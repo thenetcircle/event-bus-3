@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 
-from setuptools import find_packages, setup
+from setuptools import find_packages
+
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 with open("README.md", "r", encoding="utf-8") as f:
     readme = f.read()
 
 INSTALL_REQUIRES = [
     "loguru>=0.5.0",
+    "confluent-kafka>=1.6.0",
+    "fastapi>=0.68.0",
+    "uvicorn[standard]>=0.14.0",
 ]
 
 DEV_REQUIRES = [
@@ -45,5 +53,9 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
 )
