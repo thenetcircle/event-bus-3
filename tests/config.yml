@@ -1,0 +1,20 @@
+env: test
+allowed_namespaces:
+  - n1
+  - n2
+topic_mapping:
+  - topic: event-v3-${namespace}${env}-greenarrow
+    namespaces: [n1, n2]
+    patterns:
+      - .*
+kafka:
+  main_brokers: localhost:12181
+  # common:
+  #   ...
+  producer:
+    "enable.idempotence": true
+    acks: all
+    "max.in.flight.requests.per.connection": 5
+    "retries": 3
+  consumer:
+    "poll-interval": 50ms

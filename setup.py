@@ -15,6 +15,8 @@ INSTALL_REQUIRES = [
     "confluent-kafka>=1.6.0",
     "fastapi>=0.68.0",
     "uvicorn[standard]>=0.14.0",
+    "pydantic>=1.0.0",
+    "PyYAML>=5.4.*",
 ]
 
 DEV_REQUIRES = [

@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictStr
 
 
 class Namespace(BaseModel):
-    name: str
+    name: StrictStr
 
 
 DEFAULT_NAMESPACE = Namespace(name="default")
@@ -13,7 +13,8 @@ DEFAULT_NAMESPACE = Namespace(name="default")
 
 class Event(BaseModel):
     namespace: Namespace = DEFAULT_NAMESPACE
-    id: str
+    id: StrictStr
+    name: StrictStr
     published: datetime
-    payload: str
+    payload: StrictStr
     metadata: Optional[Dict[str, Any]] = None
