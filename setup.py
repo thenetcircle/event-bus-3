@@ -25,7 +25,7 @@ DEV_REQUIRES = [
     "isort",
     "mypy",
     "pytest==6.2.5",
-    "pytest-xdist",
+    "pytest-mock",
     "assertpy",
 ]
 

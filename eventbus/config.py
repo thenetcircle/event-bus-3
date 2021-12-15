@@ -53,14 +53,16 @@ _config_subscribers: Set[Subscriber] = set()
 _config: Optional[Config] = None
 
 
-def add_subscriber(subscriber: Subscriber) -> None:
+def add_subscriber(*subscribers: Subscriber) -> None:
     global _config_subscribers
-    _config_subscribers.add(subscriber)
+    for sub in subscribers:
+        _config_subscribers.add(sub)
 
 
-def remove_subscriber(subscriber: Subscriber) -> None:
+def remove_subscriber(*subscribers: Subscriber) -> None:
     global _config_subscribers
-    _config_subscribers.remove(subscriber)
+    for sub in subscribers:
+        _config_subscribers.remove(sub)
 
 
 def call_subscribers() -> None:
@@ -79,7 +81,7 @@ def _update_config(new_config: Config) -> None:
 
 
 def update_from_dict(data: Dict[str, Any]) -> None:
-    logger.debug("Going to update config from dict: %s", data)
+    logger.debug("Going to update config from dict: {}", data)
     try:
         new_config = Config(**data)
     except Exception:
@@ -89,7 +91,7 @@ def update_from_dict(data: Dict[str, Any]) -> None:
 
 
 def update_from_yaml(config_path: Union[str, Path]) -> None:
-    logger.info("Going to update config from an yaml file '%s'", config_path)
+    logger.info("Going to update config from an yaml file '{}'", config_path)
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"The config file `{config_path}` does not exist.")
@@ -105,8 +107,9 @@ def update_from_yaml(config_path: Union[str, Path]) -> None:
 
 
 def clean() -> None:
-    global _config
+    global _config, _config_subscribers
     _config = None
+    _config_subscribers = set()
 
 
 def get() -> Config:

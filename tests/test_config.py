@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -59,3 +60,43 @@ def test_hot_update():
 def test_config_clean():
     with pytest.raises(ConfigNoneError):
         config.get()
+
+
+def test_add_subscribe():
+    def sub1():
+        pass
+
+    def sub2():
+        pass
+
+    def sub3():
+        pass
+
+    sub4 = sub1
+
+    config.add_subscriber(sub1)
+    assert config._config_subscribers == {sub1}
+
+    config.add_subscriber(sub2, sub3)
+    assert config._config_subscribers == {sub1, sub2, sub3}
+
+    config.add_subscriber(sub4)
+    assert config._config_subscribers == {sub1, sub2, sub3}
+
+    config.remove_subscriber(sub2)
+    assert config._config_subscribers == {sub1, sub3}
+
+    config.remove_subscriber(sub1, sub3)
+    assert config._config_subscribers == set()
+
+
+def test_call_subscribe():
+    sub1 = MagicMock()
+    config.add_subscriber(sub1)
+    test_hot_update()
+    assert sub1.call_count == 2
+
+    sub1.reset_mock()
+    config.remove_subscriber(sub1)
+    test_hot_update()
+    sub1.assert_not_called()
