@@ -1,5 +1,4 @@
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -57,7 +56,7 @@ def test_hot_update():
     assert config.get().allowed_namespaces == ["n3", "n4"]
 
 
-def test_config_clean():
+def test_config_reset():
     with pytest.raises(ConfigNoneError):
         config.get()
 
@@ -90,8 +89,8 @@ def test_add_subscribe():
     assert config._config_subscribers == set()
 
 
-def test_call_subscribe():
-    sub1 = MagicMock()
+def test_call_subscribe(mocker):
+    sub1 = mocker.MagicMock()
     config.add_subscriber(sub1)
     test_hot_update()
     assert sub1.call_count == 2

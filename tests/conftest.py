@@ -4,6 +4,6 @@ from eventbus import config
 
 
 @pytest.fixture(autouse=True)
-def clean_config():
+def teardown():
     yield
-    config.clean()
+    config.reset()

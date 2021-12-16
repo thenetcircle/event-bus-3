@@ -2,11 +2,6 @@ env: test
 allowed_namespaces:
   - n1
   - n2
-topic_mapping:
-  - topic: event-v3-${namespace}${env}-greenarrow
-    namespaces: [n1, n2]
-    patterns:
-      - .*
 kafka:
   main_brokers: localhost:12181
   # common:
@@ -18,3 +13,8 @@ kafka:
     "retries": 3
   consumer:
     "poll-interval": 50ms
+topic_mapping:
+  - topic: event-v3-${namespace}${env}-greenarrow
+    namespaces: [n1, n2]
+    patterns:
+      - .*

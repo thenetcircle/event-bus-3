@@ -42,9 +42,9 @@ class Config(BaseModel):
         allow_mutation = False
 
     env: Env
-    allowed_namespaces: List[StrictStr]
-    topic_mapping: List[TopicMapping]
     kafka: KafkaConfig
+    topic_mapping: List[TopicMapping]
+    allowed_namespaces: Optional[List[StrictStr]] = None
 
 
 Subscriber = Callable[[], None]
@@ -106,7 +106,7 @@ def update_from_yaml(config_path: Union[str, Path]) -> None:
         raise ConfigUpdateError
 
 
-def clean() -> None:
+def reset() -> None:
     global _config, _config_subscribers
     _config = None
     _config_subscribers = set()
