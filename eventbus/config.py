@@ -1,10 +1,11 @@
+import threading
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel, StrictStr, validator
+from pydantic import BaseModel, StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigSubscribeError, ConfigUpdateError
 
@@ -51,6 +52,7 @@ Subscriber = Callable[[], None]
 
 _config_subscribers: Set[Subscriber] = set()
 _config: Optional[Config] = None
+_config_update_lock = threading.Lock()
 
 
 def add_subscriber(*subscribers: Subscriber) -> None:
@@ -74,10 +76,11 @@ def call_subscribers() -> None:
 
 
 def _update_config(new_config: Config) -> None:
-    global _config
-    _config = new_config
+    with _config_update_lock:
+        global _config
+        _config = new_config
 
-    call_subscribers()
+        call_subscribers()
 
 
 def update_from_dict(data: Dict[str, Any]) -> None:
@@ -90,14 +93,14 @@ def update_from_dict(data: Dict[str, Any]) -> None:
     _update_config(new_config)
 
 
-def update_from_yaml(config_path: Union[str, Path]) -> None:
-    logger.info("Going to update config from an yaml file '{}'", config_path)
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"The config file `{config_path}` does not exist.")
+def update_from_yaml(config_file: Union[str, Path]) -> None:
+    logger.info("Going to update config from an yaml file '{}'", config_file)
+    config_file = Path(config_file)
+    if not config_file.exists():
+        raise FileNotFoundError(f"The config file `{config_file}` does not exist.")
 
     try:
-        with open(config_path.resolve()) as f:
+        with open(config_file.resolve()) as f:
             parsed_config = yaml.safe_load(f)
             update_from_dict(parsed_config)
     except ConfigUpdateError:
