@@ -1,6 +1,7 @@
 import re
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -8,7 +9,7 @@ from eventbus import config, config_watcher
 from eventbus.errors import ConfigNoneError
 
 
-def test_watching(tmpdir):
+def test_watching(tmpdir, mocker):
     with pytest.raises(ConfigNoneError):
         config.get()
 
@@ -20,21 +21,38 @@ def test_watching(tmpdir):
     with open(config_file, "w") as f:
         f.write(origin_config_data)
 
-    config_watcher.start_watching(config_file, checking_interval=0.5)
+    sub1: MagicMock = mocker.MagicMock()
+    sub2: MagicMock = mocker.MagicMock()
+    config.add_subscriber(sub1)
+    config.add_subscriber(sub2)
 
-    time.sleep(1)  # waiting for the config_file to be loaded
+    config_watcher.start_watching(config_file, checking_interval=0.1)
+
+    time.sleep(0.3)  # waiting for the config_file to be loaded
     assert config.get().env == config.Env.TEST
+    sub1.assert_called_once()
+    sub2.assert_called_once()
+    sub1.reset_mock()
+    sub2.reset_mock()
+
+    # add another subscriber after watching
+    sub3: MagicMock = mocker.MagicMock()
+    config.add_subscriber(sub3)
 
     with open(config_file, "w") as f:
         new_config_data = re.sub(r"env: test", "env: prod", origin_config_data)
         f.write(new_config_data)
-    time.sleep(1)  # waiting for the config_file to be reloaded
+    time.sleep(0.3)  # waiting for the config_file to be reloaded
     assert config.get().env == config.Env.PROD
+    sub1.assert_called_once()
+    sub2.assert_called_once()
+    sub3.assert_called_once()
+    sub1.reset_mock()
+    sub2.reset_mock()
+    sub3.reset_mock()
 
-    time.sleep(1)  # waiting if another reloading happened
-
-
-def test_notify_subscriber():
-    # existed subscriber
-    # delayed subscriber
-    pass
+    time.sleep(0.3)  # waiting if another reloading happened
+    assert config.get().env == config.Env.PROD
+    sub1.assert_not_called()
+    sub2.assert_not_called()
+    sub3.assert_not_called()

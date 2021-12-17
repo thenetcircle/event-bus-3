@@ -8,3 +8,7 @@ class ConfigUpdateError(Exception):
 
 class ConfigSubscribeError(Exception):
     pass
+
+
+class ConfigWatchingError(Exception):
+    pass

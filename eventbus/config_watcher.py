@@ -7,8 +7,10 @@ from typing import Optional, Union
 from loguru import logger
 
 from eventbus import config
+from eventbus.errors import ConfigWatchingError
 
 _last_update_time: Optional[float] = None
+_watching_thread: Optional[threading.Thread] = None
 
 
 def _watch_file(config_file: Path, checking_interval: float) -> None:
@@ -30,12 +32,22 @@ def start_watching(
     if not checking_interval > 0:
         raise ValueError("checking_interval must bigger than 0")
 
+    global _last_update_time
+    global _watching_thread
+
+    if _watching_thread is not None:
+        raise ConfigWatchingError("The config watcher already watching another config.")
+
     logger.info("Start watching config file '{}'", config_file)
 
-    config_watching_thread = threading.Thread(
+    # load the config file first in current thread
+    _last_update_time = os.path.getmtime(config_file.resolve())
+    config.update_from_yaml(config_file)
+
+    _watching_thread = threading.Thread(
         target=_watch_file,
         name="config_watching",
         args=(config_file, checking_interval),
         daemon=True,
     )
-    config_watching_thread.start()
+    _watching_thread.start()

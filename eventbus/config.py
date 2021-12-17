@@ -43,6 +43,7 @@ class Config(BaseModel):
         allow_mutation = False
 
     env: Env
+    debug: bool
     kafka: KafkaConfig
     topic_mapping: List[TopicMapping]
     allowed_namespaces: Optional[List[StrictStr]] = None

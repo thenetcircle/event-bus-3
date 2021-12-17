@@ -1,4 +1,5 @@
 env: test
+debug: true
 allowed_namespaces:
   - n1
   - n2
