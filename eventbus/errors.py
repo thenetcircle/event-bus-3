@@ -12,3 +12,7 @@ class ConfigSubscribeError(Exception):
 
 class ConfigWatchingError(Exception):
     pass
+
+
+class EventValidationError(Exception):
+    pass

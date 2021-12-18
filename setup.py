@@ -1,14 +1,27 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import find_packages
+import os
+import re
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
+from setuptools import find_packages, setup
 
-with open("README.md", "r", encoding="utf-8") as f:
-    readme = f.read()
+
+def get_version(package):
+    """
+    Return package version as listed in `__version__` in `init.py`.
+    """
+    with open(os.path.join(package, "__init__.py")) as f:
+        return re.search("__version__ = ['\"]([^'\"]+)['\"]", f.read()).group(1)
+
+
+def get_long_description():
+    """
+    Return the README.
+    """
+    with open("README.md", encoding="utf8") as f:
+        return f.read()
+
 
 INSTALL_REQUIRES = [
     "loguru>=0.5.0",
@@ -31,11 +44,11 @@ DEV_REQUIRES = [
 
 setup(
     name="eventbus",
-    version="0.1.0",
+    version=get_version("eventbus"),
     author="Benn Ma",
     author_email="bennmsg@gmail.com",
     description="A reliable event/message hub for boosting Event-Driven architecture & big data ingestion.",
-    long_description=readme,
+    long_description=get_long_description(),
     long_description_content_type="text/markdown",
     python_requires=">=3.7.0",
     url="https://github.com/thenetcircle/event-bus-3",

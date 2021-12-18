@@ -1,14 +1,19 @@
-from typing import Dict
-
-from eventbus.models import Event
-
-_topic_mapping = {}
+from eventbus import config
+from eventbus.event import Event
 
 
-def update_topic_mapping(new_mapping: Dict[str, str]) -> None:
-    pass
+class TopicResolver:
+    def __init__(self):
+        self._current_topic_mapping = config.get().topic_mapping
+        self.reindex()
+        config.add_subscriber(self.topic_mapping_subscriber)
 
+    def topic_mapping_subscriber(self) -> None:
+        new_mapping = config.get().topic_mapping
+        # TODO check if topic_mapping changed, and reindex
 
-def resolve(event: Event) -> str:
-    """resolve the topic name for an event"""
-    pass
+    def reindex(self) -> None:
+        pass
+
+    def resolve(self, event: Event) -> None:
+        pass

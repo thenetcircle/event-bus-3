@@ -94,14 +94,14 @@ def update_from_dict(data: Dict[str, Any]) -> None:
     _update_config(new_config)
 
 
-def update_from_yaml(config_file: Union[str, Path]) -> None:
-    logger.info("Going to update config from an yaml file '{}'", config_file)
-    config_file = Path(config_file)
-    if not config_file.exists():
-        raise FileNotFoundError(f"The config file `{config_file}` does not exist.")
+def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
+    logger.info("Going to update config from an yaml file '{}'", yaml_file_path)
+    yaml_file_path = Path(yaml_file_path)
+    if not yaml_file_path.exists():
+        raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
 
     try:
-        with open(config_file.resolve()) as f:
+        with open(yaml_file_path.resolve()) as f:
             parsed_config = yaml.safe_load(f)
             update_from_dict(parsed_config)
     except ConfigUpdateError:

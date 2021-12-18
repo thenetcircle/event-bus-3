@@ -26,7 +26,7 @@ def test_watching(tmpdir, mocker):
     config.add_subscriber(sub1)
     config.add_subscriber(sub2)
 
-    config_watcher.start_watching(config_file, checking_interval=0.1)
+    config_watcher.watch_file(config_file, checking_interval=0.1)
 
     time.sleep(0.3)  # waiting for the config_file to be loaded
     assert config.get().env == config.Env.TEST
@@ -35,9 +35,21 @@ def test_watching(tmpdir, mocker):
     sub1.reset_mock()
     sub2.reset_mock()
 
-    # add another subscriber after watching
+    # add some other subscribers after watching
     sub3: MagicMock = mocker.MagicMock()
     config.add_subscriber(sub3)
+
+    class Sub5:
+        def __init__(self):
+            self.attr1 = "attr1"
+            self.call_times = 0
+
+        def sub_method(self):
+            self.call_times += 1
+            assert self.attr1 == "attr1"
+
+    sub5 = Sub5()
+    config.add_subscriber(sub5.sub_method)
 
     with open(config_file, "w") as f:
         new_config_data = re.sub(r"env: test", "env: prod", origin_config_data)
@@ -50,9 +62,11 @@ def test_watching(tmpdir, mocker):
     sub1.reset_mock()
     sub2.reset_mock()
     sub3.reset_mock()
+    assert sub5.call_times == 1
 
     time.sleep(0.3)  # waiting if another reloading happened
     assert config.get().env == config.Env.PROD
     sub1.assert_not_called()
     sub2.assert_not_called()
     sub3.assert_not_called()
+    assert sub5.call_times == 1
