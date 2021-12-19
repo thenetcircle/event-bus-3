@@ -25,17 +25,11 @@ class TopicMapping(BaseModel):
 
 
 class KafkaConfig(BaseModel):
-    main_brokers: StrictStr
-    fallback_brokers: Optional[StrictStr] = None
-    common: Optional[Dict[str, str]] = None
-    producer: Dict[str, str]
-    consumer: Dict[str, str]
-
-    # @validator("common_config")
-    # def must_contain_brokers(cls, v):
-    #     if "bootstrap.servers" not in v:
-    #         raise ValueError("bootstrap.servers is needed for kafka config.")
-    #     return v
+    primary_brokers: StrictStr
+    secondary_brokers: Optional[StrictStr] = None
+    common_config: Optional[Dict[str, str]] = None
+    producer_config: Dict[str, str]
+    consumer_config: Dict[str, str]
 
 
 class Config(BaseModel):

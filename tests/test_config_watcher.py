@@ -9,7 +9,7 @@ from eventbus import config, config_watcher
 from eventbus.errors import ConfigNoneError
 
 
-def test_watching(tmpdir, mocker):
+def test_watch_file(tmpdir, mocker):
     with pytest.raises(ConfigNoneError):
         config.get()
 

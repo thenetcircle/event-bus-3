@@ -1,3 +1,7 @@
+class InitError(Exception):
+    pass
+
+
 class ConfigNoneError(Exception):
     pass
 
@@ -15,4 +19,8 @@ class ConfigWatchingError(Exception):
 
 
 class EventValidationError(Exception):
+    pass
+
+
+class EventProduceError(Exception):
     pass

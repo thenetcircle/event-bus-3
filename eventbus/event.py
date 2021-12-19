@@ -16,6 +16,12 @@ class Event(BaseModel):
     summary: Optional[str] = None
     topic: Optional[str] = None
 
+    def __str__(self):
+        event_info = f"{self.title}#{self.id}@{self.published}"
+        if self.summary:
+            event_info += f"{{{self.summary}}}"
+        return event_info
+
 
 def parse_request_body(
     request_body: str, namespace: Optional[str] = None

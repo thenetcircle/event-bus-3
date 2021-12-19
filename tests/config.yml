@@ -4,15 +4,15 @@ allowed_namespaces:
   - n1
   - n2
 kafka:
-  main_brokers: localhost:12181
-  # common:
+  primary_brokers: localhost:12181
+  # common_config:
   #   ...
-  producer:
+  producer_config:
     "enable.idempotence": true
     acks: all
     "max.in.flight.requests.per.connection": 5
     "retries": 3
-  consumer:
+  consumer_config:
     "poll-interval": 50ms
 topic_mapping:
   - topic: event-v3-${namespace}${env}-greenarrow

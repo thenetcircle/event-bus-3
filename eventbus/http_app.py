@@ -8,7 +8,7 @@ from starlette.routing import Route
 
 from eventbus import config, config_watcher
 from eventbus.errors import EventValidationError
-from eventbus.event import Event, parse_request_body
+from eventbus.event import parse_request_body
 from eventbus.event_handler import EventHandler
 
 config_file = (

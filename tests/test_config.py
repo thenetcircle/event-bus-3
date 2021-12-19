@@ -22,14 +22,14 @@ def test_update_from_yaml():
         )
     ]
     assert config_data.kafka == config.KafkaConfig(
-        main_brokers="localhost:12181",
-        producer={
+        primary_brokers="localhost:12181",
+        producer_config={
             "enable.idempotence": True,
             "acks": "all",
             "max.in.flight.requests.per.connection": 5,
             "retries": 3,
         },
-        consumer={"poll-interval": "50ms"},
+        consumer_config={"poll-interval": "50ms"},
     )
 
 

@@ -1,7 +1,6 @@
 from typing import Optional
 
-import anyio
-
+from eventbus.errors import InitError
 from eventbus.event import Event
 from eventbus.producer import KafkaProducer
 from eventbus.topic_resolver import TopicResolver
@@ -18,6 +17,14 @@ class EventHandler:
         self.topic_resolver = TopicResolver()
         self.producer = KafkaProducer()
 
+    def teardown(self) -> None:
+        if self.producer:
+            self.producer.close()
+
     async def handler_event(self, event: Event) -> None:
-        await anyio.sleep(10)
-        print(event)
+        if not self.topic_resolver or not self.producer:
+            raise InitError("EventHandler must to be inited before use.")
+
+        self.topic_resolver.resolve(event)
+        msg = await self.producer.produce(event)
+        print(msg)
