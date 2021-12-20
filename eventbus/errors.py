@@ -24,3 +24,7 @@ class EventValidationError(Exception):
 
 class EventProduceError(Exception):
     pass
+
+
+class InitProducerError(Exception):
+    pass
