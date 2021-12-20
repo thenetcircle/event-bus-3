@@ -16,7 +16,7 @@ def test_update_from_yaml():
     assert config_data.allowed_namespaces == ["n1", "n2"]
     assert config_data.topic_mapping == [
         config.TopicMapping(
-            topic="event-v3-${namespace}${env}-greenarrow",
+            topic="event-v3-${namespace}${env}-default",
             namespaces=["n1", "n2"],
             patterns=[".*"],
         )

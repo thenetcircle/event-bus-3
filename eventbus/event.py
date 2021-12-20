@@ -8,7 +8,7 @@ from eventbus.errors import EventValidationError
 
 
 class Event(BaseModel):
-    id: str = Field(min_length=2, max_length=500, allow_mutation=False, regex=r"[\w-]+")
+    id: str = Field(min_length=2, max_length=500, regex=r"[\w-]+")
     title: str
     published: datetime
     payload: str

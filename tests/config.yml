@@ -15,7 +15,7 @@ kafka:
   consumer_config:
     "poll-interval": 50ms
 topic_mapping:
-  - topic: event-v3-${namespace}${env}-greenarrow
+  - topic: event-v3-${namespace}${env}-default
     namespaces: [n1, n2]
     patterns:
       - .*

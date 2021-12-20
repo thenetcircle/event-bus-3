@@ -9,8 +9,9 @@ class TopicResolver:
         config.add_subscriber(self.topic_mapping_subscriber)
 
     def topic_mapping_subscriber(self) -> None:
-        new_mapping = config.get().topic_mapping
-        # TODO check if topic_mapping changed, and reindex
+        new_topic_mapping = config.get().topic_mapping
+        if new_topic_mapping != self._current_topic_mapping:
+            self.reindex()
 
     def reindex(self) -> None:
         pass
