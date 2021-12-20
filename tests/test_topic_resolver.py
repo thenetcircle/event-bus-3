@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Tuple
 
 import pytest
@@ -5,9 +6,47 @@ from pytest_mock import MockFixture
 
 from eventbus import config
 from eventbus.config import Config, Env, KafkaConfig, TopicMapping
+from eventbus.event import Event
 from eventbus.topic_resolver import TopicResolver
 
 SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str], List[str]]
+
+
+@pytest.mark.parametrize(
+    "mapping, test_cases",
+    [
+        (
+            [
+                ("user_topic", ["n1"], ["user\..*"]),
+                ("message_topic", ["n1"], ["message\..*"]),
+                ("profile_topic", ["n1", "n2"], ["profile\..*"]),
+                ("user2_topic", ["n1"], ["user\..*"]),
+                ("user3_topic", ["n1"], ["use.*"]),
+                ("default_n2_topic", ["n2"], [".*"]),
+                ("default_n1_topic", ["n1"], [".*"]),
+            ],
+            [
+                (("n1", "message.send"), "message_topic"),
+                (("n1", "my.message.send"), "default_n1_topic"),
+                (("n1", "user.login"), "user_topic"),
+                (("n2", "user.login"), "default_n2_topic"),
+                (("n1", "user_.login"), "user3_topic"),
+                (("n1", "profile.visit"), "profile_topic"),
+                (("n2", "profile.visit"), "profile_topic"),
+            ],
+        )
+    ],
+)
+def test_resolve(mapping, test_cases, mocker: MockFixture):
+    patch_config_get_with_new_mapping(
+        mocker,
+        mapping,
+    )
+    resolver = TopicResolver()
+    for case in test_cases:
+        event = new_event(case[0][0], case[0][1])
+        resolver.resolve(event)
+        assert event.topic == case[1]
 
 
 @pytest.mark.parametrize(
@@ -57,7 +96,7 @@ SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str], List[str]]
         ),
     ],
 )
-def test_topic_mapping_subscriber(
+def test_topic_mapping_update(
     init_mapping, new_mapping, do_reindex, mocker: MockFixture
 ):
     patch_config_get_with_new_mapping(mocker, init_mapping)
@@ -91,4 +130,14 @@ def create_config(topic_mapping: List[SIMPLIFIED_MAPPING_TYPE]) -> Config:
             TopicMapping(topic=ele[0], namespaces=ele[1], patterns=ele[2])
             for ele in topic_mapping
         ],
+    )
+
+
+def new_event(namespace, title):
+    return Event(
+        namespace=namespace,
+        title=title,
+        id=f"test_event_{title}",
+        published=datetime.now(),
+        payload="",
     )
