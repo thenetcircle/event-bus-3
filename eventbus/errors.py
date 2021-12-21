@@ -23,6 +23,7 @@ class EventValidationError(Exception):
 
 
 class EventProduceError(Exception):
+    # TODO add root cause
     pass
 
 

@@ -39,6 +39,7 @@ DEV_REQUIRES = [
     "mypy",
     "pytest==6.2.5",
     "pytest-mock",
+    "pytest-asyncio",
     "assertpy",
 ]
 

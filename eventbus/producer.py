@@ -1,8 +1,9 @@
 import asyncio
+from asyncio import Future
 from threading import Thread
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional, Tuple
 
-from confluent_kafka import Producer
+from confluent_kafka import Message, Producer
 
 from eventbus import config
 from eventbus.errors import EventProduceError, EventValidationError, InitProducerError
@@ -17,6 +18,52 @@ class KafkaProducer:
         self._current_kafka_config = config.get().kafka
         config.add_subscriber(self._config_subscriber)
         self._init_internal_producers()
+
+    async def produce(self, event: Event) -> Message:
+        """
+        An awaitable produce method.
+        """
+        if not event.topic:
+            raise EventValidationError(f"The event {event}'s topic is not resolved.")
+
+        if not self._primary_producer:
+            raise InitProducerError("Primary producer must be inited.")
+
+        primary_feature, primary_ack = self._create_ack()
+        self._primary_producer.produce(
+            event.topic, event.payload, on_delivery=primary_ack
+        )
+
+        try:
+            return await primary_feature
+        except EventProduceError:
+            if self._secondary_producer:
+                secondary_feature, secondary_ack = self._create_ack()
+                self._secondary_producer.produce(
+                    event.topic, event.payload, on_delivery=secondary_ack
+                )
+                return await secondary_feature
+            else:
+                raise
+
+    def close(self):
+        if self._primary_producer:
+            self._primary_producer.close(wait_to_be_finished=True)
+        if self._secondary_producer:
+            self._secondary_producer.close(wait_to_be_finished=True)
+
+    def _create_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
+        feature = self._loop.create_future()
+
+        def ack(err: Exception, msg: Message):
+            if err:
+                self._loop.call_soon_threadsafe(
+                    feature.set_exception, EventProduceError(err)
+                )
+            else:
+                self._loop.call_soon_threadsafe(feature.set_result, msg)
+
+        return feature, ack
 
     def _config_subscriber(self) -> None:
         if self._current_kafka_config != config.get().kafka:
@@ -56,35 +103,6 @@ class KafkaProducer:
         final_config.update(self._current_kafka_config.producer_config)
         return final_config
 
-    def close(self):
-        if self._primary_producer:
-            self._primary_producer.close(wait_to_be_finished=True)
-        if self._secondary_producer:
-            self._secondary_producer.close(wait_to_be_finished=True)
-
-    async def produce(self, event: Event):
-        """
-        An awaitable produce method.
-        """
-        if not event.topic:
-            raise EventValidationError(f"The event {event}'s topic is not resolved.")
-
-        result = self._loop.create_future()
-
-        def ack(err, msg):
-            if err:
-                self._loop.call_soon_threadsafe(
-                    result.set_exception, EventProduceError(err)
-                )
-            else:
-                self._loop.call_soon_threadsafe(result.set_result, msg)
-
-        self._primary_producer.produce(event.topic, event.payload, on_delivery=ack)
-
-        # TODO try secondary producer after primary one failed
-
-        return await result
-
 
 class InternalKafkaProducer:
     """
@@ -95,17 +113,17 @@ class InternalKafkaProducer:
     """
 
     def __init__(self, producer_config: Dict[str, str]):
-        self.real_producer = Producer(producer_config)
+        self._real_producer = Producer(producer_config)
         self._cancelled = False
         self._poll_thread = Thread(target=self._poll_loop)
         self._poll_thread.start()
 
     def _poll_loop(self):
         while not self._cancelled:
-            self.real_producer.poll(0.1)
+            self._real_producer.poll(0.1)
 
         # make sure all messages to be sent after cancelled
-        self.real_producer.flush()
+        self._real_producer.flush()
 
     def produce(self, topic, value, **kwargs) -> None:
         """Produce message to topic. This is an asynchronous operation, an application may use
@@ -128,7 +146,7 @@ class InternalKafkaProducer:
                                 (Requires librdkafka >= v0.11.4 and broker version >= 0.11.0.0)
 
         ref: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Producer.produce"""
-        return self.real_producer.produce(topic, value, **kwargs)
+        return self._real_producer.produce(topic, value, **kwargs)
 
     def close(self, wait_to_be_finished=False) -> None:
         """stop the poll thread"""

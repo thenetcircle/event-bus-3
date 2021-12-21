@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Tuple
 
 import pytest
@@ -6,8 +5,8 @@ from pytest_mock import MockFixture
 
 from eventbus import config
 from eventbus.config import Config, Env, KafkaConfig, TopicMapping
-from eventbus.event import Event
 from eventbus.topic_resolver import TopicResolver
+from tests.utils import create_event_from_dict
 
 SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str], List[str]]
 
@@ -44,7 +43,7 @@ def test_resolve(mapping, test_cases, mocker: MockFixture):
     )
     resolver = TopicResolver()
     for case in test_cases:
-        event = new_event(case[0][0], case[0][1])
+        event = create_event_from_dict({"namespace": case[0][0], "title": case[0][1]})
         resolver.resolve(event)
         assert event.topic == case[1]
 
@@ -130,14 +129,4 @@ def create_config(topic_mapping: List[SIMPLIFIED_MAPPING_TYPE]) -> Config:
             TopicMapping(topic=ele[0], namespaces=ele[1], patterns=ele[2])
             for ele in topic_mapping
         ],
-    )
-
-
-def new_event(namespace, title):
-    return Event(
-        namespace=namespace,
-        title=title,
-        id=f"test_event_{title}",
-        published=datetime.now(),
-        payload="",
     )

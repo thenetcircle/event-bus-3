@@ -18,13 +18,18 @@ class Env(str, Enum):
     TEST = "test"
 
 
-class TopicMapping(BaseModel):
+class ConfigModel(BaseModel):
+    class Config:
+        allow_mutation = False
+
+
+class TopicMapping(ConfigModel):
     topic: StrictStr
     namespaces: List[StrictStr]
     patterns: List[StrictStr]
 
 
-class KafkaConfig(BaseModel):
+class KafkaConfig(ConfigModel):
     primary_brokers: StrictStr
     secondary_brokers: Optional[StrictStr] = None
     common_config: Optional[Dict[str, str]] = None
@@ -32,10 +37,7 @@ class KafkaConfig(BaseModel):
     consumer_config: Dict[str, str]
 
 
-class Config(BaseModel):
-    class Config:
-        allow_mutation = False
-
+class Config(ConfigModel):
     env: Env
     debug: bool
     kafka: KafkaConfig
@@ -76,6 +78,11 @@ def _update_config(new_config: Config) -> None:
         _config = new_config
 
         call_subscribers()
+
+
+def update_from_config(new_config: Config) -> None:
+    logger.debug("Going to update config another Config object: {}", new_config)
+    _update_config(new_config)
 
 
 def update_from_dict(data: Dict[str, Any]) -> None:
