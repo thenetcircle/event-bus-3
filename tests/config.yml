@@ -15,6 +15,14 @@ kafka:
   consumer_config:
     "poll-interval": 50ms
 topic_mapping:
+  - topic: primary-success
+    namespaces: [ n1, n2 ]
+    patterns:
+      - test\.primary-success
+  - topic: secondary-success
+    namespaces: [ n1, n2 ]
+    patterns:
+      - test\.secondary-success
   - topic: event-v3-${namespace}${env}-default
     namespaces: [n1, n2]
     patterns:

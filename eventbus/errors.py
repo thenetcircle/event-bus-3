@@ -18,6 +18,10 @@ class ConfigWatchingError(Exception):
     pass
 
 
+class NamespaceValidationError(Exception):
+    pass
+
+
 class EventValidationError(Exception):
     pass
 

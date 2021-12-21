@@ -33,9 +33,12 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rsxX -l --tb=short"
+addopts = "-rsxX -l --tb=short --strict-markers"
 xfail_strict = true
 testpaths = ["tests"]
+markers = [
+    "noconfig: Don't load the config.yml automatically"
+]
 
 [tool.mypy]
 files="eventbus,tests"

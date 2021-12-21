@@ -16,13 +16,13 @@ SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str], List[str]]
     [
         (
             [
-                ("user_topic", ["n1"], ["user\..*"]),
-                ("message_topic", ["n1"], ["message\..*"]),
-                ("profile_topic", ["n1", "n2"], ["profile\..*"]),
-                ("user2_topic", ["n1"], ["user\..*"]),
-                ("user3_topic", ["n1"], ["use.*"]),
-                ("default_n2_topic", ["n2"], [".*"]),
-                ("default_n1_topic", ["n1"], [".*"]),
+                ("user_topic", ["n1"], [r"user\..*"]),
+                ("message_topic", ["n1"], [r"message\..*"]),
+                ("profile_topic", ["n1", "n2"], [r"profile\..*"]),
+                ("user2_topic", ["n1"], [r"user\..*"]),
+                ("user3_topic", ["n1"], [r"use.*"]),
+                ("default_n2_topic", ["n2"], [r".*"]),
+                ("default_n1_topic", ["n1"], [r".*"]),
             ],
             [
                 (("n1", "message.send"), "message_topic"),
@@ -53,44 +53,47 @@ def test_resolve(mapping, test_cases, mocker: MockFixture):
     [
         # No change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
             False,
         ),
         # Topic change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["user\..*"]), ("topic3", ["n1"], [".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic3", ["n1"], [r".*"])],
             True,
         ),
         # NS change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n2"], [".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n2"], [r".*"])],
             True,
         ),
         # Pattern change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*?"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*?"])],
             True,
         ),
         # New pattern
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["message.*", "user\..*"]), ("topic2", ["n1"], [".*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [
+                ("topic1", ["n1"], [r"message.*", r"user\..*"]),
+                ("topic2", ["n1"], [r".*"]),
+            ],
             True,
         ),
         # Length change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic1", ["n1"], ["user\..*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic1", ["n1"], [r"user\..*"])],
             True,
         ),
         # Order change
         (
-            [("topic1", ["n1"], ["user\..*"]), ("topic2", ["n1"], [".*"])],
-            [("topic2", ["n1"], [".*"]), ("topic1", ["n1"], ["user\..*"])],
+            [("topic1", ["n1"], [r"user\..*"]), ("topic2", ["n1"], [r".*"])],
+            [("topic2", ["n1"], [r".*"]), ("topic1", ["n1"], [r"user\..*"])],
             True,
         ),
     ],

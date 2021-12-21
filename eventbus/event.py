@@ -8,6 +8,11 @@ from eventbus.errors import EventValidationError
 
 
 class Event(BaseModel):
+    """
+    published: YYYY-MM-DD[T]HH:MM[:SS[.ffffff]][Z or [±]HH[:]MM]]]
+               int or float as a string (assumed as Unix time)
+    """
+
     id: str = Field(min_length=2, max_length=500, regex=r"[\w-]+")
     title: str
     published: datetime

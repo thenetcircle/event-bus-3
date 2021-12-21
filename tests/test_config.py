@@ -17,10 +17,20 @@ def test_update_from_yaml():
     assert config_data.allowed_namespaces == ["n1", "n2"]
     assert config_data.topic_mapping == [
         config.TopicMapping(
+            topic="primary-success",
+            namespaces=["n1", "n2"],
+            patterns=[r"test\.primary-success"],
+        ),
+        config.TopicMapping(
+            topic="secondary-success",
+            namespaces=["n1", "n2"],
+            patterns=[r"test\.secondary-success"],
+        ),
+        config.TopicMapping(
             topic="event-v3-${namespace}${env}-default",
             namespaces=["n1", "n2"],
-            patterns=[".*"],
-        )
+            patterns=[r".*"],
+        ),
     ]
     assert config_data.kafka == config.KafkaConfig(
         primary_brokers="localhost:12181",

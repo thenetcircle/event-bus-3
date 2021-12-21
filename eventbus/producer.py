@@ -3,6 +3,7 @@ from asyncio import Future
 from threading import Thread
 from typing import Callable, Dict, Optional, Tuple
 
+import anyio
 from confluent_kafka import Message, Producer
 
 from eventbus import config

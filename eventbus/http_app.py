@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
 from eventbus import config, config_watcher
-from eventbus.errors import EventValidationError
+from eventbus.errors import EventValidationError, NamespaceValidationError
 from eventbus.event import parse_request_body
 from eventbus.event_handler import EventHandler
 
@@ -61,10 +61,10 @@ def ungzip_request_body(request_body: str) -> str:
 
 def validate_namespace(namespace) -> None:
     if namespace == "":
-        raise EventValidationError("Namespace is required.")
+        raise NamespaceValidationError("Namespace is required.")
     allowed_namespaces = config.get().allowed_namespaces
     if allowed_namespaces is not None and namespace not in allowed_namespaces:
-        raise EventValidationError(
+        raise NamespaceValidationError(
             f"Namespace '{namespace}' is not in allowed_namespaces list {allowed_namespaces}."
         )
 
