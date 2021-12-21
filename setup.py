@@ -27,6 +27,7 @@ INSTALL_REQUIRES = [
     "loguru>=0.5.0",
     "confluent-kafka>=1.6.0",
     "starlette>=0.16.0",
+    "requests>=2.25.0",
     "uvicorn[standard]>=0.14.0",
     "pydantic>=1.0.0",
     "PyYAML>=5.4.*",

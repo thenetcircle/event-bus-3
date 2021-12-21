@@ -57,9 +57,10 @@ def test_hot_update():
     assert config.get().allowed_namespaces == ["n3", "n4"]
 
 
-# def test_config_reset():
-#     with pytest.raises(ConfigNoneError):
-#         config.get()
+@pytest.mark.noconfig
+def test_config_reset():
+    with pytest.raises(ConfigNoneError):
+        config.get()
 
 
 def test_add_subscribe():

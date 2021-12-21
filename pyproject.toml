@@ -33,12 +33,9 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rsxX -l --tb=short --strict-markers"
+addopts = "-rsxX -l --tb=short"
 xfail_strict = true
 testpaths = ["tests"]
-markers = [
-  "integration: Integration tests"
-]
 
 [tool.mypy]
 files="eventbus,tests"
