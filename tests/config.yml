@@ -27,3 +27,17 @@ topic_mapping:
     namespaces: [n1, n2]
     patterns:
       - .*
+consumers:
+  - id: test_consumer1
+    subscribe_events: []
+    concurrency: 10
+    reorder: False
+    sink:
+      url: http://localhost
+      method: POST
+      headers: []
+      expected_status_codes: [200]
+      expected_responses: ["ok"]
+    retry:
+      strategy: backoff
+      max_retry_times: 10

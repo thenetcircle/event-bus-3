@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel, StrictStr
+from pydantic import BaseModel, Field, StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigSubscribeError, ConfigUpdateError
 
@@ -37,11 +37,42 @@ class KafkaConfig(ConfigModel):
     consumer_config: Dict[str, str]
 
 
+class ConsumerSinkType(str, Enum):
+    HTTP = "http"
+
+
+class ConsumerSinkConfig(ConfigModel):
+    type: ConsumerSinkType = ConsumerSinkType.HTTP
+    url: StrictStr
+    headers: Optional[Dict[str, str]] = None
+    expected_status_codes: List[int] = [200]
+    expected_responses: Optional[List[StrictStr]] = None
+
+
+class ConsumerRetryStrategy(str, Enum):
+    BACKOFF = "backoff"
+
+
+class ConsumerRetryConfig(ConfigModel):
+    strategy: ConsumerRetryStrategy = ConsumerRetryStrategy.BACKOFF
+    max_retry_times: Optional[int] = Field(default=None, gt=0)
+
+
+class ConsumerConfig(ConfigModel):
+    id: StrictStr
+    subscribe_events: List[StrictStr]
+    concurrency: Optional[int] = None
+    reorder: bool = False
+    sink: ConsumerSinkConfig
+    retry: Optional[ConsumerRetryConfig] = None
+
+
 class Config(ConfigModel):
     env: Env
     debug: bool
     kafka: KafkaConfig
     topic_mapping: List[TopicMapping]
+    consumers: List[ConsumerConfig]
     allowed_namespaces: Optional[List[StrictStr]] = None
 
 

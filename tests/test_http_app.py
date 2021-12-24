@@ -50,3 +50,28 @@ def test_send_an_event(client: TestClient):
     )
     assert response.status_code == 200
     assert response.content == b"ok"
+
+
+def test_send_multiple_events(client: TestClient):
+    response: Response = client.post(
+        "/new_events/n1",
+        json=[
+            {
+                "id": "test_event_1",
+                "title": "test.primary-success",
+                "published": "2021-08-01T18:57:44+02:00",
+            },
+            {
+                "id": "test_event_2",
+                "title": "test.primary-success",
+                "published": "2021-08-01T18:58:44.154+02:00",
+            },
+            {
+                "id": "test_event_3",
+                "title": "test.primary-success",
+                "published": "2021-08-01T18:59:44.123+02:00",
+            },
+        ],
+    )
+    assert response.status_code == 200
+    assert response.content == b"ok"
