@@ -51,3 +51,12 @@ def watch_file(
         daemon=True,
     )
     _watch_file_thread.start()
+
+
+def watch_file_from_environ() -> None:
+    config_file_path = (
+        os.environ["EVENTBUS_CONFIG"]
+        if "EVENTBUS_CONFIG" in os.environ
+        else "config.yml"
+    )
+    watch_file(config_file_path)

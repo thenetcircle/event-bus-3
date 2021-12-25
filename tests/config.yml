@@ -30,7 +30,7 @@ topic_mapping:
 consumers:
   - id: test_consumer1
     subscribe_events: []
-    concurrency: 10
+    parallelism: 10
     reorder: False
     sink:
       url: http://localhost

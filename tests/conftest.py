@@ -19,7 +19,7 @@ def setup_config(request):
 @pytest.fixture
 def mock_internal_kafka_producer(mocker: MockFixture):
     import confluent_kafka
-    from confluent_kafka import KafkaException, Message
+    from confluent_kafka import KafkaException
 
     # mock InternalKafkaProducer
     def mock_init(self, producer_config: Dict[str, str]):

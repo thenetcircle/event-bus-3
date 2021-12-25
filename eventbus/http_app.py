@@ -1,5 +1,3 @@
-import os
-
 import anyio
 from loguru import logger
 from starlette.applications import Starlette
@@ -11,10 +9,7 @@ from eventbus.errors import EventValidationError, NamespaceValidationError
 from eventbus.event import parse_request_body
 from eventbus.event_handler import EventHandler
 
-config_file = (
-    os.environ["EVENTBUS_CONFIG"] if "EVENTBUS_CONFIG" in os.environ else "config.yml"
-)
-config_watcher.watch_file(config_file)
+config_watcher.watch_file_from_environ()
 event_handler = EventHandler()
 
 

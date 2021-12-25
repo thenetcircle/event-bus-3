@@ -61,7 +61,7 @@ class ConsumerRetryConfig(ConfigModel):
 class ConsumerConfig(ConfigModel):
     id: StrictStr
     subscribe_events: List[StrictStr]
-    concurrency: Optional[int] = None
+    parallelism: Optional[int] = None
     reorder: bool = False
     sink: ConsumerSinkConfig
     retry: Optional[ConsumerRetryConfig] = None
