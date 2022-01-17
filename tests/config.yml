@@ -1,16 +1,13 @@
 env: test
 debug: true
-kafka:
+producer:
   primary_brokers: localhost:12181
-  # common_config:
-  #   ...
-  producer_config:
+  # secondary_brokers:
+  kafka_config:
     "enable.idempotence": true
     acks: all
     "max.in.flight.requests.per.connection": 5
     "retries": 3
-  consumer_config:
-    "poll-interval": 50ms
 topic_mapping:
   - topic: primary-success
     patterns:
@@ -21,16 +18,19 @@ topic_mapping:
   - topic: event-v3-${namespace}${env}-default
     patterns:
       - .*
-consumers:
-  - id: test_consumer1
-    events: []
-    concurrent_per_partition: 1
-    sink:
-      url: http://localhost
-      method: POST
-      headers: []
-      expected_status_codes: [200]
-      expected_responses: ["ok"]
-    retry:
-      strategy: backoff
-      max_retry_times: 10
+consumer:
+  kafka_config:
+    "poll-interval": 50ms
+  instances:
+    - id: test_consumer1
+      events: []
+      concurrent_per_partition: 1
+      sink:
+        url: http://localhost
+        method: POST
+        headers: []
+        expected_status_codes: [200]
+        expected_responses: ["ok"]
+      retry:
+        strategy: backoff
+        max_retry_times: 10

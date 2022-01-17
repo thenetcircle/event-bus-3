@@ -28,12 +28,10 @@ class TopicMapping(ConfigModel):
     patterns: List[StrictStr]
 
 
-class KafkaConfig(ConfigModel):
+class ProducerConfig(ConfigModel):
     primary_brokers: StrictStr
     secondary_brokers: Optional[StrictStr] = None
-    common_config: Optional[Dict[str, str]] = None
-    producer_config: Dict[str, str]
-    consumer_config: Dict[str, str]
+    kafka_config: Dict[str, str]
 
 
 class ConsumerSinkType(str, Enum):
@@ -57,7 +55,7 @@ class ConsumerRetryConfig(ConfigModel):
     max_retry_times: Optional[int] = Field(default=None, gt=0)
 
 
-class ConsumerConfig(ConfigModel):
+class ConsumerInstanceConfig(ConfigModel):
     id: StrictStr
     events: List[StrictStr]
     concurrent_per_partition: int = 1
@@ -65,12 +63,17 @@ class ConsumerConfig(ConfigModel):
     retry: Optional[ConsumerRetryConfig] = None
 
 
+class ConsumerConfig(ConfigModel):
+    kafka_config: Dict[str, str]
+    instances: List[ConsumerInstanceConfig]
+
+
 class Config(ConfigModel):
     env: Env
     debug: bool
-    kafka: KafkaConfig
+    producer: ProducerConfig
     topic_mapping: List[TopicMapping]
-    consumers: List[ConsumerConfig]
+    consumer: ConsumerConfig
 
 
 Subscriber = Callable[[], None]

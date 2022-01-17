@@ -28,15 +28,14 @@ def test_update_from_yaml():
             patterns=[r".*"],
         ),
     ]
-    assert config_data.kafka == config.KafkaConfig(
+    assert config_data.producer == config.ProducerConfig(
         primary_brokers="localhost:12181",
-        producer_config={
+        kafka_config={
             "enable.idempotence": True,
             "acks": "all",
             "max.in.flight.requests.per.connection": 5,
             "retries": 3,
         },
-        consumer_config={"poll-interval": "50ms"},
     )
 
 

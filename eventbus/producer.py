@@ -15,7 +15,7 @@ class KafkaProducer:
         self._loop = asyncio.get_event_loop()
         self._primary_producer: Optional[InternalKafkaProducer] = None
         self._secondary_producer: Optional[InternalKafkaProducer] = None
-        self._current_kafka_config = config.get().kafka
+        self._current_producer_config = config.get().producer
         config.add_subscriber(self._config_subscriber)
         self._init_internal_producers()
 
@@ -66,7 +66,7 @@ class KafkaProducer:
         return feature, ack
 
     def _config_subscriber(self) -> None:
-        if self._current_kafka_config != config.get().kafka:
+        if self._current_producer_config != config.get().producer:
             self._init_internal_producers()
 
     def _init_internal_producers(self) -> None:
@@ -88,20 +88,17 @@ class KafkaProducer:
 
     def _create_producer_config(self, is_primary=True) -> Optional[Dict[str, str]]:
         brokers = (
-            self._current_kafka_config.primary_brokers
+            self._current_producer_config.primary_brokers
             if is_primary
-            else self._current_kafka_config.secondary_brokers
+            else self._current_producer_config.secondary_brokers
         )
         if not brokers:
             return None
 
-        final_config = {"bootstrap.servers": brokers}
-
-        if self._current_kafka_config.common_config:
-            final_config.update(self._current_kafka_config.common_config)
-
-        final_config.update(self._current_kafka_config.producer_config)
-        return final_config
+        return {
+            **self._current_producer_config.kafka_config,
+            "bootstrap.servers": brokers,
+        }
 
 
 class InternalKafkaProducer:

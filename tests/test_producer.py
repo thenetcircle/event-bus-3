@@ -29,15 +29,15 @@ async def test_produce_from_both_producers(mock_internal_kafka_producer):
     old_config = config.get()
     new_config = old_config.copy(
         update={
-            "kafka": old_config.kafka.copy(
+            "producer": old_config.producer.copy(
                 update={"secondary_brokers": "localhost:12182"}
             )
         },
         deep=True,
     )
     config.update_from_config(new_config)
-    assert config.get().kafka.primary_brokers == "localhost:12181"
-    assert config.get().kafka.secondary_brokers == "localhost:12182"
+    assert config.get().producer.primary_brokers == "localhost:12181"
+    assert config.get().producer.secondary_brokers == "localhost:12182"
 
     # test result from two internal producers
     producer = KafkaProducer()
