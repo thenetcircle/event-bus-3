@@ -25,7 +25,6 @@ class ConfigModel(BaseModel):
 
 class TopicMapping(ConfigModel):
     topic: StrictStr
-    namespaces: List[StrictStr]
     patterns: List[StrictStr]
 
 
@@ -60,9 +59,8 @@ class ConsumerRetryConfig(ConfigModel):
 
 class ConsumerConfig(ConfigModel):
     id: StrictStr
-    subscribe_events: List[StrictStr]
-    parallelism: Optional[int] = None
-    reorder: bool = False
+    events: List[StrictStr]
+    concurrent_per_partition: int = 1
     sink: ConsumerSinkConfig
     retry: Optional[ConsumerRetryConfig] = None
 
@@ -73,7 +71,6 @@ class Config(ConfigModel):
     kafka: KafkaConfig
     topic_mapping: List[TopicMapping]
     consumers: List[ConsumerConfig]
-    allowed_namespaces: Optional[List[StrictStr]] = None
 
 
 Subscriber = Callable[[], None]

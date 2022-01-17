@@ -1,7 +1,7 @@
 import re
+from typing import Optional
 
 from eventbus import config
-from eventbus.event import Event
 
 
 class TopicResolver:
@@ -19,24 +19,20 @@ class TopicResolver:
 
     def reindex(self) -> None:
         """Index the topic mapping with structure:
-        namespace: { pattern: { (compiled_pattern, topic) ... }, ... }"""
+        pattern: { (compiled_pattern, topic) ... }"""
         new_index = {}
         for mp in self._current_topic_mapping:
-            for ns in mp.namespaces:
-                if ns not in new_index:
-                    new_index[ns] = {}
-                for patn in mp.patterns:
-                    if (
-                        patn not in new_index[ns]
-                    ):  # if there are repetitive patterns in one namespace, they will be abandoned
-                        new_index[ns][patn] = (re.compile(patn, re.I), mp.topic)
+            for patn in mp.patterns:
+                if (
+                    patn not in new_index
+                ):  # if there are repetitive patterns, they will be abandoned
+                    new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
 
-    def resolve(self, event: Event) -> None:
+    # TODO add cache
+    def resolve(self, event_title: str) -> Optional[str]:
         """Resolve event topic by event title according to the topic mapping"""
-        if event.namespace not in self._index:
-            return
-        for _, (pattern, topic) in self._index[event.namespace].items():
-            if re.match(pattern, event.title):
-                event.topic = topic
-                return
+        for _, (pattern, topic) in self._index.items():
+            if re.match(pattern, event_title):
+                return topic
+        return None

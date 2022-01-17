@@ -14,21 +14,17 @@ def test_update_from_yaml():
 
     config_data = config.get()
     assert config_data.env == config.Env.TEST
-    assert config_data.allowed_namespaces == ["n1", "n2"]
     assert config_data.topic_mapping == [
         config.TopicMapping(
             topic="primary-success",
-            namespaces=["n1", "n2"],
             patterns=[r"test\.primary-success"],
         ),
         config.TopicMapping(
             topic="secondary-success",
-            namespaces=["n1", "n2"],
             patterns=[r"test\.secondary-success"],
         ),
         config.TopicMapping(
             topic="event-v3-${namespace}${env}-default",
-            namespaces=["n1", "n2"],
             patterns=[r".*"],
         ),
     ]
@@ -61,10 +57,10 @@ def test_hot_update():
     config_path = Path(__file__).parent / "config.yml"
     with open(config_path) as f:
         new_config = yaml.safe_load(f)
-        new_config["allowed_namespaces"] = ["n3", "n4"]
+        new_config["env"] = "prod"
         config.update_from_dict(new_config)
 
-    assert config.get().allowed_namespaces == ["n3", "n4"]
+    assert config.get().env == config.Env.PROD
 
 
 @pytest.mark.noconfig

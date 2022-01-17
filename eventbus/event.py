@@ -17,7 +17,6 @@ class Event(BaseModel):
     title: str
     published: datetime
     payload: str
-    namespace: str = "default"
     summary: Optional[str] = None
     topic: Optional[str] = None
 
@@ -28,9 +27,7 @@ class Event(BaseModel):
         return event_info
 
 
-def parse_request_body(
-    request_body: str, namespace: Optional[str] = None
-) -> List[Event]:
+def parse_request_body(request_body: str) -> List[Event]:
     try:
         json_body = json.loads(request_body)
     except Exception:
@@ -44,8 +41,6 @@ def parse_request_body(
             "payload": request_body,
             "summary": _json.get("summary"),
         }
-        if namespace:
-            event_attrs["namespace"] = namespace
         return Event(**event_attrs)
 
     if isinstance(json_body, list):

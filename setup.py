@@ -19,6 +19,7 @@ def get_long_description():
     """
     Return the README.
     """
+
     with open("README.md", encoding="utf8") as f:
         return f.read()
 
@@ -31,6 +32,8 @@ INSTALL_REQUIRES = [
     "uvicorn[standard]>=0.14.0",
     "pydantic>=1.0.0",
     "PyYAML>=5.4.*",
+    "aiohttp>=3.7.0",
+    "aioredis[hiredis]>=2.0.0",
 ]
 
 DEV_REQUIRES = [

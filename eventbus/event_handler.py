@@ -25,6 +25,7 @@ class EventHandler:
         if not self.topic_resolver or not self.producer:
             raise InitError("EventHandler must to be inited before use.")
 
-        self.topic_resolver.resolve(event)
+        if event_topic := self.topic_resolver.resolve(event.title):
+            event.topic = event_topic
         msg = await self.producer.produce(event)
         print(msg)
