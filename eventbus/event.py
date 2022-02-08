@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from confluent_kafka.cimpl import Message
 from pydantic import BaseModel, Field
 
 from eventbus.errors import EventValidationError
@@ -25,6 +26,24 @@ class Event(BaseModel):
         if self.summary:
             event_info += f"{{{self.summary}}}"
         return event_info
+
+
+class KafkaEvent(BaseModel):
+    kafka_msg: Message
+    event: Event
+
+    def __str__(self):
+        return (
+            f"KafkaEvent({self.event} "
+            f"from {self.kafka_msg.topic()}[{self.kafka_msg.partition()}]#{self.kafka_msg.offset()})"
+        )
+
+
+def parse_kafka_message(msg: Message) -> KafkaEvent:
+    events = parse_request_body(msg.value())
+    if len(events) != 1:
+        raise EventValidationError("Invalid format of the event")
+    return KafkaEvent(event=events[0], kafka_msg=msg)
 
 
 def parse_request_body(request_body: str) -> List[Event]:

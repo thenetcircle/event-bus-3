@@ -22,10 +22,18 @@ class EventValidationError(Exception):
     pass
 
 
-class EventProduceError(Exception):
+class EventProducingError(Exception):
     # TODO add root cause
     pass
 
 
 class InitProducerError(Exception):
+    pass
+
+
+class InitConsumerError(Exception):
+    pass
+
+
+class EventConsumingError(Exception):
     pass

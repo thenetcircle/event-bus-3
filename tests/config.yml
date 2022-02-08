@@ -15,16 +15,20 @@ topic_mapping:
   - topic: secondary-success
     patterns:
       - test\.secondary-success
-  - topic: event-v3-${namespace}${env}-default
+  - topic: event-v3-${env}-default
     patterns:
       - .*
 consumer:
-  kafka_config:
-    "poll-interval": 50ms
+  default_config:
+    concurrent_per_partition: 1
+    kafka_config:
+      "enable.auto.commit": false
+      "max.poll.interval.ms": 50
   instances:
     - id: test_consumer1
       events: []
-      concurrent_per_partition: 1
+      kafka_config:
+        "group.id": "override_group_id"
       sink:
         url: http://localhost
         method: POST

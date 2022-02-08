@@ -1,7 +1,7 @@
 import pytest
 
 from eventbus import config
-from eventbus.errors import EventProduceError
+from eventbus.errors import EventProducingError
 from eventbus.producer import KafkaProducer
 from tests.utils import create_event_from_dict
 
@@ -16,7 +16,7 @@ async def test_produce_from_primary_producer(mock_internal_kafka_producer):
     result = await producer.produce(succ_event)
     assert result is primary_msg
 
-    with pytest.raises(EventProduceError):
+    with pytest.raises(EventProducingError):
         fail_event = create_event_from_dict({"topic": "fail"})
         result = await producer.produce(fail_event)
 
@@ -49,6 +49,6 @@ async def test_produce_from_both_producers(mock_internal_kafka_producer):
     result = await producer.produce(secondary_success_event)
     assert result is secondary_msg
 
-    with pytest.raises(EventProduceError):
+    with pytest.raises(EventProducingError):
         fail_event = create_event_from_dict({"topic": "other"})
         await producer.produce(fail_event)

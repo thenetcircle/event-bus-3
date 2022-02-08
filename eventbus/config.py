@@ -34,13 +34,15 @@ class ProducerConfig(ConfigModel):
     kafka_config: Dict[str, str]
 
 
-class ConsumerSinkType(str, Enum):
-    HTTP = "http"
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
 
 
-class ConsumerSinkConfig(ConfigModel):
-    type: ConsumerSinkType = ConsumerSinkType.HTTP
+class HttpSinkConfig(ConfigModel):
     url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
     headers: Optional[Dict[str, str]] = None
     expected_status_codes: List[int] = [200]
     expected_responses: Optional[List[StrictStr]] = None
@@ -55,16 +57,23 @@ class ConsumerRetryConfig(ConfigModel):
     max_retry_times: Optional[int] = Field(default=None, gt=0)
 
 
+class DefaultConsumerInstanceConfig(ConfigModel):
+    concurrent_per_partition: int = 1
+    kafka_config: Optional[Dict[str, str]] = None
+    sink: Optional[HttpSinkConfig] = None
+
+
 class ConsumerInstanceConfig(ConfigModel):
     id: StrictStr
     events: List[StrictStr]
     concurrent_per_partition: int = 1
-    sink: ConsumerSinkConfig
+    kafka_config: Dict[str, str]
+    sink: HttpSinkConfig
     retry: Optional[ConsumerRetryConfig] = None
 
 
 class ConsumerConfig(ConfigModel):
-    kafka_config: Dict[str, str]
+    default_config: Optional[DefaultConsumerInstanceConfig] = None
     instances: List[ConsumerInstanceConfig]
 
 

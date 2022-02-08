@@ -6,7 +6,7 @@ from typing import Callable, Dict, Optional, Tuple
 from confluent_kafka import Message, Producer
 
 from eventbus import config
-from eventbus.errors import EventProduceError, EventValidationError, InitProducerError
+from eventbus.errors import EventProducingError, EventValidationError, InitProducerError
 from eventbus.event import Event
 
 
@@ -36,7 +36,7 @@ class KafkaProducer:
 
         try:
             return await primary_feature
-        except EventProduceError:
+        except EventProducingError:
             if self._secondary_producer:
                 secondary_feature, secondary_ack = self._create_ack()
                 self._secondary_producer.produce(
@@ -58,7 +58,7 @@ class KafkaProducer:
         def ack(err: Exception, msg: Message):
             if err:
                 self._loop.call_soon_threadsafe(
-                    feature.set_exception, EventProduceError(err)
+                    feature.set_exception, EventProducingError(err)
                 )
             else:
                 self._loop.call_soon_threadsafe(feature.set_result, msg)
@@ -122,6 +122,7 @@ class InternalKafkaProducer:
         # make sure all messages to be sent after cancelled
         self._real_producer.flush()
 
+    # TODO add key
     def produce(self, topic, value, **kwargs) -> None:
         """Produce message to topic. This is an asynchronous operation, an application may use
         the callback (alias on_delivery) argument to pass a function (or lambda) that will be
