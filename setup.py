@@ -34,6 +34,7 @@ INSTALL_REQUIRES = [
     "PyYAML>=5.4.*",
     "aiohttp>=3.7.0",
     "aioredis[hiredis]>=2.0.0",
+    "janus>=1.0.0",
 ]
 
 DEV_REQUIRES = [
@@ -44,6 +45,7 @@ DEV_REQUIRES = [
     "pytest==6.2.5",
     "pytest-mock",
     "pytest-asyncio",
+    "pytest-aiohttp",
     "assertpy",
 ]
 

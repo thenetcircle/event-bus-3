@@ -1,11 +1,11 @@
 import asyncio
-import queue
-from asyncio import Queue as AsyncQueue
-from queue import Queue
+from asyncio import Queue
 from threading import Thread
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import aiohttp
+import janus
+from aiohttp import ClientSession
 from confluent_kafka.cimpl import Consumer, Message, TopicPartition
 from loguru import logger
 
@@ -51,17 +51,17 @@ class KafkaConsumer:
             self.subscribed_topics, on_assign=self._on_assign, on_revoke=self._on_revoke
         )
 
-        send_queue = Queue(maxsize=100)
-        commit_queue = Queue(maxsize=100)
+        send_queue = janus.Queue(maxsize=100)
+        commit_queue = janus.Queue(maxsize=100)
 
         self._fetch_events_thread = Thread(
             target=self._fetch_events,
-            args=(send_queue, commit_queue),
+            args=(send_queue.sync_q, commit_queue.sync_q),
             name=f"consumer-{self.id}-fetch-events-thread",
         )
         self._fetch_events_thread.start()
 
-        await self._send_events(send_queue, commit_queue)
+        await self._wait_and_deliver_events(send_queue.async_q, commit_queue.async_q)
 
     def close(self) -> None:
         logger.warning('Closing Kafka Consumer "{}"', self.id)
@@ -70,24 +70,8 @@ class KafkaConsumer:
         self._internal_consumer = None
 
     def _fetch_events(
-        self,
-        send_queue: Queue,
-        commit_queue: Queue,
+        self, send_queue: janus.SyncQueue, commit_queue: janus.SyncQueue
     ) -> None:
-        def enqueue_until_cancelled(
-            _queue: Queue, _queue_name: str, _kafka_event: KafkaEvent, timeout=0.2
-        ):
-            while not self._cancelled:
-                try:
-                    _queue.put(_kafka_event, block=True, timeout=timeout)
-                    logger.debug(
-                        "A kafka event has been put into the {}, current queue size: {}",
-                        _queue_name,
-                        _queue.qsize(),
-                    )
-                except queue.Full:
-                    logger.debug("The {} is full, will retry", _queue_name)
-
         try:
             while not self._cancelled:
                 try:
@@ -122,12 +106,12 @@ class KafkaConsumer:
                                 kafka_event.event.title,
                             )
                             # put the event into the commit_queue
-                            enqueue_until_cancelled(
+                            self._enqueue_until_cancelled(
                                 commit_queue, "commit_queue", kafka_event
                             )
                         else:
                             # put the event into the send_queue
-                            enqueue_until_cancelled(
+                            self._enqueue_until_cancelled(
                                 send_queue, "send_queue", kafka_event
                             )
 
@@ -141,70 +125,80 @@ class KafkaConsumer:
         except KeyboardInterrupt:
             logger.warning('The Kafka consumer "{}" aborted by user', self.id)
 
-    async def _send_events(
+    async def _wait_and_deliver_events(
         self,
-        send_queue: Queue,
-        commit_queue: Queue,
-    ):
-        buffer_size = len(self.subscribed_topics) * 3 * 3
-        buffer = AsyncQueue(maxsize=buffer_size)
-
-        async with aiohttp.ClientSession() as session:
+        send_queue: janus.AsyncQueue,
+        commit_queue: janus.AsyncQueue,
+    ) -> None:
+        tp_queues: Dict[str, Queue] = {}
+        tp_queue_size = self._consumer_conf.concurrent_per_partition * 3
+        tp_consuming_tasks = []
+        async with ClientSession() as client:
             while True:
-                # filling the buffer
-                while True:
-                    try:
-                        _kafka_event = send_queue.get_nowait()
-                        buffer.put_nowait(_kafka_event)
-                    except (queue.Empty, asyncio.QueueFull):
-                        break
-
-                if buffer.empty():
-                    logger.debug("The kafka_events buffer is empty, continue")
-                    await asyncio.sleep(0.1)
-                    continue
-
-                # sending the events from the buffer
-                req_stats = {}
-                for kafka_event in buffer:
-                    _tp = (
-                        kafka_event.kafka_msg.topic()
-                        + "_"
-                        + str(kafka_event.kafka_msg.partition())
+                new_event: KafkaEvent = await send_queue.get()
+                tp = self._get_tp_from_event(new_event)
+                if tp in tp_queues:
+                    await tp_queues[tp].put(new_event)
+                else:
+                    tp_queues[tp] = Queue(maxsize=tp_queue_size)
+                    await tp_queues[tp].put(new_event)
+                    consuming_task = asyncio.create_task(
+                        self._consume_tp_queue(client, tp_queues[tp])
                     )
+                    tp_consuming_tasks.append(consuming_task)
 
-                    if _tp in req_stats:
-                        if (
-                            req_stats[_tp]
-                            >= self._consumer_conf.concurrent_per_partition
-                        ):
-                            # skip this event if the partition already have enough reqs on the fly.
-                            continue
-                        else:
-                            req_stats[_tp] += 1
-                    else:
-                        req_stats[_tp] = 1
+    async def _consume_tp_queue(self, client: ClientSession, tp_queue: Queue):
+        while True:
+            concurrent_sending_tasks = []
+            for i in range(self._consumer_conf.concurrent_per_partition):
+                new_event = await tp_queue.get()
+                sending_task = asyncio.create_task(
+                    self._send_one_event(client, new_event)
+                )
+                concurrent_sending_tasks.append(sending_task)
 
-                    # TODO del the event from the buffer
-                    # TODO send batch requsets together
-                    # TODO block until the batch done
+            results = await asyncio.gather(*concurrent_sending_tasks)
+            # TODO process the results
 
-                    try:
-                        req_func = getattr(
-                            session, self._consumer_conf.sink.method.lower()
-                        )
-                        async with req_func(
-                            self._consumer_conf.sink.url, data=kafka_event.event.payload
-                        ) as resp:
-                            print(resp.status)
-                            print(await resp.text())
+    async def _send_one_event(self, client: ClientSession, kafka_event: KafkaEvent):
+        try:
+            req_func = getattr(client, self._consumer_conf.sink.method.lower())
+            req_kwargs = {"data": kafka_event.event.payload}
+            if self._consumer_conf.sink.headers:
+                req_kwargs["headers"] = self._consumer_conf.sink.headers
 
-                    except Exception as ex:
-                        logger.error(
-                            'Send kafka_event "{}" failed with exception: {}',
-                            kafka_event,
-                            ex,
-                        )
+            async with req_func(self._consumer_conf.sink.url, **req_kwargs) as resp:
+                print(resp.status)
+                print(await resp.text())
+
+        except Exception as ex:
+            logger.error(
+                'Send kafka_event "{}" failed with exception: {}',
+                kafka_event,
+                ex,
+            )
+
+    def _enqueue_until_cancelled(
+        self,
+        _queue: janus.SyncQueue,
+        _queue_name: str,
+        _kafka_event: KafkaEvent,
+        timeout=0.2,
+    ):
+        while not self._cancelled:
+            try:
+                _queue.put(_kafka_event, block=True, timeout=timeout)
+                logger.debug(
+                    "A kafka event has been put into the {}, current queue size: {}",
+                    _queue_name,
+                    _queue.qsize(),
+                )
+            except janus.SyncQueueFull:
+                logger.debug("The {} is full, will retry", _queue_name)
+
+    @staticmethod
+    def _get_tp_from_event(event: KafkaEvent):
+        return event.kafka_msg.topic() + "_" + str(event.kafka_msg.partition())
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(

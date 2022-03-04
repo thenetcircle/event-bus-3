@@ -29,6 +29,9 @@ class Event(BaseModel):
 
 
 class KafkaEvent(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
     kafka_msg: Message
     event: Event
 

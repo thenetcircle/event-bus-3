@@ -44,6 +44,7 @@ class HttpSinkConfig(ConfigModel):
     url: StrictStr
     method: HttpSinkMethod = HttpSinkMethod.POST
     headers: Optional[Dict[str, str]] = None
+    buffer_size: Optional[int] = None
     expected_status_codes: List[int] = [200]
     expected_responses: Optional[List[StrictStr]] = None
 
