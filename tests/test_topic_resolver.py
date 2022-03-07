@@ -4,7 +4,7 @@ import pytest
 from pytest_mock import MockFixture
 
 from eventbus import config
-from eventbus.config import Config, ConsumerConfig, Env, ProducerConfig, TopicMapping
+from eventbus.config import Config, ConsumerContainer, Env, ProducerConfig, TopicMapping
 from eventbus.topic_resolver import TopicResolver
 from tests.utils import create_event_from_dict
 
@@ -121,5 +121,5 @@ def create_config(topic_mapping: List[SIMPLIFIED_MAPPING_TYPE]) -> Config:
         topic_mapping=[
             TopicMapping(topic=ele[0], patterns=ele[1]) for ele in topic_mapping
         ],
-        consumer=ConsumerConfig(kafka_config={}, instances=[]),
+        consumer=ConsumerContainer(kafka_config={}, instances=[]),
     )

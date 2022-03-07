@@ -3,7 +3,7 @@ from queue import Queue
 import pytest
 from pytest_mock import MockFixture
 
-from eventbus.config import ConsumerInstanceConfig, HttpSinkConfig, HttpSinkMethod
+from eventbus.config import ConsumerConfig, HttpSinkConfig, HttpSinkMethod
 from eventbus.consumer import KafkaConsumer
 from eventbus.event import KafkaEvent
 from tests.utils import create_event_from_dict
@@ -11,9 +11,9 @@ from tests.utils import create_event_from_dict
 
 @pytest.mark.asyncio
 async def test_send_events(mocker: MockFixture):
-    consumer_conf = ConsumerInstanceConfig(
+    consumer_conf = ConsumerConfig(
         id="test_consumer",
-        events=["test_event1"],
+        subscribe_events=["test_event1"],
         kafka_config={},
         sink=HttpSinkConfig(url="http://localhost", method=HttpSinkMethod.POST),
     )

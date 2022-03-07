@@ -26,15 +26,11 @@ consumer:
       "max.poll.interval.ms": 50
   instances:
     - id: test_consumer1
-      events: []
+      subscribe_events: []
       kafka_config:
         "group.id": "override_group_id"
       sink:
         url: http://localhost
         method: POST
         headers: []
-        expected_status_codes: [200]
-        expected_responses: ["ok"]
-      retry:
-        strategy: backoff
-        max_retry_times: 10
+        timeout: 2

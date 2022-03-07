@@ -6,7 +6,7 @@ import aiohttp
 import janus
 from loguru import logger
 
-from eventbus.config import ConsumerInstanceConfig
+from eventbus.config import ConsumerConfig
 from eventbus.event import KafkaEvent
 
 
@@ -15,7 +15,7 @@ class Sink:
 
 
 class HttpSink(Sink):
-    def __init__(self, consumer_conf: ConsumerInstanceConfig):
+    def __init__(self, consumer_conf: ConsumerConfig):
         self._consumer_conf = consumer_conf
         self._max_buffer_size = self._consumer_conf.sink.buffer_size or 3 * 3 * 3
 

@@ -1,4 +1,5 @@
 import threading
+from datetime import timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
@@ -44,38 +45,27 @@ class HttpSinkConfig(ConfigModel):
     url: StrictStr
     method: HttpSinkMethod = HttpSinkMethod.POST
     headers: Optional[Dict[str, str]] = None
-    buffer_size: Optional[int] = None
-    expected_status_codes: List[int] = [200]
-    expected_responses: Optional[List[StrictStr]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
 
 
-class ConsumerRetryStrategy(str, Enum):
-    BACKOFF = "backoff"
-
-
-class ConsumerRetryConfig(ConfigModel):
-    strategy: ConsumerRetryStrategy = ConsumerRetryStrategy.BACKOFF
-    max_retry_times: Optional[int] = Field(default=None, gt=0)
-
-
-class DefaultConsumerInstanceConfig(ConfigModel):
+class DefaultConsumerConfig(ConfigModel):
     concurrent_per_partition: int = 1
     kafka_config: Optional[Dict[str, str]] = None
     sink: Optional[HttpSinkConfig] = None
 
 
-class ConsumerInstanceConfig(ConfigModel):
+class ConsumerConfig(ConfigModel):
     id: StrictStr
-    events: List[StrictStr]
+    subscribe_events: List[StrictStr]
     concurrent_per_partition: int = 1
     kafka_config: Dict[str, str]
     sink: HttpSinkConfig
-    retry: Optional[ConsumerRetryConfig] = None
 
 
-class ConsumerConfig(ConfigModel):
-    default_config: Optional[DefaultConsumerInstanceConfig] = None
-    instances: List[ConsumerInstanceConfig]
+class ConsumerContainer(ConfigModel):
+    default_config: Optional[DefaultConsumerConfig] = None
+    instances: List[ConsumerConfig]
 
 
 class Config(ConfigModel):
@@ -83,7 +73,7 @@ class Config(ConfigModel):
     debug: bool
     producer: ProducerConfig
     topic_mapping: List[TopicMapping]
-    consumer: ConsumerConfig
+    consumer: ConsumerContainer
 
 
 Subscriber = Callable[[], None]

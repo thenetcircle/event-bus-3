@@ -22,7 +22,7 @@ class Event(BaseModel):
     topic: Optional[str] = None
 
     def __str__(self):
-        event_info = f"{self.title}#{self.id}@{self.published}"
+        event_info = f"{self.title}#{self.id}"
         if self.summary:
             event_info += f"{{{self.summary}}}"
         return event_info

@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Any
-
-import confluent_kafka
-from pytest_mock import MockFixture
+from unittest import mock
 
 from eventbus.event import Event, KafkaEvent
 
@@ -18,8 +16,8 @@ def create_event_from_dict(_dict: [str, Any]) -> Event:
     )
 
 
-def create_kafka_event_from_dict(mocker: MockFixture, _dict: [str, Any]) -> KafkaEvent:
-    kafka_msg = mocker.patch("confluent_kafka.cimpl.Message", autospec=True)
+def create_kafka_event_from_dict(_dict: [str, Any]) -> KafkaEvent:
+    kafka_msg = mock.patch("confluent_kafka.cimpl.Message", autospec=True).start()
     kafka_msg.topic.return_value = _dict.get("topic") or "topic"
     kafka_msg.partition.return_value = _dict.get("partition") or 1
     kafka_msg.offset.return_value = _dict.get("offset") or -1
