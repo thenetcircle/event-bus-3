@@ -98,7 +98,7 @@ class KafkaConsumer:
                             str(msg.key()),
                         )
                         try:
-                            kafka_event: KafkaEvent = parse_kafka_message(msg)
+                            event: KafkaEvent = parse_kafka_message(msg)
                         except Exception as ex:
                             logger.error(
                                 'Parsing kafka message: "{}" failed with error: "{}"',
@@ -109,19 +109,19 @@ class KafkaConsumer:
                             continue
 
                         # if the events from the topics not in subscribed events
-                        if kafka_event.event.title not in self._config.subscribe_events:
+                        if event.title not in self._config.subscribe_events:
                             logger.debug(
                                 'Get a new event "{}" which is not in subscribed events list, skip it',
-                                kafka_event.event.title,
+                                event.title,
                             )
                             # put the event into the commit_queue
                             self._enqueue_until_cancelled(
-                                commit_queue, "commit_queue", kafka_event
+                                commit_queue, "commit_queue", event
                             )
                         else:
                             # put the event into the send_queue
                             self._enqueue_until_cancelled(
-                                send_queue, "send_queue", kafka_event
+                                send_queue, "send_queue", event
                             )
 
                 except Exception as ex:
@@ -180,14 +180,14 @@ class KafkaConsumer:
             # TODO process the results
 
     async def _send_one_event(
-        self, client: ClientSession, kafka_event: KafkaEvent
+        self, client: ClientSession, event: KafkaEvent
     ) -> SendEventResult:
         retry_times = 0
         max_retry_times = self._config.sink.max_retry_times
 
         req_func = getattr(client, self._config.sink.method.lower())
         req_kwargs = {
-            "data": kafka_event.event.payload,
+            "data": event.payload,
             "timeout": aiohttp.ClientTimeout(total=self._config.sink.timeout),
         }
         if self._config.sink.headers:
@@ -203,7 +203,7 @@ class KafkaConsumer:
                         if resp_body == "ok":
                             logger.info(
                                 'That sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
-                                kafka_event,
+                                event,
                                 req_url,
                                 self._get_cost_time(start_time),
                                 retry_times,
@@ -215,7 +215,7 @@ class KafkaConsumer:
                             if retry_times >= max_retry_times:
                                 logger.info(
                                     'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                    kafka_event,
+                                    event,
                                     req_url,
                                     retry_times,
                                     self._get_cost_time(start_time),
@@ -229,7 +229,7 @@ class KafkaConsumer:
                             # unexpected resp
                             logger.warning(
                                 'That sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
-                                kafka_event,
+                                event,
                                 req_url,
                                 self._get_cost_time(start_time),
                                 resp_body,
@@ -239,7 +239,7 @@ class KafkaConsumer:
                     else:
                         logger.warning(
                             'That sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
-                            kafka_event,
+                            event,
                             req_url,
                             self._get_cost_time(start_time),
                             resp.status,
@@ -249,7 +249,7 @@ class KafkaConsumer:
                         if retry_times >= max_retry_times:
                             logger.info(
                                 'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                kafka_event,
+                                event,
                                 req_url,
                                 retry_times,
                                 self._get_cost_time(start_time),
@@ -268,7 +268,7 @@ class KafkaConsumer:
             ) as ex:
                 logger.error(
                     'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
-                    kafka_event,
+                    event,
                     req_url,
                     self._get_cost_time(start_time),
                     type(ex),
@@ -287,7 +287,7 @@ class KafkaConsumer:
                 # so just return retry_later
                 logger.error(
                     'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
-                    kafka_event,
+                    event,
                     req_url,
                     self._get_cost_time(start_time),
                     type(ex),
@@ -299,7 +299,7 @@ class KafkaConsumer:
             except Exception as ex:
                 logger.error(
                     'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception "{}", details : {}',
-                    kafka_event,
+                    event,
                     req_url,
                     self._get_cost_time(start_time),
                     type(ex),
@@ -315,12 +315,12 @@ class KafkaConsumer:
         self,
         _queue: janus.SyncQueue,
         _queue_name: str,
-        _kafka_event: KafkaEvent,
+        _event: KafkaEvent,
         timeout=0.2,
     ):
         while not self._cancelled:
             try:
-                _queue.put(_kafka_event, block=True, timeout=timeout)
+                _queue.put(_event, block=True, timeout=timeout)
                 logger.debug(
                     "A kafka event has been put into the {}, current queue size: {}",
                     _queue_name,
@@ -331,7 +331,7 @@ class KafkaConsumer:
 
     @staticmethod
     def _get_tp_from_event(event: KafkaEvent):
-        return event.kafka_msg.topic() + "_" + str(event.kafka_msg.partition())
+        return event.topic + "_" + str(event.partition)
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(

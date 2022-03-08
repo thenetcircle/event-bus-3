@@ -19,20 +19,15 @@ class KafkaProducer:
         config.add_subscriber(self._config_subscriber)
         self._init_internal_producers()
 
-    async def produce(self, event: Event) -> Message:
+    async def produce(self, topic: str, event: Event) -> Message:
         """
         An awaitable produce method.
         """
-        if not event.topic:
-            raise EventValidationError(f"The event {event}'s topic is not resolved.")
-
         if not self._primary_producer:
             raise InitProducerError("Primary producer must be inited.")
 
         primary_feature, primary_ack = self._create_ack()
-        self._primary_producer.produce(
-            event.topic, event.payload, on_delivery=primary_ack
-        )
+        self._primary_producer.produce(topic, event.payload, on_delivery=primary_ack)
 
         try:
             return await primary_feature
@@ -40,7 +35,7 @@ class KafkaProducer:
             if self._secondary_producer:
                 secondary_feature, secondary_ack = self._create_ack()
                 self._secondary_producer.produce(
-                    event.topic, event.payload, on_delivery=secondary_ack
+                    topic, event.payload, on_delivery=secondary_ack
                 )
                 return await secondary_feature
             else:

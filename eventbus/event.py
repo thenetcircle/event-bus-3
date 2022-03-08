@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from confluent_kafka.cimpl import Message
+from confluent_kafka.cimpl import TIMESTAMP_NOT_AVAILABLE, Message
 from pydantic import BaseModel, Field
 
 from eventbus.errors import EventValidationError
@@ -18,35 +18,46 @@ class Event(BaseModel):
     title: str
     published: datetime
     payload: str
-    summary: Optional[str] = None
-    topic: Optional[str] = None
 
     def __str__(self):
-        event_info = f"{self.title}#{self.id}"
-        if self.summary:
-            event_info += f"{{{self.summary}}}"
-        return event_info
+        return f"{self.title}#{self.id}"
 
 
-class KafkaEvent(BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
+class KafkaEvent(Event):
 
-    kafka_msg: Message
-    event: Event
+    topic: str
+    partition: int
+    offset: int
+    timestamp: Optional[int]
 
     def __str__(self):
-        return (
-            f"KafkaEvent({self.event} "
-            f"from {self.kafka_msg.topic()}[{self.kafka_msg.partition()}]#{self.kafka_msg.offset()})"
-        )
+        return super().__str__() + f"(:{self.topic},{self.partition},{self.offset})"
 
 
 def parse_kafka_message(msg: Message) -> KafkaEvent:
-    events = parse_request_body(msg.value())
-    if len(events) != 1:
+    try:
+        json_body = json.loads(msg.value())
+    except Exception:
+        raise EventValidationError(f"Request body must not an non-empty Json.")
+
+    if not isinstance(json_body, dict):
         raise EventValidationError("Invalid format of the event")
-    return KafkaEvent(event=events[0], kafka_msg=msg)
+
+    msg_timestamp = msg.timestamp()
+
+    event_attrs = {
+        "id": json_body.get("id"),
+        "title": json_body.get("title"),
+        "published": json_body.get("published"),
+        "payload": msg.value(),
+        "topic": msg.topic(),
+        "partition": msg.partition(),
+        "offset": msg.offset(),
+        "timestamp": (
+            msg_timestamp[1] if msg_timestamp[0] != TIMESTAMP_NOT_AVAILABLE else None
+        ),
+    }
+    return KafkaEvent(**event_attrs)
 
 
 def parse_request_body(request_body: str) -> List[Event]:
@@ -61,7 +72,6 @@ def parse_request_body(request_body: str) -> List[Event]:
             "title": _json.get("title"),
             "published": _json.get("published"),
             "payload": request_body,
-            "summary": _json.get("summary"),
         }
         return Event(**event_attrs)
 
