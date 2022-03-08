@@ -144,8 +144,7 @@ class KafkaConsumer:
         tp_queue_size = self._config.concurrent_per_partition * 3
         tp_consuming_tasks = []
 
-        timeout = aiohttp.ClientTimeout(total=self._config.sink.timeout)
-        async with ClientSession(timeout=timeout) as client:
+        async with ClientSession() as client:
             while True:
                 new_event: KafkaEvent = await send_queue.get()
                 tp = self._get_tp_from_event(new_event)
@@ -183,17 +182,20 @@ class KafkaConsumer:
     async def _send_one_event(
         self, client: ClientSession, kafka_event: KafkaEvent
     ) -> SendEventResult:
-        start_time = datetime.now()
         retry_times = 0
         max_retry_times = self._config.sink.max_retry_times
 
         req_func = getattr(client, self._config.sink.method.lower())
-        req_kwargs = {"data": kafka_event.event.payload}
+        req_kwargs = {
+            "data": kafka_event.event.payload,
+            "timeout": aiohttp.ClientTimeout(total=self._config.sink.timeout),
+        }
         if self._config.sink.headers:
             req_kwargs["headers"] = self._config.sink.headers
         req_url = self._config.sink.url
 
         while True:
+            start_time = datetime.now()
             try:
                 async with req_func(req_url, **req_kwargs) as resp:
                     if resp.status == 200:
@@ -211,6 +213,13 @@ class KafkaConsumer:
                         elif resp_body == "retry":
                             # retry logic
                             if retry_times >= max_retry_times:
+                                logger.info(
+                                    'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    kafka_event,
+                                    req_url,
+                                    retry_times,
+                                    self._get_cost_time(start_time),
+                                )
                                 return SendEventResult.RETRY_LATER
                             else:
                                 retry_times += 1
@@ -228,8 +237,23 @@ class KafkaConsumer:
                             return SendEventResult.RETRY_LATER
 
                     else:
+                        logger.warning(
+                            'That sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
+                            kafka_event,
+                            req_url,
+                            self._get_cost_time(start_time),
+                            resp.status,
+                        )
+
                         # non-200 status code, use retry logic
                         if retry_times >= max_retry_times:
+                            logger.info(
+                                'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                kafka_event,
+                                req_url,
+                                retry_times,
+                                self._get_cost_time(start_time),
+                            )
                             return SendEventResult.RETRY_LATER
                         else:
                             retry_times += 1
@@ -238,15 +262,16 @@ class KafkaConsumer:
             # more details of aiohttp errors can be found here:
             # https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientPayloadError
             except (
-                aiohttp.ClientConnectionError,  # this includes timeout error
+                aiohttp.ClientConnectionError,
                 aiohttp.InvalidURL,
+                asyncio.exceptions.TimeoutError,
             ) as ex:
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of {}. The details: {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
                     kafka_event,
                     req_url,
                     self._get_cost_time(start_time),
-                    type(ex).__name__,
+                    type(ex),
                     ex,
                 )
                 # TODO trigger alert
@@ -261,11 +286,11 @@ class KafkaConsumer:
                 # at least we shouldn't block other subsequence events
                 # so just return retry_later
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of {}. The details: {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
                     kafka_event,
                     req_url,
                     self._get_cost_time(start_time),
-                    type(ex).__name__,
+                    type(ex),
                     ex,
                 )
                 # TODO trigger alert
@@ -273,16 +298,18 @@ class KafkaConsumer:
 
             except Exception as ex:
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception {} : {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception "{}", details : {}',
                     kafka_event,
                     req_url,
                     self._get_cost_time(start_time),
-                    type(ex).__name__,
+                    type(ex),
                     ex,
                 )
                 # TODO trigger alert
                 # keep retry until fixed
                 await asyncio.sleep(0.1)
+
+            retry_times += 1
 
     def _enqueue_until_cancelled(
         self,
