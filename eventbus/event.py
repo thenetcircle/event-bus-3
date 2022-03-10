@@ -31,7 +31,7 @@ class KafkaEvent(Event):
     timestamp: Optional[int]
 
     def __str__(self):
-        return super().__str__() + f"(:{self.topic},{self.partition},{self.offset})"
+        return super().__str__() + f"({self.topic},{self.partition},{self.offset})"
 
 
 def parse_kafka_message(msg: Message) -> KafkaEvent:

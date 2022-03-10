@@ -1,12 +1,11 @@
 import threading
-from datetime import timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 import yaml
 from loguru import logger
-from pydantic import BaseModel, Field, StrictStr
+from pydantic import BaseModel, StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigSubscribeError, ConfigUpdateError
 
@@ -57,7 +56,8 @@ class DefaultConsumerConfig(ConfigModel):
 
 class ConsumerConfig(ConfigModel):
     id: StrictStr
-    subscribe_events: List[StrictStr]
+    listening_topics: List[StrictStr]
+    listening_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
     kafka_config: Dict[str, str]
     sink: HttpSinkConfig

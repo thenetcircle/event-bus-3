@@ -1,128 +1,175 @@
 import asyncio
-from asyncio import Queue
-from typing import Dict
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Optional, Tuple
 
 import aiohttp
-import janus
+from aiohttp import ClientSession
 from loguru import logger
 
 from eventbus.config import ConsumerConfig
+from eventbus.consumer import ProcessStatus
 from eventbus.event import KafkaEvent
 
 
-class Sink:
-    pass
+class Sink(ABC):
+    @abstractmethod
+    async def init(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, ProcessStatus]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def close(self):
+        raise NotImplementedError
 
 
 class HttpSink(Sink):
-    def __init__(self, consumer_conf: ConsumerConfig):
-        self._consumer_conf = consumer_conf
-        self._max_buffer_size = self._consumer_conf.sink.buffer_size or 3 * 3 * 3
+    def __init__(self, config: ConsumerConfig):
+        self._config = config
+        self._client: Optional[ClientSession] = None
 
-    async def wait_and_deliver_events(
-        self,
-        send_queue: janus.AsyncQueue,
-        commit_queue: janus.AsyncQueue,
-    ) -> None:
-        tp_queues: Dict[str, Queue] = {}
-        tp_queue_size = self._consumer_conf.concurrent_per_partition * 3
-        tp_consuming_tasks = []
-        async with aiohttp.ClientSession() as aiohttp_session:
-            while True:
-                new_event: KafkaEvent = await send_queue.get()
-                tp = self.get_tp_from_event(new_event)
-                if tp in tp_queues:
-                    await tp_queues[tp].put(new_event)
-                else:
-                    tp_queues[tp] = Queue(maxsize=tp_queue_size)
-                    consuming_task = asyncio.create_task(
-                        self.consume_tp_queue(aiohttp_session, tp_queues[tp])
-                    )
-                    tp_consuming_tasks.append(consuming_task)
+        self._max_retry_times = self._config.sink.max_retry_times
+        self._timeout = aiohttp.ClientTimeout(total=self._config.sink.timeout)
 
-    async def consume_tp_queue(
-        self, aiohttp_session: aiohttp.ClientSession, tp_queue: Queue
-    ):
+    async def init(self):
+        self._client = ClientSession()
+
+    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, ProcessStatus]:
+        retry_times = 0
+        req_func = getattr(self._client, self._config.sink.method.lower())
+        req_url = self._config.sink.url
+        req_kwargs = {
+            "data": event.payload,
+            "timeout": self._timeout,
+        }
+        if self._config.sink.headers:
+            req_kwargs["headers"] = self._config.sink.headers
+
         while True:
-            concurrent_sending_tasks = []
-            for i in range(self._consumer_conf.concurrent_per_partition):
-                new_event = await tp_queue.get()
-                sending_task = asyncio.create_task(
-                    self._send_one_event(aiohttp_session, new_event)
+            start_time = datetime.now()
+            try:
+                async with req_func(req_url, **req_kwargs) as resp:
+                    if resp.status == 200:
+                        resp_body = await resp.text()
+                        if resp_body == "ok":
+                            logger.info(
+                                'That sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
+                                event,
+                                req_url,
+                                self._get_cost_time(start_time),
+                                retry_times,
+                            )
+                            return event, ProcessStatus.DONE
+
+                        elif resp_body == "retry":
+                            # retry logic
+                            if retry_times >= self._max_retry_times:
+                                logger.info(
+                                    'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    event,
+                                    req_url,
+                                    retry_times,
+                                    self._get_cost_time(start_time),
+                                )
+                                return event, ProcessStatus.RETRY_LATER
+                            else:
+                                retry_times += 1
+                                continue
+
+                        else:
+                            # unexpected resp
+                            logger.warning(
+                                'That sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
+                                event,
+                                req_url,
+                                self._get_cost_time(start_time),
+                                resp_body,
+                            )
+                            return event, ProcessStatus.RETRY_LATER
+
+                    else:
+                        logger.warning(
+                            'That sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
+                            event,
+                            req_url,
+                            self._get_cost_time(start_time),
+                            resp.status,
+                        )
+
+                        # non-200 status code, use retry logic
+                        if retry_times >= self._max_retry_times:
+                            logger.info(
+                                'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                event,
+                                req_url,
+                                retry_times,
+                                self._get_cost_time(start_time),
+                            )
+                            return event, ProcessStatus.RETRY_LATER
+                        else:
+                            retry_times += 1
+                            continue
+
+            # more details of aiohttp errors can be found here:
+            # https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientPayloadError
+            except (
+                aiohttp.ClientConnectionError,
+                aiohttp.InvalidURL,
+                asyncio.exceptions.TimeoutError,
+            ) as ex:
+                logger.error(
+                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
+                    event,
+                    req_url,
+                    self._get_cost_time(start_time),
+                    type(ex),
+                    ex,
                 )
-                concurrent_sending_tasks.append(sending_task)
+                # TODO trigger alert
+                # keep retry
+                await asyncio.sleep(0.1)
 
-            results = await asyncio.gather(*concurrent_sending_tasks)
-            # TODO process the results
+            except (
+                aiohttp.ClientResponseError,  # this is mostly the response related error
+                aiohttp.ClientPayloadError,  # this is response data error
+            ) as ex:
+                # since it's response related errors, it could be recovered later by improving the target
+                # at least we shouldn't block other subsequence events
+                # so just return retry_later
+                logger.error(
+                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
+                    event,
+                    req_url,
+                    self._get_cost_time(start_time),
+                    type(ex),
+                    ex,
+                )
+                # TODO trigger alert
+                return event, ProcessStatus.RETRY_LATER
 
-    async def _send_one_event(
-        self, aiohttp_session: aiohttp.ClientSession, kafka_event: KafkaEvent
-    ):
-        try:
-            req_func = getattr(aiohttp_session, self._consumer_conf.sink.method.lower())
-            req_kwargs = {"data": kafka_event.event.payload}
-            if self._consumer_conf.sink.headers:
-                req_kwargs["headers"] = self._consumer_conf.sink.headers
+            except Exception as ex:
+                logger.error(
+                    'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception "{}", details : {}',
+                    event,
+                    req_url,
+                    self._get_cost_time(start_time),
+                    type(ex),
+                    ex,
+                )
+                # TODO trigger alert
+                # keep retry until fixed
+                await asyncio.sleep(0.1)
 
-            async with req_func(self._consumer_conf.sink.url, **req_kwargs) as resp:
-                print(resp.status)
-                print(await resp.text())
+            retry_times += 1
 
-        except Exception as ex:
-            logger.error(
-                'Send kafka_event "{}" failed with exception: {}',
-                kafka_event,
-                ex,
-            )
+    async def close(self):
+        if self._client:
+            await self._client.close()
+            self._client = None
 
     @staticmethod
-    def get_tp_from_event(self, event: KafkaEvent):
-        return event.kafka_msg.topic() + "_" + str(event.kafka_msg.partition())
-
-    # async def _fill_buffer_from_queue(
-    #     self, send_queue: janus.AsyncQueue, buffer: Dict[str, List[KafkaEvent]]
-    # ) -> None:
-    #     buffer_size = sum([len(v) for k, v in buffer.items()])
-    #     # filling the buffer
-    #     while True:
-    #         try:
-    #             if buffer_size >= self._max_buffer_size:
-    #                 break
-    #
-    #             _kafka_event = await send_queue.get()
-    #
-    #             _tp = (
-    #                 _kafka_event.kafka_msg.topic()
-    #                 + "_"
-    #                 + str(_kafka_event.kafka_msg.partition())
-    #             )
-    #             if _tp in buffer:
-    #                 buffer[_tp].append(_kafka_event)
-    #             else:
-    #                 buffer[_tp] = [_kafka_event]
-    #             buffer_size += 1
-    #
-    #         except queue.Empty:
-    #             if buffer_size == 0:
-    #                 logger.debug("The kafka_events buffer is empty, continue")
-    #                 await asyncio.sleep(0.1)
-    #             else:
-    #                 # if the buffer is not empty, but the queue is empty, then break the loop
-    #                 break
-
-    # async def _send_buffer_events(
-    #     self,
-    #     session: aiohttp.ClientSession,
-    #     buffer: Dict[str, List[KafkaEvent]],
-    #     commit_queue: janus.AsyncQueue,
-    # ) -> None:
-    #     tasks = set()
-    #     # sending the events from the buffer
-    #     for buffer_key, kafka_events in buffer.items():
-    #         for i in range(self._consumer_conf.concurrent_per_partition):
-    #             if len(kafka_events) == 0:
-    #                 break
-    #             kafka_event = kafka_events.pop(0)
-    #             tasks.add(self._send_one_event(session, kafka_event))
-    #
-    #     done, pending = await asyncio.wait(tasks)
+    def _get_cost_time(start_time: datetime) -> float:
+        return ((datetime.now()) - start_time).total_seconds()

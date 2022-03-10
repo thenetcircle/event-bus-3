@@ -37,3 +37,7 @@ class InitConsumerError(Exception):
 
 class EventConsumingError(Exception):
     pass
+
+
+class ClosedError(Exception):
+    pass

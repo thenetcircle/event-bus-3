@@ -1,88 +1,177 @@
 import asyncio
-from asyncio import Queue
-from datetime import datetime
+import re
+import time
+from asyncio import Queue as AsyncioQueue
 from enum import Enum
-from threading import Thread
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-import aiohttp
 import janus
-from aiohttp import ClientSession
 from confluent_kafka.cimpl import Consumer, Message, TopicPartition
+from janus import Queue as JanusQueue
 from loguru import logger
 
 from eventbus.config import ConsumerConfig
-from eventbus.errors import EventConsumingError, InitConsumerError
+from eventbus.errors import ClosedError, EventConsumingError
 from eventbus.event import KafkaEvent, parse_kafka_message
+from eventbus.sink import HttpSink, Sink
 
 
-class SendEventResult(str, Enum):
+class ProcessStatus(str, Enum):
     DONE = "done"
     RETRY_LATER = "retry_later"
     DISCARD = "discard"
 
 
+class ConsumerCoordinator:
+    def __init__(self, config: ConsumerConfig, topics: List[str]):
+        # TODO check args, kafka_config, group.id, bootstrap.servers, ...
+        self._config = config
+        self._consumer = KafkaConsumer(config, topics)
+        self._sink: Sink = HttpSink(config)
+
+    async def run(self) -> None:
+        send_queue: JanusQueue[KafkaEvent] = JanusQueue(maxsize=100)
+        commit_queue: JanusQueue[Tuple[KafkaEvent, ProcessStatus]] = JanusQueue(
+            maxsize=100
+        )
+
+        try:
+            await self._consumer.init()
+            await self._sink.init()
+
+            done, pending = await asyncio.wait(
+                {
+                    self._consumer.fetch_events(send_queue),
+                    self._wait_and_send_events(send_queue, commit_queue),
+                    self._consumer.commit_events(commit_queue),
+                }
+            )
+
+            logger.warning(
+                "ConsumerCoordinator runs over. done: {}, pending: {}", done, pending
+            )
+        finally:
+            await self.cancel()
+
+    async def cancel(self) -> None:
+        logger.warning(
+            'Cancelling ConsumerCoordinator of Consumer "{}"', self._config.id
+        )
+        done, pending = await asyncio.wait(
+            {self._consumer.close(), self._sink.close()}, timeout=300
+        )
+        logger.info("ConsumerCoordinator cancelled. done: {}", done)
+        if pending:
+            logger.warning("ConsumerCoordinator cancelled. pending: {}", pending)
+
+    async def _wait_and_send_events(
+        self,
+        send_queue: JanusQueue[KafkaEvent],
+        commit_queue: JanusQueue[Tuple[KafkaEvent, ProcessStatus]],
+    ) -> None:
+        tp_queues: Dict[str, AsyncioQueue[KafkaEvent]] = {}
+        tp_queue_size = self._config.concurrent_per_partition * 3
+        tp_tasks = []
+
+        while True:
+            new_event: KafkaEvent = await send_queue.async_q.get()
+            tp = self._get_topic_partition_str(new_event)
+            if tp in tp_queues:
+                await tp_queues[tp].put(new_event)
+            else:
+                tp_queues[tp] = AsyncioQueue(maxsize=tp_queue_size)
+                await tp_queues[tp].put(new_event)
+                tp_task = asyncio.create_task(
+                    self._send_one_partition_events(tp_queues[tp], commit_queue)
+                )
+                tp_tasks.append(tp_task)
+
+    async def _send_one_partition_events(
+        self,
+        tp_queue: AsyncioQueue[KafkaEvent],
+        commit_queue: JanusQueue[Tuple[KafkaEvent, ProcessStatus]],
+    ):
+        while True:
+            current_tasks = []
+            try:
+                for i in range(self._config.concurrent_per_partition):
+                    if i == 0:
+                        # only wait for the first event
+                        new_event = await tp_queue.get()
+                    else:
+                        new_event = tp_queue.get_nowait()
+
+                    if self._is_listening_event(new_event):
+                        sending_task = asyncio.create_task(
+                            self._sink.send_event(new_event)
+                        )
+                    else:
+                        # If the event is not in listening events, just use a future to represent the process result
+                        sending_task = asyncio.get_event_loop().create_future()
+                        sending_task.set_result((new_event, ProcessStatus.DISCARD))
+
+                    current_tasks.append(sending_task)
+            except asyncio.QueueEmpty:
+                pass
+
+            results = await asyncio.gather(*current_tasks)
+            for send_result in results:
+                await commit_queue.async_q.put(send_result)
+
+    def _is_listening_event(self, event: KafkaEvent) -> bool:
+        listening_event = self._config.listening_events
+        if not listening_event:
+            return True
+        for ev_pattern in listening_event:
+            if re.match(re.compile(ev_pattern, re.I), event.title):
+                return True
+        return False
+
+    @staticmethod
+    def _get_topic_partition_str(event: KafkaEvent):
+        return event.topic + "_" + str(event.partition)
+
+
 class KafkaConsumer:
     def __init__(self, config: ConsumerConfig, topics: List[str]):
         # TODO check args, kafka_config, group.id, bootstrap.servers, ...
-        self._id = config.id
         self._config = config
+        self._closed = False
         self._subscribed_topics = topics
-        self._current_topic_partitions: Dict[str, int] = {}
-        self._cancelled = False
         self._internal_consumer: Optional[Consumer] = None
-        self._fetch_events_thread: Optional[Thread] = None
 
-    @property
-    def id(self) -> str:
-        return self._id
-
-    @property
-    def subscribed_topics(self) -> List[str]:
-        return self._subscribed_topics
-
-    async def start(self) -> None:
-        """
-        - get topics by listening events and topic mapping
-        - start the consumer on the topic-partitions
-        - send to sink
-        - update offsets on redis, and periodically commit to kafka
-        """
-
-        if self._internal_consumer:
-            raise InitConsumerError("The Kafka consumer has been already started.")
-
+    async def init(self) -> None:
         self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
         self._internal_consumer.subscribe(
             self.subscribed_topics, on_assign=self._on_assign, on_revoke=self._on_revoke
         )
 
-        send_queue = janus.Queue(maxsize=100)
-        commit_queue = janus.Queue(maxsize=100)
-        retry_queue = janus.Queue(maxsize=100)
+    async def fetch_events(
+        self,
+        send_queue: JanusQueue[KafkaEvent],
+        commit_queue: JanusQueue[Tuple[KafkaEvent, ProcessStatus]],
+    ):
+        await asyncio.to_thread(self._internal_fetch_events, send_queue)
+        logger.info('The KafkaConsumer "{}" fetch_events quit.', self._config.id)
 
-        self._fetch_events_thread = Thread(
-            target=self._fetch_events,
-            args=(send_queue.sync_q, commit_queue.sync_q),
-            name=f"consumer-{self.id}-fetch-events-thread",
-        )
-        self._fetch_events_thread.start()
+    async def commit_events(
+        self, commit_queue: JanusQueue[Tuple[KafkaEvent, ProcessStatus]]
+    ):
+        await asyncio.to_thread(self._internal_commit_events, commit_queue)
+        logger.info('The KafkaConsumer "{}" commit_events quit.', self._config.id)
 
-        await self._wait_and_deliver_events(
-            send_queue.async_q, commit_queue.async_q, retry_queue.async_q
-        )
-
-    def close(self) -> None:
-        logger.warning('Closing Kafka Consumer "{}"', self.id)
-        self._cancelled = True
+    async def close(self) -> None:
+        logger.warning('Closing Kafka Consumer "{}"', self._config.id)
+        self._closed = True
+        await asyncio.sleep(3)  # wait for the threads to complete their jobs
         self._internal_consumer.close()
         self._internal_consumer = None
 
-    def _fetch_events(
-        self, send_queue: janus.SyncQueue, commit_queue: janus.SyncQueue
-    ) -> None:
+        # TODO commit events haven't been procssed completely
+
+    def _internal_fetch_events(self, send_queue: JanusQueue) -> None:
         try:
-            while not self._cancelled:
+            while not self._closed:
                 try:
                     msg: Message = self._internal_consumer.poll(timeout=1.0)
                     if msg is None:
@@ -101,249 +190,99 @@ class KafkaConsumer:
                             event: KafkaEvent = parse_kafka_message(msg)
                         except Exception as ex:
                             logger.error(
-                                'Parsing kafka message: "{}" failed with error: "{}"',
+                                'Parse kafka message: "{}" failed with error: "{}"',
                                 msg.value(),
-                                ex,
+                                type(ex),
                             )
-                            # skip this event if parsed failed
+                            # TODO trigger error
+                            # skip this event if parse failed
                             continue
 
-                        # if the events from the topics not in subscribed events
-                        if event.title not in self._config.subscribe_events:
-                            logger.debug(
-                                'Get a new event "{}" which is not in subscribed events list, skip it',
-                                event.title,
-                            )
-                            # put the event into the commit_queue
-                            self._enqueue_until_cancelled(
-                                commit_queue, "commit_queue", event
-                            )
-                        else:
-                            # put the event into the send_queue
-                            self._enqueue_until_cancelled(
-                                send_queue, "send_queue", event
-                            )
+                        while not self._closed:
+                            try:
+                                send_queue.sync_q.put(event, block=True, timeout=0.2)
+                                logger.debug(
+                                    "A kafka event has been put into send_queue, current queue size is {}",
+                                    send_queue.sync_q.qsize(),
+                                )
+                            except janus.SyncQueueFull:
+                                logger.debug("The send_queue is full, will retry")
 
                 except Exception as ex:
                     logger.error(
-                        'The fetch_events_thread of consumer "{}" get a new exception: {}',
-                        self.id,
-                        ex,
+                        "Pull events from Kafka failed with exception: {}, will retry",
+                        type(ex),
                     )
+                    time.sleep(0.1)
 
         except KeyboardInterrupt:
-            logger.warning('The Kafka consumer "{}" aborted by user', self.id)
+            logger.warning(
+                'The Kafka consumer _internal_send_events "{}" aborted by user',
+                self._config.id,
+            )
 
-    async def _wait_and_deliver_events(
-        self,
-        send_queue: janus.AsyncQueue,
-        commit_queue: janus.AsyncQueue,
-        retry_queue: janus.AsyncQueue,
-    ) -> None:
-        tp_queues: Dict[str, Queue] = {}
-        tp_queue_size = self._config.concurrent_per_partition * 3
-        tp_consuming_tasks = []
+    def _internal_commit_events(self, commit_queue: JanusQueue) -> None:
+        try:
+            while self._check_if_close():
+                event: KafkaEvent = None
+                status: ProcessStatus = None
 
-        async with ClientSession() as client:
-            while True:
-                new_event: KafkaEvent = await send_queue.get()
-                tp = self._get_tp_from_event(new_event)
-                if tp in tp_queues:
-                    await tp_queues[tp].put(new_event)
-                else:
-                    tp_queues[tp] = Queue(maxsize=tp_queue_size)
-                    await tp_queues[tp].put(new_event)
-                    consuming_task = asyncio.create_task(
-                        self._consume_tp_queue(
-                            client, tp_queues[tp], commit_queue, retry_queue
-                        )
+                while self._check_if_close():
+                    try:
+                        event, status = commit_queue.sync_q.get(block=True, timeout=0.2)
+                    except janus.SyncQueueEmpty:
+                        pass
+
+                try:
+                    self._internal_consumer.commit(
+                        offsets=self._get_topic_partitions(event)
                     )
-                    tp_consuming_tasks.append(consuming_task)
 
-    async def _consume_tp_queue(
-        self,
-        client: ClientSession,
-        tp_queue: Queue,
-        commit_queue: janus.AsyncQueue,
-        retry_queue: janus.AsyncQueue,
-    ):
-        while True:
-            concurrent_sending_tasks = []
-            for i in range(self._config.concurrent_per_partition):
-                new_event = await tp_queue.get()
-                sending_task = asyncio.create_task(
-                    self._send_one_event(client, new_event, commit_queue, retry_queue)
-                )
-                concurrent_sending_tasks.append(sending_task)
+                    if status == ProcessStatus.DONE:
+                        pass
 
-            results = await asyncio.gather(*concurrent_sending_tasks)
-            # TODO process the results
+                    elif status == ProcessStatus.RETRY_LATER:
+                        # TODO send to another topic
+                        pass
 
-    async def _send_one_event(
-        self, client: ClientSession, event: KafkaEvent
-    ) -> SendEventResult:
-        retry_times = 0
-        max_retry_times = self._config.sink.max_retry_times
+                    elif status == ProcessStatus.DISCARD:
+                        pass
+                except Exception as ex:
+                    logger.error(
+                        "Pull events from Kafka failed with exception: {}, will retry",
+                        type(ex),
+                    )
+                    time.sleep(0.1)
 
-        req_func = getattr(client, self._config.sink.method.lower())
-        req_kwargs = {
-            "data": event.payload,
-            "timeout": aiohttp.ClientTimeout(total=self._config.sink.timeout),
-        }
-        if self._config.sink.headers:
-            req_kwargs["headers"] = self._config.sink.headers
-        req_url = self._config.sink.url
-
-        while True:
-            start_time = datetime.now()
-            try:
-                async with req_func(req_url, **req_kwargs) as resp:
-                    if resp.status == 200:
-                        resp_body = await resp.text()
-                        if resp_body == "ok":
-                            logger.info(
-                                'That sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
-                                event,
-                                req_url,
-                                self._get_cost_time(start_time),
-                                retry_times,
-                            )
-                            return SendEventResult.DONE
-
-                        elif resp_body == "retry":
-                            # retry logic
-                            if retry_times >= max_retry_times:
-                                logger.info(
-                                    'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                    event,
-                                    req_url,
-                                    retry_times,
-                                    self._get_cost_time(start_time),
-                                )
-                                return SendEventResult.RETRY_LATER
-                            else:
-                                retry_times += 1
-                                continue
-
-                        else:
-                            # unexpected resp
-                            logger.warning(
-                                'That sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
-                                event,
-                                req_url,
-                                self._get_cost_time(start_time),
-                                resp_body,
-                            )
-                            return SendEventResult.RETRY_LATER
-
-                    else:
-                        logger.warning(
-                            'That sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
-                            event,
-                            req_url,
-                            self._get_cost_time(start_time),
-                            resp.status,
-                        )
-
-                        # non-200 status code, use retry logic
-                        if retry_times >= max_retry_times:
-                            logger.info(
-                                'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                event,
-                                req_url,
-                                retry_times,
-                                self._get_cost_time(start_time),
-                            )
-                            return SendEventResult.RETRY_LATER
-                        else:
-                            retry_times += 1
-                            continue
-
-            # more details of aiohttp errors can be found here:
-            # https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientPayloadError
-            except (
-                aiohttp.ClientConnectionError,
-                aiohttp.InvalidURL,
-                asyncio.exceptions.TimeoutError,
-            ) as ex:
-                logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
-                    event,
-                    req_url,
-                    self._get_cost_time(start_time),
-                    type(ex),
-                    ex,
-                )
-                # TODO trigger alert
-                # keep retry
-                await asyncio.sleep(0.1)
-
-            except (
-                aiohttp.ClientResponseError,  # this is mostly the response related error
-                aiohttp.ClientPayloadError,  # this is response data error
-            ) as ex:
-                # since it's response related errors, it could be recovered later by improving the target
-                # at least we shouldn't block other subsequence events
-                # so just return retry_later
-                logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
-                    event,
-                    req_url,
-                    self._get_cost_time(start_time),
-                    type(ex),
-                    ex,
-                )
-                # TODO trigger alert
-                return SendEventResult.RETRY_LATER
-
-            except Exception as ex:
-                logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception "{}", details : {}',
-                    event,
-                    req_url,
-                    self._get_cost_time(start_time),
-                    type(ex),
-                    ex,
-                )
-                # TODO trigger alert
-                # keep retry until fixed
-                await asyncio.sleep(0.1)
-
-            retry_times += 1
-
-    def _enqueue_until_cancelled(
-        self,
-        _queue: janus.SyncQueue,
-        _queue_name: str,
-        _event: KafkaEvent,
-        timeout=0.2,
-    ):
-        while not self._cancelled:
-            try:
-                _queue.put(_event, block=True, timeout=timeout)
-                logger.debug(
-                    "A kafka event has been put into the {}, current queue size: {}",
-                    _queue_name,
-                    _queue.qsize(),
-                )
-            except janus.SyncQueueFull:
-                logger.debug("The {} is full, will retry", _queue_name)
-
-    @staticmethod
-    def _get_tp_from_event(event: KafkaEvent):
-        return event.topic + "_" + str(event.partition)
+        except (KeyboardInterrupt, ClosedError):
+            logger.warning(
+                'The Kafka consumer _internal_commit_events "{}" aborted by user',
+                self._config.id,
+            )
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
             'KafkaConsumer "{}" get assigned new TopicPartitions: "{}"',
-            self.id,
+            self._config.id,
             partitions,
         )
 
     def _on_revoke(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
-            'KafkaConsumer "{}" get revoked TopicPartitions: "{}"', self.id, partitions
+            'KafkaConsumer "{}" get revoked TopicPartitions: "{}"',
+            self._config.id,
+            partitions,
         )
 
-    def _get_cost_time(self, start_time: datetime) -> float:
-        return ((datetime.now()) - start_time).total_seconds()
+    def _check_if_close(self) -> bool:
+        if self._closed:
+            raise ClosedError
+
+        return not self._closed
+
+    @staticmethod
+    def _get_topic_partitions(self, *events: KafkaEvent) -> List[TopicPartition]:
+        return [
+            TopicPartition(event.topic, event.partition, event.offset)
+            for event in events
+        ]
