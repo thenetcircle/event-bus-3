@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from confluent_kafka.cimpl import TIMESTAMP_NOT_AVAILABLE, Message
@@ -20,7 +21,7 @@ class Event(BaseModel):
     payload: str
 
     def __str__(self):
-        return f"{self.title}#{self.id}"
+        return f"Event({self.title}#{self.id})"
 
 
 class KafkaEvent(Event):
@@ -31,7 +32,13 @@ class KafkaEvent(Event):
     timestamp: Optional[int]
 
     def __str__(self):
-        return super().__str__() + f"({self.topic},{self.partition},{self.offset})"
+        return f"KafkaEvent({self.title}#{self.id}@{self.topic}:{self.partition}:{self.offset})"
+
+
+class EventProcessStatus(str, Enum):
+    DONE = "done"
+    RETRY_LATER = "retry_later"
+    DISCARD = "discard"
 
 
 def parse_kafka_message(msg: Message) -> KafkaEvent:

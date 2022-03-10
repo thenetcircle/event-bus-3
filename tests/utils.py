@@ -1,5 +1,9 @@
+import json
 from datetime import datetime
 from typing import Any
+from unittest import mock
+
+from confluent_kafka.cimpl import TIMESTAMP_CREATE_TIME, TIMESTAMP_NOT_AVAILABLE
 
 from eventbus.event import Event, KafkaEvent
 
@@ -24,3 +28,33 @@ def create_kafka_event_from_dict(_dict: [str, Any]) -> KafkaEvent:
         offset=_dict.get("offset") or -1,
         timestamp=_dict.get("timestamp") or None,
     )
+
+
+def create_kafka_message_from_dict(_dict: [str, Any]) -> "confluent_kafka.Message":
+    with mock.patch("confluent_kafka.Message", autospec=True) as MessageClass:
+        msg = MessageClass()
+        msg.topic.return_value = _dict.get("topic") or "topic1"
+        msg.partition.return_value = _dict.get("partition") or 1
+        msg.offset.return_value = _dict.get("offset") or 1
+        msg.key.return_value = _dict.get("key") or ""
+
+        value = {}
+        value["id"] = _dict.get("id") or "test_event_1"
+        value["title"] = _dict.get("title") or "user.login"
+        # YYYY-MM-DD[T]HH:MM[:SS[.ffffff]][Z or [±]HH[:]MM]]]
+        value["published"] = _dict.get("published") or (
+            datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        )
+        msg.value.return_value = json.dumps(value)
+
+        msg_timestamp = _dict.get("timestamp")
+        # datetime.utcnow().microsecond * 1000
+        msg.timestamp.return_value = (
+            (TIMESTAMP_CREATE_TIME, msg_timestamp)
+            if msg_timestamp
+            else (TIMESTAMP_NOT_AVAILABLE, None)
+        )
+
+        msg.error.return_value = _dict.get("error") or None
+
+        return msg

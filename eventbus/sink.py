@@ -8,8 +8,7 @@ from aiohttp import ClientSession
 from loguru import logger
 
 from eventbus.config import ConsumerConfig
-from eventbus.consumer import ProcessStatus
-from eventbus.event import KafkaEvent
+from eventbus.event import EventProcessStatus, KafkaEvent
 
 
 class Sink(ABC):
@@ -18,7 +17,9 @@ class Sink(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, ProcessStatus]:
+    async def send_event(
+        self, event: KafkaEvent
+    ) -> Tuple[KafkaEvent, EventProcessStatus]:
         raise NotImplementedError
 
     @abstractmethod
@@ -37,7 +38,9 @@ class HttpSink(Sink):
     async def init(self):
         self._client = ClientSession()
 
-    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, ProcessStatus]:
+    async def send_event(
+        self, event: KafkaEvent
+    ) -> Tuple[KafkaEvent, EventProcessStatus]:
         retry_times = 0
         req_func = getattr(self._client, self._config.sink.method.lower())
         req_url = self._config.sink.url
@@ -62,7 +65,7 @@ class HttpSink(Sink):
                                 self._get_cost_time(start_time),
                                 retry_times,
                             )
-                            return event, ProcessStatus.DONE
+                            return event, EventProcessStatus.DONE
 
                         elif resp_body == "retry":
                             # retry logic
@@ -74,7 +77,7 @@ class HttpSink(Sink):
                                     retry_times,
                                     self._get_cost_time(start_time),
                                 )
-                                return event, ProcessStatus.RETRY_LATER
+                                return event, EventProcessStatus.RETRY_LATER
                             else:
                                 retry_times += 1
                                 continue
@@ -88,7 +91,7 @@ class HttpSink(Sink):
                                 self._get_cost_time(start_time),
                                 resp_body,
                             )
-                            return event, ProcessStatus.RETRY_LATER
+                            return event, EventProcessStatus.RETRY_LATER
 
                     else:
                         logger.warning(
@@ -108,7 +111,7 @@ class HttpSink(Sink):
                                 retry_times,
                                 self._get_cost_time(start_time),
                             )
-                            return event, ProcessStatus.RETRY_LATER
+                            return event, EventProcessStatus.RETRY_LATER
                         else:
                             retry_times += 1
                             continue
@@ -148,7 +151,7 @@ class HttpSink(Sink):
                     ex,
                 )
                 # TODO trigger alert
-                return event, ProcessStatus.RETRY_LATER
+                return event, EventProcessStatus.RETRY_LATER
 
             except Exception as ex:
                 logger.error(

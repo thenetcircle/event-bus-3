@@ -1,10 +1,19 @@
+import multiprocessing
 from pathlib import Path
+from sys import platform
 from typing import Dict
 
 import pytest
 from pytest_mock import MockFixture
 
 from eventbus import config
+
+
+def pytest_configure(config):
+    if platform in ["darwin", "windows"]:
+        multiprocessing.set_start_method("spawn")
+    else:
+        multiprocessing.set_start_method("fork")
 
 
 @pytest.fixture(autouse=True)

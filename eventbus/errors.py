@@ -39,5 +39,9 @@ class EventConsumingError(Exception):
     pass
 
 
+class InvalidArgumentError(Exception):
+    pass
+
+
 class ClosedError(Exception):
     pass
