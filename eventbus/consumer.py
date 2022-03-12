@@ -2,8 +2,7 @@ import asyncio
 import re
 import time
 from asyncio import Queue as AsyncioQueue
-from threading import Thread
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import janus
 from confluent_kafka.cimpl import Consumer, Message, TopicPartition
@@ -21,53 +20,63 @@ class ConsumerCoordinator:
         self._config = config
         self._consumer = KafkaConsumer(config)
         self._sink: Sink = HttpSink(config)
+        self._running = False
+        self._main_wait_task = None
+        self._partition_wait_tasks = []
+        self._send_queue: JanusQueue[KafkaEvent] = None
+        self._commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]] = None
 
-    async def run(self) -> None:
-        send_queue: JanusQueue[KafkaEvent] = JanusQueue(maxsize=100)
-        commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]] = JanusQueue(
-            maxsize=100
-        )
+    async def init(self) -> None:
+        await self._consumer.init()
+        await self._sink.init()
+        self._send_queue = JanusQueue(maxsize=100)
+        self._commit_queue = JanusQueue(maxsize=100)
+
+    async def run(
+        self,
+    ) -> None:
+        start_time = time.time()
+        self._running = True
 
         try:
-            await self._consumer.init()
-            await self._sink.init()
+            self._main_wait_task = asyncio.create_task(self._wait_and_send_events())
 
-            done, pending = await asyncio.wait(
-                {
-                    self._consumer.fetch_events(send_queue),
-                    self._wait_and_send_events(send_queue, commit_queue),
-                    self._consumer.commit_events(commit_queue),
-                }
+            await asyncio.gather(
+                self._consumer.fetch_events(self._send_queue),
+                self._main_wait_task,
+                self._consumer.commit_events(self._commit_queue),
             )
 
             logger.warning(
-                "ConsumerCoordinator runs over. done: {}, pending: {}", done, pending
+                "ConsumerCoordinator runs over after {} seconds",
+                time.time() - start_time,
             )
         finally:
             await self.cancel()
 
     async def cancel(self) -> None:
-        logger.warning(
-            'Cancelling ConsumerCoordinator of Consumer "{}"', self._config.id
-        )
-        done, pending = await asyncio.wait(
-            {self._consumer.close(), self._sink.close()}, timeout=300
-        )
-        logger.info("ConsumerCoordinator cancelled. done: {}", done)
-        if pending:
-            logger.warning("ConsumerCoordinator cancelled. pending: {}", pending)
+        if self._running:
+            logger.warning('Cancelling ConsumerCoordinator of "{}"', self._config.id)
+            self._running = False
+            self._main_wait_task.cancel()
+            for t in self._partition_wait_tasks:
+                t.cancel()
+            await asyncio.gather(self._consumer.close(), self._sink.close())
+
+            logger.info(
+                'ConsumerCoordinator of Consumer "{}" has cancelled.', self._config.id
+            )
 
     async def _wait_and_send_events(
         self,
-        send_queue: JanusQueue[KafkaEvent],
-        commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]],
     ) -> None:
-        tp_queues: Dict[str, AsyncioQueue[KafkaEvent]] = {}
-        tp_queue_size = self._config.concurrent_per_partition * 3
-        tp_tasks = []
+        self._partition_wait_tasks = []
 
-        while True:
-            new_event: KafkaEvent = await send_queue.async_q.get()
+        tp_queues = {}
+        tp_queue_size = self._config.concurrent_per_partition * 3
+
+        while self._running:
+            new_event: KafkaEvent = await self._send_queue.async_q.get()
             tp = self._get_topic_partition_str(new_event)
             if tp in tp_queues:
                 await tp_queues[tp].put(new_event)
@@ -75,41 +84,48 @@ class ConsumerCoordinator:
                 tp_queues[tp] = AsyncioQueue(maxsize=tp_queue_size)
                 await tp_queues[tp].put(new_event)
                 tp_task = asyncio.create_task(
-                    self._send_one_partition_events(tp_queues[tp], commit_queue)
+                    self._consume_one_parti_queue(tp_queues[tp])
                 )
-                tp_tasks.append(tp_task)
+                self._partition_wait_tasks.append(tp_task)
 
-    async def _send_one_partition_events(
+    async def _consume_one_parti_queue(
         self,
         tp_queue: AsyncioQueue,
-        commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]],
-    ):
-        while True:
-            current_tasks = []
-            try:
-                for i in range(self._config.concurrent_per_partition):
-                    if i == 0:
-                        # only wait for the first event
-                        new_event = await tp_queue.get()
-                    else:
-                        new_event = tp_queue.get_nowait()
+    ) -> None:
+        while self._running:
+            batch = []
+            for i in range(self._config.concurrent_per_partition):
+                if i == 0:
+                    # only wait for the first event
+                    event = await tp_queue.get()
+                else:
+                    try:
+                        event = tp_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
 
-                    if self._is_listening_event(new_event):
-                        sending_task = asyncio.create_task(
-                            self._sink.send_event(new_event)
-                        )
-                    else:
-                        # If the event is not in listening events, just use a future to represent the process result
-                        sending_task = asyncio.get_running_loop().create_future()
-                        sending_task.set_result((new_event, EventProcessStatus.DISCARD))
+                batch.append(event)
 
-                    current_tasks.append(sending_task)
-            except asyncio.QueueEmpty:
-                pass
+            if len(batch) > 0:
+                asyncio.create_task(self._send_one_parti_batch(batch))
 
-            results = await asyncio.gather(*current_tasks)
-            for send_result in results:
-                await commit_queue.async_q.put(send_result)
+    async def _send_one_parti_batch(self, batch: List[KafkaEvent]) -> None:
+        send_tasks = []
+
+        for event in batch:
+            # TODO refactor this to skip bunch of this sort of events from very beginning
+            if self._is_listening_event(event):
+                task = asyncio.create_task(self._sink.send_event(event))
+            else:
+                # If the event is not in listening events, just use a future to represent the process result
+                task = asyncio.get_running_loop().create_future()
+                task.set_result((event, EventProcessStatus.DISCARD))
+
+            send_tasks.append(task)
+
+        results = await asyncio.gather(*send_tasks)
+        for send_result in results:
+            await self._commit_queue.async_q.put(send_result)
 
     def _is_listening_event(self, event: KafkaEvent) -> bool:
         listening_event = self._config.listening_events
@@ -131,8 +147,8 @@ class KafkaConsumer:
         self._config = config
         self._closed = False
         self._internal_consumer: Optional[Consumer] = None
-        self._fetch_events_thread: Optional[Thread] = None
-        self._commit_events_thread: Optional[Thread] = None
+        self._is_fetch_events_running = False
+        self._is_commit_events_running = False
 
     async def init(self) -> None:
         self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
@@ -146,30 +162,52 @@ class KafkaConsumer:
         self,
         send_queue: JanusQueue[KafkaEvent],
     ):
+        assert self._is_fetch_events_running == False
+        self._is_fetch_events_running = True
+
         await asyncio.get_running_loop().run_in_executor(
             None, self._internal_fetch_events, send_queue
         )
-        logger.info('The KafkaConsumer "{}" fetch_events quit.', self._config.id)
+
+        self._is_fetch_events_running = False
+
+        logger.info('KafkaConsumer "{}" fetch_events thread has quit.', self._config.id)
 
     async def commit_events(
         self, commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]]
     ):
+        assert self._is_commit_events_running == False
+        self._is_commit_events_running = True
+
         await asyncio.get_running_loop().run_in_executor(
             None, self._internal_commit_events, commit_queue
         )
-        logger.info('The KafkaConsumer "{}" commit_events quit.', self._config.id)
+
+        self._is_commit_events_running = False
+
+        logger.info(
+            'KafkaConsumer "{}" commit_events thread has quit.', self._config.id
+        )
 
     async def close(self) -> None:
-        logger.warning('Closing Kafka Consumer "{}"', self._config.id)
-        self._closed = True
-        await asyncio.sleep(3)  # wait for the threads to complete their jobs
-        self._internal_consumer.close()
-        self._internal_consumer = None
-        # TODO commit events haven't been procssed completely
+        if self._internal_consumer:
+            logger.warning('Closing KafkaConsumer "{}"', self._config.id)
+
+            self._closed = True
+
+            while (
+                self._is_commit_events_running
+            ):  # wait for the pending events to be committed
+                await asyncio.sleep(0.1)
+
+            self._internal_consumer.close()
+            self._internal_consumer = None
+
+            logger.info('KafkaConsumer "{}" has closed', self._config.id)
 
     def _internal_fetch_events(self, send_queue: JanusQueue) -> None:
         try:
-            while self._check_if_close():
+            while self._check_closed():
                 try:
                     msg: Message = self._internal_consumer.poll(timeout=1.0)
                     if msg is None:
@@ -178,11 +216,10 @@ class KafkaConsumer:
                         raise EventConsumingError(msg.error())
                     else:
                         logger.debug(
-                            "Get a new Kafka Message from {} [{}] at offset {} with key {}",
+                            "Get a new Kafka Message from topic: {}-{}, offset: {}",
                             msg.topic(),
                             msg.partition(),
                             msg.offset(),
-                            str(msg.key()),
                         )
                 except Exception as ex:
                     logger.error(
@@ -203,7 +240,7 @@ class KafkaConsumer:
                     # skip this event if parse failed
                     continue
 
-                while self._check_if_close():
+                while self._check_closed():
                     try:
                         send_queue.sync_q.put(event, block=True, timeout=0.2)
                         logger.debug(
@@ -216,23 +253,23 @@ class KafkaConsumer:
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                'The Kafka consumer _internal_send_events "{}" is aborted by "{}"',
+                'KafkaConsumer "{}" _internal_send_events is aborted by "{}"',
                 self._config.id,
                 type(ex),
             )
 
-    def _internal_commit_events(self, commit_queue: JanusQueue) -> None:
+    def _internal_commit_events(self, _commit_queue: JanusQueue) -> None:
         try:
-            while self._check_if_close():
-                event: KafkaEvent = None
-                status: EventProcessStatus = None
+            commit_queue = _commit_queue.sync_q
+            event: KafkaEvent = None
+            status: EventProcessStatus = None
 
-                while self._check_if_close():
-                    try:
-                        event, status = commit_queue.sync_q.get(block=True, timeout=0.2)
-                        break
-                    except janus.SyncQueueEmpty:
-                        pass
+            # if the consumer is closed and no more pending events, then quit
+            while self._check_closed(commit_queue.empty()):
+                try:
+                    event, status = commit_queue.get(block=True, timeout=0.2)
+                except janus.SyncQueueEmpty:
+                    continue
 
                 try:
                     if status == EventProcessStatus.DONE:
@@ -257,7 +294,7 @@ class KafkaConsumer:
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                'The Kafka consumer _internal_commit_events "{}" is aborted by "{}"',
+                'KafkaConsumer "{}" _internal_commit_events is aborted by "{}"',
                 self._config.id,
                 type(ex),
             )
@@ -276,11 +313,11 @@ class KafkaConsumer:
             partitions,
         )
 
-    def _check_if_close(self) -> bool:
-        if self._closed:
+    def _check_closed(self, extra: bool = True) -> bool:
+        if self._closed and extra:
             raise ClosedError
 
-        return not self._closed
+        return True
 
     @staticmethod
     def _get_topic_partitions(*events: KafkaEvent) -> List[TopicPartition]:
@@ -299,3 +336,4 @@ class KafkaConsumer:
 
         # enable.auto.commit
         # auto.offset.reset
+        # Note that ‘enable.auto.offset.store’ must be set to False when using this API. <- https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.store_offsets

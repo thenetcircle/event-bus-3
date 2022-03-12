@@ -170,8 +170,12 @@ class HttpSink(Sink):
 
     async def close(self):
         if self._client:
+            logger.warning('Closing HttpSink "{}"', self._config.id)
+
             await self._client.close()
             self._client = None
+
+            logger.info('HttpSink "{}" has closed', self._config.id)
 
     @staticmethod
     def _get_cost_time(start_time: datetime) -> float:
