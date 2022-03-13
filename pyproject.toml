@@ -37,7 +37,8 @@ addopts = "-rsxX -l --tb=short --strict-markers"
 xfail_strict = true
 testpaths = ["tests"]
 markers = [
-    "noconfig: Don't load the config.yml automatically"
+    "noconfig: Don't load the config.yml automatically",
+    "benchmark: Benchmark tests"
 ]
 
 [tool.mypy]

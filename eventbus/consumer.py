@@ -64,7 +64,10 @@ class ConsumerCoordinator:
             await asyncio.gather(self._consumer.close(), self._sink.close())
 
             logger.info(
-                'ConsumerCoordinator of Consumer "{}" has cancelled.', self._config.id
+                'ConsumerCoordinator of Consumer "{}" has cancelled. Current send_queue: {}, commit_queue: {}',
+                self._config.id,
+                self._send_queue.async_q.qsize(),
+                self._commit_queue.async_q.qsize(),
             )
 
     async def _wait_and_send_events(
