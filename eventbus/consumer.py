@@ -1,6 +1,5 @@
 import asyncio
 import re
-import statistics
 import time
 from asyncio import Queue as AsyncioQueue
 from typing import Dict, List, Optional, Tuple
@@ -65,7 +64,7 @@ class ConsumerCoordinator:
             await asyncio.gather(self._consumer.close(), self._sink.close())
 
             logger.info(
-                'ConsumerCoordinator of Consumer "{}" has cancelled. Current send_queue: {}, commit_queue: {}',
+                'ConsumerCoordinator of Consumer "{}" has been cancelled, current queue stats: send_queue: {}, commit_queue: {}',
                 self._config.id,
                 self._send_queue.async_q.qsize(),
                 self._commit_queue.async_q.qsize(),
@@ -147,8 +146,7 @@ class KafkaConsumer:
         self._config = config
         self._closed = False
         self._internal_consumer: Optional[Consumer] = None
-        self._is_fetch_events_running = False
-        self._is_commit_events_running = False
+        self._is_commit_running = False
 
     async def init(self) -> None:
         self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
@@ -162,32 +160,18 @@ class KafkaConsumer:
         self,
         send_queue: JanusQueue[KafkaEvent],
     ):
-        assert self._is_fetch_events_running == False
-        self._is_fetch_events_running = True
-
         await asyncio.get_running_loop().run_in_executor(
             None, self._internal_fetch_events, send_queue
         )
 
-        self._is_fetch_events_running = False
-
-        logger.info('KafkaConsumer "{}" fetch_events thread has quit.', self._config.id)
-
     async def commit_events(
         self, commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]]
     ):
-        assert self._is_commit_events_running == False
-        self._is_commit_events_running = True
-
+        self._is_commit_running = True
         await asyncio.get_running_loop().run_in_executor(
             None, self._internal_commit_events, commit_queue
         )
-
-        self._is_commit_events_running = False
-
-        logger.info(
-            'KafkaConsumer "{}" commit_events thread has quit.', self._config.id
-        )
+        self._is_commit_running = False
 
     async def close(self) -> None:
         if self._internal_consumer:
@@ -196,7 +180,7 @@ class KafkaConsumer:
             self._closed = True
 
             while (
-                self._is_commit_events_running
+                self._is_commit_running
             ):  # wait for the pending events to be committed
                 await asyncio.sleep(0.1)
 
@@ -253,7 +237,7 @@ class KafkaConsumer:
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                'KafkaConsumer "{}" _internal_send_events is aborted by "{}"',
+                '_internal_send_events of KafkaConsumer "{}" is aborted by "{}"',
                 self._config.id,
                 type(ex),
             )
@@ -261,8 +245,6 @@ class KafkaConsumer:
     def _internal_commit_events(self, _commit_queue: JanusQueue) -> None:
         try:
             commit_queue = _commit_queue.sync_q
-            event: KafkaEvent = None
-            status: EventProcessStatus = None
 
             # if the consumer is closed and no more pending events, then quit
             while self._check_closed(commit_queue.empty()):
@@ -294,7 +276,7 @@ class KafkaConsumer:
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                'KafkaConsumer "{}" _internal_commit_events is aborted by "{}"',
+                '_internal_commit_events of KafkaConsumer "{}" is aborted by "{}"',
                 self._config.id,
                 type(ex),
             )

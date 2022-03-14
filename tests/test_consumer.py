@@ -225,8 +225,9 @@ async def test_consumer_coordinator_benchmark(coordinator):
     #     if coordinator._send_queue.async_q.empty():
     #         break
 
-    await asyncio.sleep(20)
+    await asyncio.sleep(10)
     await coordinator.cancel()
+    await asyncio.sleep(1)
 
     print("\n---\n")
     # print(mock_consumer.committed_data)
