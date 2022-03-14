@@ -37,10 +37,11 @@ def create_kafka_message_from_dict(
 
         class MockMessage:
             def __init__(self):
+                self._topic = _dict.get("topic") or "topic1"
                 self._offset = _dict.get("offset") or 1
 
             def topic(self):
-                return _dict.get("topic") or "topic1"
+                return self._topic
 
             def partition(self):
                 return _dict.get("partition") or 1

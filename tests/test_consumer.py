@@ -3,7 +3,6 @@ import statistics
 import sys
 import time
 from typing import Optional
-from unittest import mock
 
 import loguru
 import pytest
@@ -28,13 +27,14 @@ def consumer_conf():
         sink=HttpSinkConfig(
             url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
         ),
+        concurrent_per_partition=1,
     )
     yield consumer_conf
 
 
 class MockInternalConsumer:
     def __init__(self):
-        self.queue = JanusQueue(maxsize=10000)
+        self.queue = JanusQueue(maxsize=100000)
         self.committed_data = []
         self.benchmark = False
 
@@ -45,7 +45,7 @@ class MockInternalConsumer:
         try:
             msg = self.queue.sync_q.get(block=True, timeout=timeout)
             if self.benchmark:
-                msg._offset = time.time()
+                msg._offset = int(time.time() * 1000000)
             return msg
         except:
             return None
@@ -53,13 +53,34 @@ class MockInternalConsumer:
     def commit(self, message=None, offsets=None, asynchronous=True):
         if self.benchmark:
             self.committed_data.append(
-                [time.time() - float(t.offset) for t in offsets][0]
+                [time.time() - (t.offset / 1000000) for t in offsets][0]
             )
         else:
             self.committed_data.append(offsets)
 
     def close(self):
         pass
+
+
+@pytest_asyncio.fixture
+async def coordinator(mocker, consumer_conf):
+    async def mock_send_event(self, event: KafkaEvent):
+        # await asyncio.sleep(0.01)
+        return event, EventProcessStatus.DONE
+
+    mocker.patch("eventbus.sink.HttpSink.send_event", mock_send_event)
+
+    consumer = KafkaConsumer(consumer_conf)
+    mock_consumer = MockInternalConsumer()
+    consumer._internal_consumer = mock_consumer
+    # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
+
+    coordinator = ConsumerCoordinator(consumer_conf)
+    coordinator._consumer = consumer
+    coordinator._send_queue: JanusQueue = JanusQueue(maxsize=100)
+    coordinator._commit_queue = JanusQueue(maxsize=100)
+
+    yield coordinator
 
 
 @pytest.mark.asyncio
@@ -123,26 +144,6 @@ async def test_commit_events(mocker, consumer_conf):
     # assert _send_one_event.call_count == 3
 
 
-@pytest_asyncio.fixture
-async def coordinator(mocker, consumer_conf):
-    async def mock_send_event(self, event: KafkaEvent):
-        return event, EventProcessStatus.DONE
-
-    mocker.patch("eventbus.sink.HttpSink.send_event", mock_send_event)
-
-    consumer = KafkaConsumer(consumer_conf)
-    mock_consumer = MockInternalConsumer()
-    consumer._internal_consumer = mock_consumer
-    # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
-
-    coordinator = ConsumerCoordinator(consumer_conf)
-    coordinator._consumer = consumer
-    coordinator._send_queue: JanusQueue = JanusQueue(maxsize=100)
-    coordinator._commit_queue = JanusQueue(maxsize=100)
-
-    yield coordinator
-
-
 @pytest.mark.asyncio
 async def test_consumer_coordinator(coordinator):
     mock_consumer = coordinator._consumer._internal_consumer
@@ -203,9 +204,10 @@ async def test_consumer_coordinator_benchmark(coordinator):
     start_time = time.time()
     test_events_amount = 10000
     for i in range(test_events_amount):
+        partition = i % 10
         mock_consumer.put(
             create_kafka_message_from_dict(
-                {"id": f"e{i+1}"},
+                {"id": f"e{i+1}", "partition": partition},
                 faster=True,
             )
         )
@@ -218,12 +220,12 @@ async def test_consumer_coordinator_benchmark(coordinator):
     # let's do this two times to check if the coordinator are able to rerun
     asyncio.create_task(coordinator.run())
 
-    while True:
-        await asyncio.sleep(0.1)
-        if coordinator._send_queue.async_q.empty():
-            break
+    # while True:
+    #     await asyncio.sleep(0.1)
+    #     if coordinator._send_queue.async_q.empty():
+    #         break
 
-    await asyncio.sleep(10)
+    await asyncio.sleep(20)
     await coordinator.cancel()
 
     print("\n---\n")

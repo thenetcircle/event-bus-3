@@ -1,8 +1,9 @@
 import asyncio
 import re
+import statistics
 import time
 from asyncio import Queue as AsyncioQueue
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import janus
 from confluent_kafka.cimpl import Consumer, Message, TopicPartition
@@ -21,8 +22,8 @@ class ConsumerCoordinator:
         self._consumer = KafkaConsumer(config)
         self._sink: Sink = HttpSink(config)
         self._running = False
-        self._main_wait_task = None
-        self._partition_wait_tasks = []
+        self._wait_task = None
+        self._tp_tasks = []
         self._send_queue: JanusQueue[KafkaEvent] = None
         self._commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]] = None
 
@@ -39,11 +40,11 @@ class ConsumerCoordinator:
         self._running = True
 
         try:
-            self._main_wait_task = asyncio.create_task(self._wait_and_send_events())
+            self._wait_task = asyncio.create_task(self._wait_events())
 
             await asyncio.gather(
                 self._consumer.fetch_events(self._send_queue),
-                self._main_wait_task,
+                self._wait_task,
                 self._consumer.commit_events(self._commit_queue),
             )
 
@@ -58,8 +59,8 @@ class ConsumerCoordinator:
         if self._running:
             logger.warning('Cancelling ConsumerCoordinator of "{}"', self._config.id)
             self._running = False
-            self._main_wait_task.cancel()
-            for t in self._partition_wait_tasks:
+            self._wait_task.cancel()
+            for t in self._tp_tasks:
                 t.cancel()
             await asyncio.gather(self._consumer.close(), self._sink.close())
 
@@ -70,33 +71,35 @@ class ConsumerCoordinator:
                 self._commit_queue.async_q.qsize(),
             )
 
-    async def _wait_and_send_events(
+    async def _wait_events(
         self,
     ) -> None:
-        self._partition_wait_tasks = []
-
-        tp_queues = {}
+        self._tp_tasks = []
+        tp_queues: Dict[str, AsyncioQueue] = {}
         tp_queue_size = self._config.concurrent_per_partition * 3
 
         while self._running:
-            new_event: KafkaEvent = await self._send_queue.async_q.get()
-            tp = self._get_topic_partition_str(new_event)
-            if tp in tp_queues:
-                await tp_queues[tp].put(new_event)
-            else:
-                tp_queues[tp] = AsyncioQueue(maxsize=tp_queue_size)
-                await tp_queues[tp].put(new_event)
-                tp_task = asyncio.create_task(
-                    self._consume_one_parti_queue(tp_queues[tp])
-                )
-                self._partition_wait_tasks.append(tp_task)
+            event: KafkaEvent = await self._send_queue.async_q.get()
 
-    async def _consume_one_parti_queue(
+            tp_name = self._get_topic_partition_str(event)
+            if tp_name not in tp_queues:
+                tp_queues[tp_name] = AsyncioQueue(maxsize=tp_queue_size)
+                tp_task = asyncio.create_task(
+                    self._send_tp_events(tp_name, tp_queues[tp_name])
+                )
+                self._tp_tasks.append(tp_task)
+
+            await tp_queues[tp_name].put(event)
+
+    async def _send_tp_events(
         self,
+        tp_name: str,
         tp_queue: AsyncioQueue,
     ) -> None:
+        logger.debug(f'Start consuming tp_queue "{tp_name}"')
+
         while self._running:
-            batch = []
+            send_tasks = []
             for i in range(self._config.concurrent_per_partition):
                 if i == 0:
                     # only wait for the first event
@@ -107,28 +110,22 @@ class ConsumerCoordinator:
                     except asyncio.QueueEmpty:
                         break
 
-                batch.append(event)
+                # TODO refactor this to skip bunch of this sort of events from very beginning
+                if self._is_listening_event(event):
+                    task = asyncio.create_task(self._sink.send_event(event))
+                else:
+                    # If the event is not in listening events, just use a future to represent the process result
+                    task = asyncio.get_running_loop().create_future()
+                    task.set_result((event, EventProcessStatus.DISCARD))
 
-            if len(batch) > 0:
-                asyncio.create_task(self._send_one_parti_batch(batch))
+                send_tasks.append(task)
 
-    async def _send_one_parti_batch(self, batch: List[KafkaEvent]) -> None:
-        send_tasks = []
-
-        for event in batch:
-            # TODO refactor this to skip bunch of this sort of events from very beginning
-            if self._is_listening_event(event):
-                task = asyncio.create_task(self._sink.send_event(event))
-            else:
-                # If the event is not in listening events, just use a future to represent the process result
-                task = asyncio.get_running_loop().create_future()
-                task.set_result((event, EventProcessStatus.DISCARD))
-
-            send_tasks.append(task)
-
-        results = await asyncio.gather(*send_tasks)
-        for send_result in results:
-            await self._commit_queue.async_q.put(send_result)
+            try:
+                results = await asyncio.gather(*send_tasks)
+                for send_result in results:
+                    await self._commit_queue.async_q.put(send_result)
+            except asyncio.CancelledError:
+                pass
 
     def _is_listening_event(self, event: KafkaEvent) -> bool:
         listening_event = self._config.listening_events
