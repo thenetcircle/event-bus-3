@@ -109,11 +109,10 @@ class EventConsumer:
                     except asyncio.QueueEmpty:
                         break
 
-                # TODO refactor this to skip bunch of this sort of events from very beginning
-                if self._is_listening_event(event):
+                if event.is_subscribed:
                     task = asyncio.create_task(self._sink.send_event(event))
                 else:
-                    # If the event is not in listening events, just use a future to represent the process result
+                    # If the event is not subscribed, just use a future to represent the process result
                     task = asyncio.get_running_loop().create_future()
                     task.set_result((event, EventProcessStatus.DISCARD))
 
@@ -125,15 +124,6 @@ class EventConsumer:
                     await self._commit_queue.async_q.put(send_result)
             except asyncio.CancelledError:
                 pass
-
-    def _is_listening_event(self, event: KafkaEvent) -> bool:
-        listening_event = self._config.listening_events
-        if not listening_event:
-            return True
-        for ev_pattern in listening_event:
-            if re.match(re.compile(ev_pattern, re.I), event.title):
-                return True
-        return False
 
     @staticmethod
     def _get_topic_partition_str(event: KafkaEvent):
@@ -151,7 +141,7 @@ class KafkaConsumer:
     async def init(self) -> None:
         self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
         self._internal_consumer.subscribe(
-            self._config.listening_topics,
+            self._config.kafka_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
         )
@@ -191,6 +181,9 @@ class KafkaConsumer:
 
     def _internal_fetch_events(self, send_queue: JanusQueue) -> None:
         try:
+            skipped_events = 0
+            max_skip_events = 100
+
             while self._check_closed():
                 try:
                     msg: Message = self._internal_consumer.poll(timeout=1.0)
@@ -223,6 +216,14 @@ class KafkaConsumer:
                     # TODO trigger error
                     # skip this event if parse failed
                     continue
+
+                if not self._is_subscribed_event(event):
+                    if skipped_events >= max_skip_events:
+                        event.is_subscribed = False
+                        skipped_events = 0
+                    else:
+                        skipped_events += 1
+                        continue
 
                 while self._check_closed():
                     try:
@@ -294,6 +295,22 @@ class KafkaConsumer:
             self._config.id,
             partitions,
         )
+
+    def _is_subscribed_event(self, event: KafkaEvent) -> bool:
+        def match_event_title(patterns) -> bool:
+            for p in patterns:
+                if re.match(re.compile(p, re.I), event.title):
+                    return True
+            return False
+
+        if self._config.include_events:
+            if not match_event_title(self._config.include_events):
+                return False
+
+        if self._config.exclude_events:
+            return not match_event_title(self._config.exclude_events)
+
+        return True
 
     def _check_closed(self, extra: bool = True) -> bool:
         if self._closed and extra:

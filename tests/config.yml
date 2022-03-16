@@ -26,10 +26,11 @@ consumer:
       "max.poll.interval.ms": 50
   instances:
     - id: test_consumer1
-      listening_topics: ["topic1"]
-      listening_events: []
+      kafka_topics: ["topic1"]
       kafka_config:
         "group.id": "override_group_id"
+      include_events: []
+      exclude_events: []
       sink:
         url: http://localhost
         method: POST

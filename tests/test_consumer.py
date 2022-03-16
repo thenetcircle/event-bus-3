@@ -1,10 +1,8 @@
 import asyncio
 import statistics
-import sys
 import time
 from typing import Optional
 
-import loguru
 import pytest
 import pytest_asyncio
 from consumer import EventConsumer, KafkaConsumer
@@ -19,11 +17,13 @@ from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_
 def consumer_conf():
     consumer_conf = ConsumerConfig(
         id="test_consumer",
-        listening_topics=["topic1"],
+        kafka_topics=["topic1"],
         kafka_config={
             "bootstrap.servers": "127.0.0.1:9093",
             "group.id": "test-group-1",
         },
+        include_events=[r"test\..*"],
+        exclude_events=[r"test\.exclude"],
         sink=HttpSinkConfig(
             url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
         ),
@@ -95,20 +95,20 @@ async def test_send_events(consumer_conf):
         consumer.fetch_events(send_queue)
     )  # trigger fetch events thread
 
-    test_msg_1 = create_kafka_message_from_dict({"id": "e1"})
+    test_msg_1 = create_kafka_message_from_dict({"title": "test.e1"})
     mock_consumer.put(test_msg_1)
     event = await send_queue.async_q.get()
-    assert event.id == "e1"
+    assert event.title == "test.e1"
     assert send_queue.async_q.empty() == True
 
-    test_msg_2 = create_kafka_message_from_dict({"id": "e2"})
-    test_msg_3 = create_kafka_message_from_dict({"id": "e3"})
+    test_msg_2 = create_kafka_message_from_dict({"title": "test.e2"})
+    test_msg_3 = create_kafka_message_from_dict({"title": "test.e3"})
     mock_consumer.put(test_msg_2)
     mock_consumer.put(test_msg_3)
     event = await send_queue.async_q.get()
-    assert event.id == "e2"
+    assert event.title == "test.e2"
     event = await send_queue.async_q.get()
-    assert event.id == "e3"
+    assert event.title == "test.e3"
     assert send_queue.async_q.empty() == True
 
     test_msg_4 = create_kafka_message_from_dict({"published": "xxx"})
@@ -132,8 +132,8 @@ async def test_commit_events(mocker, consumer_conf):
         consumer.commit_events(commit_queue)
     )  # trigger commmit events thread
 
-    test_event_1 = create_kafka_event_from_dict({"id": "e1"})
-    test_event_2 = create_kafka_event_from_dict({"id": "e2"})
+    test_event_1 = create_kafka_event_from_dict({"title": "test.e1"})
+    test_event_2 = create_kafka_event_from_dict({"title": "test.e2"})
     commit_queue.sync_q.put((test_event_1, EventProcessStatus.DONE))
     commit_queue.sync_q.put((test_event_2, EventProcessStatus.DONE))
 
@@ -155,7 +155,7 @@ async def test_consumer_coordinator(coordinator):
     test_events_amount = 10
     for i in range(test_events_amount):
         mock_consumer.put(
-            create_kafka_message_from_dict({"id": f"e{i+1}", "offset": i + 1})
+            create_kafka_message_from_dict({"title": f"test.e{i+1}", "offset": i + 1})
         )
 
     await asyncio.sleep(0.1)
@@ -163,7 +163,9 @@ async def test_consumer_coordinator(coordinator):
     assert len(mock_consumer.committed_data) == test_events_amount
 
     # check how it acts when new events come after the coordinator cancelled
-    mock_consumer.put(create_kafka_message_from_dict({"id": f"ne", "offset": -1}))
+    mock_consumer.put(
+        create_kafka_message_from_dict({"title": f"test.ne", "offset": -1})
+    )
     await asyncio.sleep(0.1)
     assert len(mock_consumer.committed_data) == test_events_amount
 
@@ -195,9 +197,6 @@ async def test_consumer_coordinator_benchmark(coordinator):
     import pstats
     from pstats import SortKey
 
-    loguru.logger.remove()
-    loguru.logger.add(sys.stderr, level="INFO")
-
     mock_consumer = coordinator._consumer._internal_consumer
     mock_consumer.benchmark = True
 
@@ -207,7 +206,7 @@ async def test_consumer_coordinator_benchmark(coordinator):
         partition = i % 10
         mock_consumer.put(
             create_kafka_message_from_dict(
-                {"id": f"e{i+1}", "partition": partition},
+                {"title": f"test.e{i+1}", "partition": partition},
                 faster=True,
             )
         )
@@ -246,3 +245,31 @@ async def test_consumer_coordinator_benchmark(coordinator):
     print(si.getvalue())
 
     assert len(mock_consumer.committed_data) == test_events_amount
+
+
+@pytest.mark.asyncio
+async def test_consumer_coordinator_skip_events(coordinator):
+    mock_consumer = coordinator._consumer._internal_consumer
+    asyncio.create_task(coordinator.run())
+
+    mock_consumer.put(
+        create_kafka_message_from_dict({"title": f"test.e1", "offset": 1})
+    )
+    mock_consumer.put(
+        create_kafka_message_from_dict({"title": f"test.e2", "offset": 2})
+    )
+    mock_consumer.put(
+        create_kafka_message_from_dict({"title": f"test.exclude", "offset": 3})
+    )
+
+    for i in range(4, 310):
+        mock_consumer.put(
+            create_kafka_message_from_dict({"title": f"skip.e{i+1}", "offset": i + 1})
+        )
+
+    await asyncio.sleep(0.5)
+    await coordinator.cancel()
+    assert len(mock_consumer.committed_data) == 5
+
+    # check the order of received commits
+    assert [m[0].offset for m in mock_consumer.committed_data] == [1, 2, 104, 205, 306]

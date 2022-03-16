@@ -57,7 +57,7 @@ async def test_httpsink_send_event(aiohttp_client):
     sink = HttpSink(
         ConsumerConfig(
             id="test_consumer",
-            listening_topics=["topic1"],
+            kafka_topics=["topic1"],
             kafka_config={},
             sink=HttpSinkConfig(
                 url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
@@ -90,7 +90,7 @@ async def test_httpsink_send_event(aiohttp_client):
     sink2 = HttpSink(
         ConsumerConfig(
             id="test_consumer2",
-            listening_topics=["topic1"],
+            kafka_topics=["topic1"],
             kafka_config={},
             sink=HttpSinkConfig(
                 url="/unknown",

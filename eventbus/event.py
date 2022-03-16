@@ -30,6 +30,7 @@ class KafkaEvent(Event):
     partition: int
     offset: int
     timestamp: Optional[int]
+    is_subscribed: bool = True
 
     def __str__(self):
         return f"KafkaEvent({self.title}#{self.id}@{self.topic}:{self.partition}:{self.offset})"

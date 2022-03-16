@@ -57,10 +57,11 @@ class DefaultConsumerConfig(ConfigModel):
 
 class ConsumerConfig(ConfigModel):
     id: StrictStr
-    listening_topics: List[StrictStr]
-    listening_events: Optional[List[StrictStr]] = None
-    concurrent_per_partition: int = 1
+    kafka_topics: List[StrictStr]
     kafka_config: Dict[str, str]
+    include_events: Optional[List[StrictStr]] = None
+    exclude_events: Optional[List[StrictStr]] = None
+    concurrent_per_partition: int = 1
     sink: HttpSinkConfig
 
 
