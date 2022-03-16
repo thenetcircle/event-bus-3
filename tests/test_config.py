@@ -1,9 +1,13 @@
+import re
+import time
 from pathlib import Path
+from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
 
-from eventbus import config
+from eventbus import config, config_watcher, signals
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 
@@ -24,7 +28,7 @@ def test_update_from_yaml():
             patterns=[r"test\.secondary-success"],
         ),
         config.TopicMapping(
-            topic="event-v3-${namespace}${env}-default",
+            topic="event-v3-${env}-default",
             patterns=[r".*"],
         ),
     ]
@@ -68,41 +72,120 @@ def test_config_reset():
         config.get()
 
 
-def test_add_subscribe():
-    def sub1():
-        pass
+@pytest.mark.noconfig
+def test_signals():
+    def reset_mocks():
+        mock1.reset_mock()
+        mock2.reset_mock()
+        mock3.reset_mock()
 
-    def sub2():
-        pass
+    mock1 = mock.Mock(spec={})
+    mock2 = mock.Mock(spec={})
+    mock3 = mock.Mock(spec={})
 
-    def sub3():
-        pass
+    signals.CONFIG_PRODUCER_CHANGED.connect(mock1)
+    signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(mock2)
+    signals.CONFIG_CONSUMER_CHANGED.connect(mock3)
 
-    sub4 = sub1
+    test_update_from_yaml()
+    mock1.assert_called_once()
+    mock2.assert_called_once()
+    mock3.assert_called_once()
 
-    config.add_subscriber(sub1)
-    assert config._config_subscribers == {sub1}
+    reset_mocks()
+    # update config again with same content
+    test_update_from_yaml()
+    mock1.assert_not_called()
+    mock2.assert_not_called()
+    mock3.assert_not_called()
 
-    config.add_subscriber(sub2, sub3)
-    assert config._config_subscribers == {sub1, sub2, sub3}
+    reset_mocks()
+    _config = config.get().dict(exclude_defaults=True)
+    _config["producer"]["primary_brokers"] = "localhost:12182"
+    config.update_from_dict(_config)
+    mock1.assert_called_once()
+    mock2.assert_not_called()
+    mock3.assert_not_called()
 
-    config.add_subscriber(sub4)
-    assert config._config_subscribers == {sub1, sub2, sub3}
+    reset_mocks()
+    _config = config.get().dict(exclude_defaults=True)
+    _config["topic_mapping"][0]["topic"] = "primary-success2"
+    config.update_from_dict(_config)
+    mock1.assert_not_called()
+    mock2.assert_called_once()
+    mock3.assert_not_called()
 
-    config.remove_subscriber(sub2)
-    assert config._config_subscribers == {sub1, sub3}
+    reset_mocks()
+    _config = config.get().dict(exclude_defaults=True)
+    _config["consumer"]["instances"][0]["id"] = "test_consumer2"
+    config.update_from_dict(_config)
+    mock1.assert_not_called()
+    mock2.assert_not_called()
+    mock3.assert_called_once()
 
-    config.remove_subscriber(sub1, sub3)
-    assert config._config_subscribers == set()
 
+@pytest.mark.noconfig
+def test_watch_file(tmpdir, mocker):
+    with pytest.raises(ConfigNoneError):
+        config.get()
 
-def test_call_subscribe(mocker):
-    sub1 = mocker.MagicMock()
-    config.add_subscriber(sub1)
-    test_hot_update()
-    assert sub1.call_count == 2
+    origin_config_file = Path(__file__).parent / "config.yml"
+    with open(origin_config_file, "r") as f:
+        origin_config_data = f.read()
 
-    sub1.reset_mock()
-    config.remove_subscriber(sub1)
-    test_hot_update()
-    sub1.assert_not_called()
+    config_file = tmpdir / "config.yml"
+    with open(config_file, "w") as f:
+        f.write(origin_config_data)
+
+    def reset_mocks():
+        mock1.reset_mock()
+        mock2.reset_mock()
+        mock3.reset_mock()
+
+    mock1 = mock.Mock(spec={})
+    mock2 = mock.Mock(spec={})
+    mock3 = mock.Mock(spec={})
+
+    signals.CONFIG_CHANGED.connect(mock1)
+    signals.CONFIG_CHANGED.connect(mock2)
+
+    config_watcher.watch_file(config_file, checking_interval=0.1)
+
+    time.sleep(0.3)  # waiting for the config_file to be loaded
+    assert config.get().env == config.Env.TEST
+    mock1.assert_called_once()
+    mock2.assert_called_once()
+    reset_mocks()
+
+    # add some other subscribers after watching
+    signals.CONFIG_CHANGED.connect(mock3)
+
+    class Mock4:
+        def __init__(self):
+            self.attr1 = "attr1"
+            self.call_times = 0
+
+        def sub_method(self, *args):
+            self.call_times += 1
+            assert self.attr1 == "attr1"
+
+    mock4 = Mock4()
+    signals.CONFIG_CHANGED.connect(mock4.sub_method)
+
+    with open(config_file, "w") as f:
+        new_config_data = re.sub(r"env: test", "env: prod", origin_config_data)
+        f.write(new_config_data)
+    time.sleep(0.3)  # waiting for the config_file to be reloaded
+    assert config.get().env == config.Env.PROD
+    mock1.assert_called_once()
+    mock2.assert_called_once()
+    mock3.assert_called_once()
+    assert mock4.call_times == 1
+    reset_mocks()
+
+    time.sleep(0.3)  # waiting if another reloading happened
+    assert config.get().env == config.Env.PROD
+    mock1.assert_not_called()
+    mock2.assert_not_called()
+    mock3.assert_not_called()
+    assert mock4.call_times == 1

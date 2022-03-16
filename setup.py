@@ -35,6 +35,7 @@ INSTALL_REQUIRES = [
     "aiohttp>=3.7.0",
     "aioredis[hiredis]>=2.0.0",
     "janus>=1.0.0",
+    "blinker>=1.4",
 ]
 
 DEV_REQUIRES = [

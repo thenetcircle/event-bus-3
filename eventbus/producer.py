@@ -5,7 +5,7 @@ from typing import Callable, Dict, Optional, Tuple
 
 from confluent_kafka import Message, Producer
 
-from eventbus import config
+from eventbus import config, signals
 from eventbus.errors import EventProducingError, EventValidationError, InitProducerError
 from eventbus.event import Event
 
@@ -16,7 +16,6 @@ class KafkaProducer:
         self._primary_producer: Optional[InternalKafkaProducer] = None
         self._secondary_producer: Optional[InternalKafkaProducer] = None
         self._current_producer_config = config.get().producer
-        config.add_subscriber(self._config_subscriber)
         self._init_internal_producers()
 
     async def produce(self, topic: str, event: Event) -> Message:
@@ -60,9 +59,10 @@ class KafkaProducer:
 
         return feature, ack
 
+    @signals.CONFIG_PRODUCER_CHANGED.connect
     def _config_subscriber(self) -> None:
-        if self._current_producer_config != config.get().producer:
-            self._init_internal_producers()
+        self._current_producer_config = config.get().producer
+        self._init_internal_producers()
 
     def _init_internal_producers(self) -> None:
         # if there is already a primary producer (when config got updated), close it.

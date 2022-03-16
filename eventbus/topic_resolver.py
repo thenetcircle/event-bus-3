@@ -1,7 +1,7 @@
 import re
 from typing import Optional
 
-from eventbus import config
+from eventbus import config, signals
 
 
 class TopicResolver:
@@ -9,13 +9,6 @@ class TopicResolver:
         self._current_topic_mapping = config.get().topic_mapping
         self._index = {}
         self.reindex()
-        config.add_subscriber(self.topic_mapping_subscriber)
-
-    def topic_mapping_subscriber(self) -> None:
-        """Subscribing the topic mapping changes, and update related index accordingly."""
-        new_topic_mapping = config.get().topic_mapping
-        if new_topic_mapping != self._current_topic_mapping:
-            self.reindex()
 
     def reindex(self) -> None:
         """Index the topic mapping with structure:
@@ -36,3 +29,9 @@ class TopicResolver:
             if re.match(pattern, event_title):
                 return topic
         return None
+
+    @signals.CONFIG_TOPIC_MAPPING_CHANGED.connect
+    def _handle_topic_mapping_signal(self) -> None:
+        """Subscribing the topic mapping changes signal, and update related index accordingly."""
+        self._current_topic_mapping = config.get().topic_mapping
+        self.reindex()

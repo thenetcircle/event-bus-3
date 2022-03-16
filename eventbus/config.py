@@ -7,6 +7,7 @@ import yaml
 from loguru import logger
 from pydantic import BaseModel, StrictStr
 
+from eventbus import signals
 from eventbus.errors import ConfigNoneError, ConfigSubscribeError, ConfigUpdateError
 
 
@@ -78,7 +79,6 @@ class Config(ConfigModel):
 
 Subscriber = Callable[[], None]
 
-_config_subscribers: Set[Subscriber] = set()
 _config: Optional[Config] = None
 _config_update_lock = threading.Lock()
 
@@ -89,26 +89,50 @@ def add_subscriber(*subscribers: Subscriber) -> None:
         _config_subscribers.add(sub)
 
 
-def remove_subscriber(*subscribers: Subscriber) -> None:
-    global _config_subscribers
-    for sub in subscribers:
-        _config_subscribers.remove(sub)
-
-
-def call_subscribers() -> None:
+def _send_signals(old_config: Optional[Config]) -> None:
     try:
-        for subscriber in _config_subscribers:
-            subscriber()
-    except Exception:
+        sender = "config"
+
+        if not old_config or old_config != _config:
+            receivers = signals.CONFIG_CHANGED.send(sender)
+            logger.info(
+                "Config changed, sent CONFIG_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        if not old_config or old_config.producer != _config.producer:
+            receivers = signals.CONFIG_PRODUCER_CHANGED.send(sender)
+            logger.info(
+                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        if not old_config or old_config.topic_mapping != _config.topic_mapping:
+            receivers = signals.CONFIG_TOPIC_MAPPING_CHANGED.send(sender)
+            logger.info(
+                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        if not old_config or old_config.consumer != _config.consumer:
+            receivers = signals.CONFIG_CONSUMER_CHANGED.send(sender)
+            logger.info(
+                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+    except Exception as ex:
+        logger.error("Sent ConfigSignals failed with error: {} {}", type(ex), ex)
         raise ConfigSubscribeError
 
 
 def _update_config(new_config: Config) -> None:
     with _config_update_lock:
         global _config
+        old_config = _config
         _config = new_config
 
-        call_subscribers()
+        _send_signals(old_config)
 
 
 def update_from_config(new_config: Config) -> None:
