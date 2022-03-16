@@ -7,7 +7,7 @@ from typing import Optional
 import loguru
 import pytest
 import pytest_asyncio
-from consumer import ConsumerCoordinator, KafkaConsumer
+from consumer import EventConsumer, KafkaConsumer
 from janus import Queue as JanusQueue
 
 from eventbus.config import ConsumerConfig, HttpSinkConfig, HttpSinkMethod
@@ -75,7 +75,7 @@ async def coordinator(mocker, consumer_conf):
     consumer._internal_consumer = mock_consumer
     # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
 
-    coordinator = ConsumerCoordinator(consumer_conf)
+    coordinator = EventConsumer(consumer_conf)
     coordinator._consumer = consumer
     coordinator._send_queue: JanusQueue = JanusQueue(maxsize=100)
     coordinator._commit_queue = JanusQueue(maxsize=100)

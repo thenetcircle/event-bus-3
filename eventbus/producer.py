@@ -6,16 +6,18 @@ from typing import Callable, Dict, Optional, Tuple
 from confluent_kafka import Message, Producer
 
 from eventbus import config, signals
-from eventbus.errors import EventProducingError, EventValidationError, InitProducerError
+from eventbus.errors import EventProducingError, InitProducerError
 from eventbus.event import Event
 
 
-class KafkaProducer:
+class EventProducer:
     def __init__(self):
         self._loop = asyncio.get_event_loop()
-        self._primary_producer: Optional[InternalKafkaProducer] = None
-        self._secondary_producer: Optional[InternalKafkaProducer] = None
+        self._primary_producer: Optional[KafkaProducer] = None
+        self._secondary_producer: Optional[KafkaProducer] = None
         self._current_producer_config = config.get().producer
+
+    def init(self) -> None:
         self._init_internal_producers()
 
     async def produce(self, topic: str, event: Event) -> Message:
@@ -71,7 +73,7 @@ class KafkaProducer:
         primary_producer_config = self._create_producer_config(is_primary=True)
         if not primary_producer_config:
             raise InitProducerError("Primary producer config is none.")
-        self._primary_producer = InternalKafkaProducer(primary_producer_config)
+        self._primary_producer = KafkaProducer(primary_producer_config)
 
         # if there is already a secondary producer (when config got updated), close it.
         if self._secondary_producer:
@@ -79,7 +81,7 @@ class KafkaProducer:
         # if there is secondary_brokers config, init the secondary producer
         secondary_producer_config = self._create_producer_config(is_primary=False)
         if secondary_producer_config:
-            self._secondary_producer = InternalKafkaProducer(secondary_producer_config)
+            self._secondary_producer = KafkaProducer(secondary_producer_config)
 
     def _create_producer_config(self, is_primary=True) -> Optional[Dict[str, str]]:
         brokers = (
@@ -96,7 +98,7 @@ class KafkaProducer:
         }
 
 
-class InternalKafkaProducer:
+class KafkaProducer:
     """
     KafkaProducer based on Asyncio, use another thread to poll and send result to the event loop in current thread.
 

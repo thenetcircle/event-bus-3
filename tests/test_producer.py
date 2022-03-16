@@ -2,7 +2,7 @@ import pytest
 
 from eventbus import config
 from eventbus.errors import EventProducingError
-from eventbus.producer import KafkaProducer
+from eventbus.producer import EventProducer
 from tests.utils import create_event_from_dict
 
 
@@ -11,7 +11,7 @@ async def test_produce_from_primary_producer(mock_internal_kafka_producer):
     primary_msg, secondary_msg = mock_internal_kafka_producer
 
     # test only primary producer
-    producer = KafkaProducer()
+    producer = EventProducer()
     succ_event = create_event_from_dict({"topic": "primary-success"})
     result = await producer.produce(succ_event)
     assert result is primary_msg
@@ -40,7 +40,7 @@ async def test_produce_from_both_producers(mock_internal_kafka_producer):
     assert config.get().producer.secondary_brokers == "localhost:12182"
 
     # test result from two internal producers
-    producer = KafkaProducer()
+    producer = EventProducer()
     primary_success_event = create_event_from_dict({"topic": "primary-success"})
     result = await producer.produce(primary_success_event)
     assert result is primary_msg

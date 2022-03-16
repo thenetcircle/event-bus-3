@@ -15,7 +15,7 @@ from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
 from eventbus.sink import HttpSink, Sink
 
 
-class ConsumerCoordinator:
+class EventConsumer:
     def __init__(self, config: ConsumerConfig):
         self._config = config
         self._consumer = KafkaConsumer(config)

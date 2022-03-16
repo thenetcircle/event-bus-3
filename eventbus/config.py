@@ -83,10 +83,55 @@ _config: Optional[Config] = None
 _config_update_lock = threading.Lock()
 
 
-def add_subscriber(*subscribers: Subscriber) -> None:
-    global _config_subscribers
-    for sub in subscribers:
-        _config_subscribers.add(sub)
+def update_from_config(new_config: Config) -> None:
+    logger.debug("Going to update config another Config object: {}", new_config)
+    _update_config(new_config)
+
+
+def update_from_dict(data: Dict[str, Any]) -> None:
+    logger.debug("Going to update config from dict: {}", data)
+    try:
+        new_config = Config(**data)
+    except Exception:
+        raise ConfigUpdateError
+
+    _update_config(new_config)
+
+
+def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
+    logger.info("Going to update config from an yaml file '{}'", yaml_file_path)
+    yaml_file_path = Path(yaml_file_path)
+    if not yaml_file_path.exists():
+        raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
+
+    try:
+        with open(yaml_file_path.resolve()) as f:
+            parsed_config = yaml.safe_load(f)
+            update_from_dict(parsed_config)
+    except ConfigUpdateError:
+        raise
+    except Exception:
+        raise ConfigUpdateError
+
+
+def reset() -> None:
+    global _config
+    _config = None
+
+
+def get() -> Config:
+    if _config is None:
+        raise ConfigNoneError
+    return _config
+
+
+def _update_config(new_config: Config) -> None:
+    with _config_update_lock:
+        global _config
+        old_config = _config
+        _config = new_config
+
+        _send_signals(old_config)
 
 
 def _send_signals(old_config: Optional[Config]) -> None:
@@ -124,55 +169,3 @@ def _send_signals(old_config: Optional[Config]) -> None:
     except Exception as ex:
         logger.error("Sent ConfigSignals failed with error: {} {}", type(ex), ex)
         raise ConfigSubscribeError
-
-
-def _update_config(new_config: Config) -> None:
-    with _config_update_lock:
-        global _config
-        old_config = _config
-        _config = new_config
-
-        _send_signals(old_config)
-
-
-def update_from_config(new_config: Config) -> None:
-    logger.debug("Going to update config another Config object: {}", new_config)
-    _update_config(new_config)
-
-
-def update_from_dict(data: Dict[str, Any]) -> None:
-    logger.debug("Going to update config from dict: {}", data)
-    try:
-        new_config = Config(**data)
-    except Exception:
-        raise ConfigUpdateError
-
-    _update_config(new_config)
-
-
-def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
-    logger.info("Going to update config from an yaml file '{}'", yaml_file_path)
-    yaml_file_path = Path(yaml_file_path)
-    if not yaml_file_path.exists():
-        raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
-
-    try:
-        with open(yaml_file_path.resolve()) as f:
-            parsed_config = yaml.safe_load(f)
-            update_from_dict(parsed_config)
-    except ConfigUpdateError:
-        raise
-    except Exception:
-        raise ConfigUpdateError
-
-
-def reset() -> None:
-    global _config, _config_subscribers
-    _config = None
-    _config_subscribers = set()
-
-
-def get() -> Config:
-    if _config is None:
-        raise ConfigNoneError
-    return _config

@@ -1,47 +1,51 @@
-class InitError(Exception):
+class EventBusError(Exception):
     pass
 
 
-class ConfigNoneError(Exception):
+class InitError(EventBusError):
     pass
 
 
-class ConfigUpdateError(Exception):
+class ConfigNoneError(EventBusError):
     pass
 
 
-class ConfigSubscribeError(Exception):
+class ConfigUpdateError(EventBusError):
     pass
 
 
-class ConfigWatchingError(Exception):
+class ConfigSubscribeError(EventBusError):
     pass
 
 
-class EventValidationError(Exception):
+class ConfigWatchingError(EventBusError):
     pass
 
 
-class EventProducingError(Exception):
+class EventValidationError(EventBusError):
+    pass
+
+
+class EventProducingError(EventBusError):
     # TODO add root cause
     pass
 
 
-class InitProducerError(Exception):
+class InitProducerError(EventBusError):
     pass
 
 
-class InitConsumerError(Exception):
+class InitConsumerError(EventBusError):
     pass
 
 
-class EventConsumingError(Exception):
+class EventConsumingError(EventBusError):
     pass
 
 
-class InvalidArgumentError(Exception):
+class InvalidArgumentError(EventBusError):
     pass
 
 
-class ClosedError(Exception):
+class ClosedError(EventBusError):
     pass

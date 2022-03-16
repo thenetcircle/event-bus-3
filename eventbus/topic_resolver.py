@@ -6,9 +6,20 @@ from eventbus import config, signals
 
 class TopicResolver:
     def __init__(self):
-        self._current_topic_mapping = config.get().topic_mapping
         self._index = {}
+        self._current_topic_mapping = config.get().topic_mapping
         self.reindex()
+
+    def init(self) -> None:
+        pass
+
+    # TODO add cache
+    def resolve(self, event_title: str) -> Optional[str]:
+        """Resolve event topic by event title according to the topic mapping"""
+        for _, (pattern, topic) in self._index.items():
+            if re.match(pattern, event_title):
+                return topic
+        return None
 
     def reindex(self) -> None:
         """Index the topic mapping with structure:
@@ -21,14 +32,6 @@ class TopicResolver:
                 ):  # if there are repetitive patterns, they will be abandoned
                     new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
-
-    # TODO add cache
-    def resolve(self, event_title: str) -> Optional[str]:
-        """Resolve event topic by event title according to the topic mapping"""
-        for _, (pattern, topic) in self._index.items():
-            if re.match(pattern, event_title):
-                return topic
-        return None
 
     @signals.CONFIG_TOPIC_MAPPING_CHANGED.connect
     def _handle_topic_mapping_signal(self) -> None:
