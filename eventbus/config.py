@@ -182,31 +182,57 @@ def _send_signals(old_config: Optional[Config]) -> None:
     try:
         sender = "config"
 
-        if not old_config or old_config != _config:
+        new_config = _config
+        assert new_config is not None
+
+        if not old_config or old_config != new_config:
             receivers = signals.CONFIG_CHANGED.send(sender)
             logger.info(
                 "Config changed, sent CONFIG_CHANGED signal to receivers {}",
                 receivers,
             )
 
-        if not old_config or old_config.producer != _config.producer:
-            receivers = signals.CONFIG_PRODUCER_CHANGED.send(sender)
+        def compare_two_config(
+            old: Dict[str, Any], new: Dict[str, Any]
+        ) -> Dict[str, set]:
+            old_keys = set(old.keys())
+            new_keys = set(new.keys())
+
+            removed = old_keys.difference(new_keys)
+            added = new_keys.difference(old_keys)
+            changed = set()
+            for k in old_keys.intersection(new_keys):
+                if old[k] != new[k]:
+                    changed.add(k)
+
+            return {"added": added, "removed": removed, "changed": changed}
+
+        if not old_config or old_config.event_producers != new_config.event_producers:
+            kwargs = compare_two_config(
+                old_config.event_producers if old_config else {},
+                new_config.event_producers,
+            )
+            receivers = signals.CONFIG_PRODUCER_CHANGED.send(sender, **kwargs)
             logger.info(
                 "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
                 receivers,
             )
 
-        if not old_config or old_config.topic_mapping != _config.topic_mapping:
-            receivers = signals.CONFIG_TOPIC_MAPPING_CHANGED.send(sender)
+        if not old_config or old_config.event_consumers != new_config.event_consumers:
+            kwargs = compare_two_config(
+                old_config.event_consumers if old_config else {},
+                new_config.event_consumers,
+            )
+            receivers = signals.CONFIG_CONSUMER_CHANGED.send(sender, **kwargs)
             logger.info(
-                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
                 receivers,
             )
 
-        if not old_config or old_config.consumer != _config.consumer:
-            receivers = signals.CONFIG_CONSUMER_CHANGED.send(sender)
+        if not old_config or old_config.topic_mapping != new_config.topic_mapping:
+            receivers = signals.CONFIG_TOPIC_MAPPING_CHANGED.send(sender)
             logger.info(
-                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
                 receivers,
             )
 

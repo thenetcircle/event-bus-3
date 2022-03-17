@@ -2,7 +2,6 @@ import re
 import time
 from pathlib import Path
 from unittest import mock
-from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -32,15 +31,26 @@ def test_update_from_yaml():
             patterns=[r".*"],
         ),
     ]
-    assert config_data.producer == config.ProducerConfig(
-        primary_brokers="localhost:12181",
-        kafka_config={
-            "enable.idempotence": True,
-            "acks": "all",
-            "max.in.flight.requests.per.connection": 5,
-            "retries": 3,
-        },
-    )
+    assert config_data.event_producers == {
+        "p1": config.EventProducerConfig(
+            kafka_config={
+                "enable.idempotence": "false",
+                "acks": "all",
+                "max.in.flight.requests.per.connection": 5,
+                "retries": 3,
+                "compression.type": "none",
+            },
+        ),
+        "p2": config.EventProducerConfig(
+            kafka_config={
+                "enable.idempotence": "true",
+                "acks": "all",
+                "max.in.flight.requests.per.connection": 5,
+                "retries": 3,
+                "compression.type": "gzip",
+            },
+        ),
+    }
 
 
 def test_invalid_config_path():
@@ -83,6 +93,8 @@ def test_signals():
     mock2 = mock.Mock(spec={})
     mock3 = mock.Mock(spec={})
 
+    signal_sender = "config"
+
     signals.CONFIG_PRODUCER_CHANGED.connect(mock1)
     signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(mock2)
     signals.CONFIG_CONSUMER_CHANGED.connect(mock3)
@@ -100,28 +112,38 @@ def test_signals():
     mock3.assert_not_called()
 
     reset_mocks()
-    _config = config.get().dict(exclude_defaults=True)
-    _config["producer"]["primary_brokers"] = "localhost:12182"
+    _config = config.get().dict(exclude_unset=True)
+    _config["event_producers"]["p1"]["kafka_config"]["compression.type"] = "snappy"
+    _config["event_producers"]["p3"] = {"kafka_config": {}}
+    del _config["event_producers"]["p2"]
     config.update_from_dict(_config)
     mock1.assert_called_once()
+    mock1.assert_called_with(
+        signal_sender, added={"p3"}, removed={"p2"}, changed={"p1"}
+    )
     mock2.assert_not_called()
     mock3.assert_not_called()
 
     reset_mocks()
-    _config = config.get().dict(exclude_defaults=True)
+    _config = config.get().dict(exclude_unset=True)
+    _config["event_consumers"]["c1"]["kafka_config"]["group.id"] = "group11"
+    _config["event_consumers"]["c3"] = config.get().event_consumers["c2"].dict()
+    del _config["event_consumers"]["c2"]
+    config.update_from_dict(_config)
+    mock1.assert_not_called()
+    mock2.assert_not_called()
+    mock3.assert_called_once()
+    mock3.assert_called_with(
+        signal_sender, added={"c3"}, removed={"c2"}, changed={"c1"}
+    )
+
+    reset_mocks()
+    _config = config.get().dict(exclude_unset=True)
     _config["topic_mapping"][0]["topic"] = "primary-success2"
     config.update_from_dict(_config)
     mock1.assert_not_called()
     mock2.assert_called_once()
     mock3.assert_not_called()
-
-    reset_mocks()
-    _config = config.get().dict(exclude_defaults=True)
-    _config["consumer"]["instances"][0]["id"] = "test_consumer2"
-    config.update_from_dict(_config)
-    mock1.assert_not_called()
-    mock2.assert_not_called()
-    mock3.assert_called_once()
 
 
 @pytest.mark.noconfig
