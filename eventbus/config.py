@@ -55,27 +55,44 @@ class DefaultConsumerConfig(ConfigModel):
     sink: Optional[HttpSinkConfig] = None
 
 
-class ConsumerConfig(ConfigModel):
-    id: StrictStr
+class DefaultKafkaConfig(ConfigModel):
+    producer: Optional[Dict[str, str]] = None
+    consumer: Optional[Dict[str, str]] = None
+
+
+class EventProducerConfig(ConfigModel):
+    kafka_config: Optional[Dict[str, str]] = None
+
+
+class EventConsumerConfig(ConfigModel):
     kafka_topics: List[StrictStr]
     kafka_config: Dict[str, str]
+    producers: List[str]
+    sink: HttpSinkConfig
     include_events: Optional[List[StrictStr]] = None
     exclude_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
-    sink: HttpSinkConfig
 
 
 class ConsumerContainer(ConfigModel):
     default_config: Optional[DefaultConsumerConfig] = None
-    instances: List[ConsumerConfig]
+    instances: List[EventConsumerConfig]
+
+
+class HttpAppConfig(ConfigModel):
+    producers: List[str]
 
 
 class Config(ConfigModel):
     env: Env
     debug: bool
     producer: ProducerConfig
-    topic_mapping: List[TopicMapping]
     consumer: ConsumerContainer
+    http_app: HttpAppConfig
+    event_producers: Dict[str, EventProducerConfig]
+    event_consumers: Dict[str, EventConsumerConfig]
+    topic_mapping: List[TopicMapping]
+    default_kafka_config: Optional[DefaultKafkaConfig] = None
 
 
 Subscriber = Callable[[], None]
@@ -85,14 +102,16 @@ _config_update_lock = threading.Lock()
 
 
 def update_from_config(new_config: Config) -> None:
-    logger.debug("Going to update config another Config object: {}", new_config)
+    logger.info("Going to update config from another Config object: {}", new_config)
     _update_config(new_config)
 
 
-def update_from_dict(data: Dict[str, Any]) -> None:
-    logger.debug("Going to update config from dict: {}", data)
+def update_from_dict(data: Dict[str, Any], log=True) -> None:
+    if log:
+        logger.info("Going to update config from dict: {}", data)
+
     try:
-        new_config = Config(**data)
+        new_config = _fill_config(Config(**data))
     except Exception:
         raise ConfigUpdateError
 
@@ -108,7 +127,7 @@ def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
     try:
         with open(yaml_file_path.resolve()) as f:
             parsed_config = yaml.safe_load(f)
-            update_from_dict(parsed_config)
+            update_from_dict(parsed_config, log=False)
     except ConfigUpdateError:
         raise
     except Exception:
@@ -133,6 +152,30 @@ def _update_config(new_config: Config) -> None:
         _config = new_config
 
         _send_signals(old_config)
+
+
+def _fill_config(config: Config) -> Config:
+    if config.default_kafka_config:
+        default_kafka_producer_config = config.default_kafka_config.producer or {}
+        default_kafka_consumer_config = config.default_kafka_config.consumer or {}
+    else:
+        default_kafka_producer_config = {}
+        default_kafka_consumer_config = {}
+
+    config_dict = config.dict()
+
+    for p_name, p_config in config_dict["event_producers"].items():
+        config_dict["event_producers"][p_name]["kafka_config"] = {
+            **default_kafka_producer_config,
+            **(p_config["kafka_config"] or {}),
+        }
+    for c_name, c_config in config_dict["event_consumers"].items():
+        config_dict["event_consumers"][c_name]["kafka_config"] = {
+            **default_kafka_consumer_config,
+            **(c_config["kafka_config"] or {}),
+        }
+
+    return Config(**config_dict)
 
 
 def _send_signals(old_config: Optional[Config]) -> None:

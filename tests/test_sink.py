@@ -4,7 +4,7 @@ import pytest
 from aiohttp import web
 from loguru import logger
 
-from eventbus.config import ConsumerConfig, HttpSinkConfig, HttpSinkMethod
+from eventbus.config import EventConsumerConfig, HttpSinkConfig, HttpSinkMethod
 from eventbus.event import EventProcessStatus
 from eventbus.sink import HttpSink
 from tests.utils import create_kafka_event_from_dict
@@ -55,7 +55,7 @@ async def test_httpsink_send_event(aiohttp_client):
     client = await aiohttp_client(app)
 
     sink = HttpSink(
-        ConsumerConfig(
+        EventConsumerConfig(
             id="test_consumer",
             kafka_topics=["topic1"],
             kafka_config={},
@@ -88,7 +88,7 @@ async def test_httpsink_send_event(aiohttp_client):
     assert (await sink.send_event(retry_event))[1] == EventProcessStatus.DONE
 
     sink2 = HttpSink(
-        ConsumerConfig(
+        EventConsumerConfig(
             id="test_consumer2",
             kafka_topics=["topic1"],
             kafka_config={},

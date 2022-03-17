@@ -9,14 +9,14 @@ from confluent_kafka.cimpl import Consumer, Message, TopicPartition
 from janus import Queue as JanusQueue
 from loguru import logger
 
-from eventbus.config import ConsumerConfig
+from eventbus.config import EventConsumerConfig
 from eventbus.errors import ClosedError, EventConsumingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
 from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, config: ConsumerConfig):
+    def __init__(self, config: EventConsumerConfig):
         self._config = config
         self._consumer = KafkaConsumer(config)
         self._sink: Sink = HttpSink(config)
@@ -131,7 +131,7 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, config: ConsumerConfig):
+    def __init__(self, config: EventConsumerConfig):
         self._check_config(config)
         self._config = config
         self._closed = False
@@ -326,7 +326,7 @@ class KafkaConsumer:
         ]
 
     @staticmethod
-    def _check_config(config: ConsumerConfig) -> None:
+    def _check_config(config: EventConsumerConfig) -> None:
         kafka_config = config.kafka_config
         if "bootstrap.servers" not in kafka_config:
             raise InvalidArgumentError('"bootstrap.servers" is needed')

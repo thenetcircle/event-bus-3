@@ -8,16 +8,6 @@ producer:
     acks: all
     "max.in.flight.requests.per.connection": 5
     "retries": 3
-topic_mapping:
-  - topic: primary-success
-    patterns:
-      - test\.primary-success
-  - topic: secondary-success
-    patterns:
-      - test\.secondary-success
-  - topic: event-v3-${env}-default
-    patterns:
-      - .*
 consumer:
   default_config:
     concurrent_per_partition: 1
@@ -31,8 +21,67 @@ consumer:
         "group.id": "override_group_id"
       include_events: []
       exclude_events: []
+      producers: [p1]
       sink:
         url: http://localhost
         method: POST
         headers: []
         timeout: 2
+
+http_app:
+  producers: [p1]
+
+default_kafka_config:
+  producer:
+    "enable.idempotence": "true"
+    "acks": "all"
+    "max.in.flight.requests.per.connection": "5"
+    "retries": "3"
+  consumer:
+    "enable.auto.commit": "false"
+    "auto.offset.reset": "latest"
+    "max.poll.interval.ms": "50"
+
+event_producers:
+  p1:
+    kafka_config:
+      "enable.idempotence": "false"
+      "compression.type": "none"
+  p2:
+    kafka_config:
+      "compression.type": "gzip"
+
+event_consumers:
+  c1:
+    kafka_topics: [ "topic1" ]
+    kafka_config:
+      "group.id": "group1"
+      "max.poll.interval.ms": "100"
+    include_events: [test\..*]
+    producers: [p1]
+    sink:
+      url: http://localhost:8001
+      method: POST
+      timeout: 5
+  c2:
+    kafka_topics: [ "topic2" ]
+    kafka_config:
+      "group.id": "group2"
+      "max.poll.interval.ms": "80"
+    include_events: [test2\..*]
+    producers: [p2]
+    sink:
+      url: http://localhost:8002
+      method: POST
+      timeout: 10
+
+topic_mapping:
+  - topic: primary-success
+    patterns:
+      - test\.primary-success
+  - topic: secondary-success
+    patterns:
+      - test\.secondary-success
+  - topic: event-v3-${env}-default
+    patterns:
+      - .*

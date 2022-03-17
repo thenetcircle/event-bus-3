@@ -189,3 +189,28 @@ def test_watch_file(tmpdir, mocker):
     mock2.assert_not_called()
     mock3.assert_not_called()
     assert mock4.call_times == 1
+
+
+@pytest.mark.noconfig
+def test_fill_config(tmpdir, mocker):
+    config_path = Path(__file__).parent / "config.yml"
+    config.update_from_yaml(config_path)
+
+    _config = config.get()
+
+    assert len(_config.event_producers["p1"].kafka_config) == 5
+    assert _config.event_producers["p1"].kafka_config["enable.idempotence"] == "false"
+    assert _config.event_producers["p1"].kafka_config["compression.type"] == "none"
+    assert _config.event_producers["p1"].kafka_config["acks"] == "all"
+    assert len(_config.event_producers["p2"].kafka_config) == 5
+    assert _config.event_producers["p2"].kafka_config["enable.idempotence"] == "true"
+    assert _config.event_producers["p2"].kafka_config["compression.type"] == "gzip"
+    assert _config.event_producers["p2"].kafka_config["acks"] == "all"
+
+    assert len(_config.event_consumers["c1"].kafka_config) == 4
+    assert _config.event_consumers["c1"].kafka_config["group.id"] == "group1"
+    assert _config.event_consumers["c1"].kafka_config["max.poll.interval.ms"] == "100"
+    assert _config.event_consumers["c1"].kafka_config["enable.auto.commit"] == "false"
+    assert _config.event_consumers["c2"].kafka_config["group.id"] == "group2"
+    assert _config.event_consumers["c2"].kafka_config["max.poll.interval.ms"] == "80"
+    assert _config.event_consumers["c2"].kafka_config["enable.auto.commit"] == "false"

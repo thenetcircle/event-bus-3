@@ -8,14 +8,14 @@ import pytest_asyncio
 from consumer import EventConsumer, KafkaConsumer
 from janus import Queue as JanusQueue
 
-from eventbus.config import ConsumerConfig, HttpSinkConfig, HttpSinkMethod
+from eventbus.config import EventConsumerConfig, HttpSinkConfig, HttpSinkMethod
 from eventbus.event import EventProcessStatus, KafkaEvent
 from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 
 @pytest.fixture
 def consumer_conf():
-    consumer_conf = ConsumerConfig(
+    consumer_conf = EventConsumerConfig(
         id="test_consumer",
         kafka_topics=["topic1"],
         kafka_config={
