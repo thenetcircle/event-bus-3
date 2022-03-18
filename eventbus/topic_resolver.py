@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Optional, Set
 
 from eventbus import config, signals
 from eventbus.event import Event
@@ -10,8 +10,9 @@ class TopicResolver:
         self._index = {}
         self._current_topic_mapping = config.get().topic_mapping
         self.reindex()
+        signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(self._handle_topic_mapping_signal)
 
-    def init(self) -> None:
+    async def init(self) -> None:
         pass
 
     # TODO add cache
@@ -34,8 +35,7 @@ class TopicResolver:
                     new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
 
-    @signals.CONFIG_TOPIC_MAPPING_CHANGED.connect
-    def _handle_topic_mapping_signal(self) -> None:
+    def _handle_topic_mapping_signal(self, sender) -> None:
         """Subscribing the topic mapping changes signal, and update related index accordingly."""
         self._current_topic_mapping = config.get().topic_mapping
         self.reindex()

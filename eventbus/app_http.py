@@ -1,6 +1,7 @@
 import asyncio
 from typing import List, Union
 
+from confluent_kafka.cimpl import Message
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -17,10 +18,10 @@ topic_resolver = TopicResolver()
 producer = EventProducer("app_http", config.get().http_app.producers)
 
 
-def startup():
+async def startup():
     logger.info("The app is starting up")
-    topic_resolver.init()
-    producer.init()
+    await topic_resolver.init()
+    await producer.init()
 
 
 async def shutdown():
@@ -68,7 +69,7 @@ async def receive_events(request):
         )
 
 
-async def handler_event(*events: Event) -> List[Union[bool, Exception]]:
+async def handler_event(*events: Event) -> List[Union[Message, Exception]]:
     tasks = []
     for event in events:
         if event_topic := topic_resolver.resolve(event):
@@ -81,9 +82,9 @@ async def handler_event(*events: Event) -> List[Union[bool, Exception]]:
 
 
 def _create_response(
-    event_ids: List[str], results: List[Union[bool, Exception]], resp_format: int
+    event_ids: List[str], results: List[Union[Message, Exception]], resp_format: int
 ) -> Response:
-    succ_events_len = len(list(filter(lambda r: r == True, results)))
+    succ_events_len = len(list(filter(lambda r: isinstance(r, Message), results)))
 
     if resp_format == 2:
         if succ_events_len == len(event_ids):
@@ -108,7 +109,7 @@ def _create_response(
         details = {}
         for i, event_id in enumerate(event_ids):
             result = results[i]
-            if result != True:
+            if not isinstance(result, Message):
                 details[event_id] = f"<{type(result).__name__}> {result}"
         if details:
             resp["details"] = details

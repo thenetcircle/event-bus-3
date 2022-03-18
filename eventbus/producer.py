@@ -21,15 +21,15 @@ class EventProducer:
         self._loop = None
         self._max_retry_times_in_one_producer = 3
 
-    @property
-    def caller_id(self):
-        return self._caller_id
-
-    def init(self) -> None:
-        self._init_producers()
+    async def init(self) -> None:
+        await self._init_producers()
         self._loop = asyncio.get_running_loop()
 
-    async def produce(self, topic: str, event: Event) -> bool:
+    async def close(self):
+        logger.warning("Cloing EventProducer")
+        await asyncio.gather(*[p.close() for p in self._producers])
+
+    async def produce(self, topic: str, event: Event) -> Message:
         """
         An awaitable produce method.
         """
@@ -54,7 +54,7 @@ class EventProducer:
                     cost_time,
                     retry_times,
                 )
-                return True
+                return msg
 
             except Exception as ex:
                 logger.error(
@@ -67,7 +67,7 @@ class EventProducer:
                 if (i + 1) == len(self._producers):
                     raise
 
-        return False
+        raise RuntimeError('somehow reached the end of "produce" func')
 
     async def _do_produce(
         self,
@@ -98,10 +98,6 @@ class EventProducer:
             # NotImplementedError – if timestamp is specified without underlying library support.
             raise
 
-    async def close(self):
-        logger.warning("Cloing EventProducer")
-        await asyncio.gather(*[p.close() for p in self._producers])
-
     def _generate_fut_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
         fut = self._loop.create_future()
 
@@ -122,7 +118,7 @@ class EventProducer:
     #         if producer.id in changed_producer_ids:
     #             producer.update_config(config.get().event_producers[producer.id])
 
-    def _init_producers(self) -> None:
+    async def _init_producers(self) -> None:
         for producer_id in self._producer_ids:
             if producer_id not in config.get().event_producers:
                 raise InitProducerError(
@@ -133,8 +129,7 @@ class EventProducer:
             )
             self._producers.append(producer)
 
-        for producer in self._producers:
-            producer.init()
+        await asyncio.gather(*[p.init() for p in self._producers])
 
 
 class KafkaProducer:
@@ -162,7 +157,7 @@ class KafkaProducer:
     def id(self) -> str:
         return self._id
 
-    def init(self) -> None:
+    async def init(self) -> None:
         self._real_producer = Producer(self._config.kafka_config)
         self._poll_thread = Thread(
             target=self._poll,
@@ -170,6 +165,14 @@ class KafkaProducer:
             daemon=True,
         )
         self._poll_thread.start()
+
+    async def close(self, block=False) -> None:
+        """stop the poll thread"""
+        self._cancelled = True
+        if block:
+            while self._is_polling:
+                # TODO may use event to replace
+                await asyncio.sleep(0.1)
 
     def update_config(self, producer_conf: EventProducerConfig):
         # self._real_producer = Producer(producer_conf)
@@ -205,14 +208,6 @@ class KafkaProducer:
 
         ref: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Producer.produce"""
         return self._real_producer.produce(topic, value, **kwargs)
-
-    async def close(self, block=False) -> None:
-        """stop the poll thread"""
-        self._cancelled = True
-        if block:
-            while self._is_polling:
-                # TODO may use event to replace
-                await asyncio.sleep(0.1)
 
     def _poll(self):
         # TODO handler errors
