@@ -16,10 +16,10 @@ from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, config: EventConsumerConfig):
-        self._config = config
-        self._consumer = KafkaConsumer(config)
-        self._sink: Sink = HttpSink(config)
+    def __init__(self, consumer_conf: EventConsumerConfig):
+        self._config = consumer_conf
+        self._consumer = KafkaConsumer(consumer_conf)
+        self._sink: Sink = HttpSink(consumer_conf)
         self._running = False
         self._wait_task = None
         self._tp_tasks = []
@@ -131,9 +131,9 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, config: EventConsumerConfig):
-        self._check_config(config)
-        self._config = config
+    def __init__(self, consumer_conf: EventConsumerConfig):
+        self._check_config(consumer_conf)
+        self._config = consumer_conf
         self._closed = False
         self._internal_consumer: Optional[Consumer] = None
         self._is_commit_running = False
@@ -326,8 +326,8 @@ class KafkaConsumer:
         ]
 
     @staticmethod
-    def _check_config(config: EventConsumerConfig) -> None:
-        kafka_config = config.kafka_config
+    def _check_config(consumer_conf: EventConsumerConfig) -> None:
+        kafka_config = consumer_conf.kafka_config
         if "bootstrap.servers" not in kafka_config:
             raise InvalidArgumentError('"bootstrap.servers" is needed')
         if "group.id" not in kafka_config:

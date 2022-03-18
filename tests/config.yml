@@ -38,6 +38,7 @@ default_kafka_config:
     "max.in.flight.requests.per.connection": "5"
     "retries": "3"
   consumer:
+    "bootstrap.servers": "localhost:12811"
     "enable.auto.commit": "false"
     "auto.offset.reset": "latest"
     "max.poll.interval.ms": "50"
@@ -45,10 +46,12 @@ default_kafka_config:
 event_producers:
   p1:
     kafka_config:
+      "bootstrap.servers": "localhost:12811"
       "enable.idempotence": "false"
       "compression.type": "none"
   p2:
     kafka_config:
+      "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
 
 event_consumers:

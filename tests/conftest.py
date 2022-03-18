@@ -2,13 +2,14 @@ import multiprocessing
 import sys
 from pathlib import Path
 from sys import platform
-from typing import Dict
+from threading import Thread
 
 import loguru
 import pytest
 from pytest_mock import MockFixture
+from utils import create_kafka_message_from_dict
 
-from eventbus import config
+from eventbus import config, producer
 
 
 def pytest_configure(config):
@@ -32,31 +33,29 @@ def setup_config(request):
 
 @pytest.fixture
 def mock_internal_kafka_producer(mocker: MockFixture):
-    import confluent_kafka
-    from confluent_kafka import KafkaException
-
     # mock InternalKafkaProducer
-    def mock_init(self, producer_config: Dict[str, str]):
-        self.is_primary = producer_config["bootstrap.servers"] == "localhost:12181"
-
-    mocker.patch("eventbus.producer.InternalKafkaProducer.__init__", mock_init)
-    mocker.patch("confluent_kafka.Message")
-
-    primary_msg = confluent_kafka.Message()
-    secondary_msg = confluent_kafka.Message()
+    # def mock_init(self, producer_config: Dict[str, str]):
+    #     self.is_primary = producer_config["bootstrap.servers"] == "localhost:12181"
+    #
+    # mocker.patch("eventbus.producer.KafkaProducer.__init__", mock_init)
 
     def produce_mock(self, topic, value, **kwargs) -> None:
-        if self.is_primary:
-            if topic == "primary-success":
-                kwargs["on_delivery"](None, primary_msg)
-            else:
-                kwargs["on_delivery"](KafkaException(), None)
-        else:
-            if topic == "secondary-success":
-                kwargs["on_delivery"](None, secondary_msg)
-            else:
-                kwargs["on_delivery"](KafkaException(), None)
+        def delivery(err, msg):
+            Thread(target=kwargs["on_delivery"], args=(err, msg), daemon=True).start()
 
-    mocker.patch("eventbus.producer.InternalKafkaProducer.produce", produce_mock)
+        msg = create_kafka_message_from_dict({})
+        delivery(None, msg)
 
-    yield primary_msg, secondary_msg
+        # if self.is_primary:
+        #     if topic == "primary-success":
+        #         kwargs["on_delivery"](None, primary_msg)
+        #     else:
+        #         kwargs["on_delivery"](KafkaException(), None)
+        # else:
+        #     if topic == "secondary-success":
+        #         kwargs["on_delivery"](None, secondary_msg)
+        #     else:
+        #         kwargs["on_delivery"](KafkaException(), None)
+
+    mocker.patch("eventbus.producer.KafkaProducer.init")
+    mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)

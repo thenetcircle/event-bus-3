@@ -2,6 +2,7 @@ import re
 from typing import Optional
 
 from eventbus import config, signals
+from eventbus.event import Event
 
 
 class TopicResolver:
@@ -14,10 +15,10 @@ class TopicResolver:
         pass
 
     # TODO add cache
-    def resolve(self, event_title: str) -> Optional[str]:
+    def resolve(self, event: Event) -> Optional[str]:
         """Resolve event topic by event title according to the topic mapping"""
         for _, (pattern, topic) in self._index.items():
-            if re.match(pattern, event_title):
+            if re.match(pattern, event.title):
                 return topic
         return None
 

@@ -1,101 +1,140 @@
 import asyncio
+import time
 from asyncio import Future
 from threading import Thread
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, List, Tuple
 
-from confluent_kafka import Message, Producer
+from config import EventProducerConfig
+from confluent_kafka import KafkaError, KafkaException, Message, Producer
+from loguru import logger
 
-from eventbus import config, signals
-from eventbus.errors import EventProducingError, InitProducerError
-from eventbus.event import Event
+from eventbus import config
+from eventbus.errors import InitProducerError
+from eventbus.event import Event, create_kafka_message
 
 
 class EventProducer:
-    def __init__(self):
-        self._loop = asyncio.get_event_loop()
-        self._primary_producer: Optional[KafkaProducer] = None
-        self._secondary_producer: Optional[KafkaProducer] = None
-        self._current_producer_config = config.get().producer
+    def __init__(self, caller_id: str, producer_ids: List[str]):
+        self._caller_id = caller_id
+        self._producer_ids: List[str] = producer_ids
+        self._producers: List[KafkaProducer] = []
+        self._loop = None
+        self._max_retry_times_in_one_producer = 3
+
+    @property
+    def caller_id(self):
+        return self._caller_id
 
     def init(self) -> None:
-        self._init_internal_producers()
+        self._init_producers()
+        self._loop = asyncio.get_running_loop()
 
-    async def produce(self, topic: str, event: Event) -> Message:
+    async def produce(self, topic: str, event: Event) -> bool:
         """
         An awaitable produce method.
         """
-        if not self._primary_producer:
-            raise InitProducerError("Primary producer must be inited.")
+        if not self._producers or not self._loop:
+            raise InitProducerError(
+                "Need init producers before call the produce method."
+            )
 
-        primary_feature, primary_ack = self._create_ack()
-        self._primary_producer.produce(topic, event.payload, on_delivery=primary_ack)
-
-        try:
-            return await primary_feature
-        except EventProducingError:
-            if self._secondary_producer:
-                secondary_feature, secondary_ack = self._create_ack()
-                self._secondary_producer.produce(
-                    topic, event.payload, on_delivery=secondary_ack
+        start_time = time.time()
+        for i, producer in enumerate(self._producers):
+            try:
+                msg, retry_times = await self._do_produce(topic, event, producer, 0)
+                cost_time = time.time() - start_time
+                logger.info(
+                    'Has sent an event "{}" to producer "{}", topic: "{}", partition: {}, offset: {}.  '
+                    "in {} seconds after {} times retries",
+                    event,
+                    producer.id,
+                    msg.topic(),
+                    msg.partition(),
+                    msg.offset(),
+                    cost_time,
+                    retry_times,
                 )
-                return await secondary_feature
+                return True
+
+            except Exception as ex:
+                logger.error(
+                    'Delivery an event "{}" to producer "{}" failed with error: {} {}',
+                    event,
+                    producer.id,
+                    type(ex),
+                    ex,
+                )
+                if (i + 1) == len(self._producers):
+                    raise
+
+        return False
+
+    async def _do_produce(
+        self,
+        topic: str,
+        event: Event,
+        producer: "KafkaProducer",
+        retry_times: int,
+    ) -> Tuple[Message, int]:
+        try:
+            feature, feature_ack = self._generate_fut_ack()
+            key, value = create_kafka_message(event)
+            producer.produce(topic, value, key=key, on_delivery=feature_ack)
+            msg: Message = await feature
+            return msg, retry_times
+
+        except KafkaException as ex:
+            kafka_error: KafkaError = ex.args[0]
+            if (
+                kafka_error.retriable()
+                and retry_times < self._max_retry_times_in_one_producer
+            ):
+                return await self._do_produce(topic, event, producer, retry_times + 1)
             else:
                 raise
 
-    def close(self):
-        if self._primary_producer:
-            self._primary_producer.close(wait_to_be_finished=True)
-        if self._secondary_producer:
-            self._secondary_producer.close(wait_to_be_finished=True)
+        except Exception:
+            # BufferError - if the internal producer message queue is full (queue.buffering.max.messages exceeded)
+            # NotImplementedError – if timestamp is specified without underlying library support.
+            raise
 
-    def _create_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
-        feature = self._loop.create_future()
+    async def close(self):
+        logger.warning("Cloing EventProducer")
+        await asyncio.gather(*[p.close() for p in self._producers])
 
-        def ack(err: Exception, msg: Message):
+    def _generate_fut_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
+        fut = self._loop.create_future()
+
+        def fut_ack(err: Exception, msg: Message):
             if err:
-                self._loop.call_soon_threadsafe(
-                    feature.set_exception, EventProducingError(err)
-                )
+                self._loop.call_soon_threadsafe(fut.set_exception, err)
             else:
-                self._loop.call_soon_threadsafe(feature.set_result, msg)
+                self._loop.call_soon_threadsafe(fut.set_result, msg)
 
-        return feature, ack
+        return fut, fut_ack
 
-    @signals.CONFIG_PRODUCER_CHANGED.connect
-    def _config_subscriber(self) -> None:
-        self._current_producer_config = config.get().producer
-        self._init_internal_producers()
+    # @signals.CONFIG_PRODUCER_CHANGED.connect
+    # def _config_subscriber(
+    #     self, sender, added: Set[str], removed: Set[str], changed: Set[str]
+    # ) -> None:
+    #     changed_producer_ids = changed.intersection(self._producer_ids)
+    #     for producer in self._producers:
+    #         if producer.id in changed_producer_ids:
+    #             producer.update_config(config.get().event_producers[producer.id])
 
-    def _init_internal_producers(self) -> None:
-        # if there is already a primary producer (when config got updated), close it.
-        if self._primary_producer:
-            self._primary_producer.close(wait_to_be_finished=False)
-        primary_producer_config = self._create_producer_config(is_primary=True)
-        if not primary_producer_config:
-            raise InitProducerError("Primary producer config is none.")
-        self._primary_producer = KafkaProducer(primary_producer_config)
+    def _init_producers(self) -> None:
+        for producer_id in self._producer_ids:
+            if producer_id not in config.get().event_producers:
+                raise InitProducerError(
+                    f"Producer id {producer_id} can not be found in config"
+                )
+            producer = KafkaProducer(
+                producer_id, config.get().event_producers[producer_id]
+            )
+            self._producers.append(producer)
 
-        # if there is already a secondary producer (when config got updated), close it.
-        if self._secondary_producer:
-            self._secondary_producer.close(wait_to_be_finished=False)
-        # if there is secondary_brokers config, init the secondary producer
-        secondary_producer_config = self._create_producer_config(is_primary=False)
-        if secondary_producer_config:
-            self._secondary_producer = KafkaProducer(secondary_producer_config)
-
-    def _create_producer_config(self, is_primary=True) -> Optional[Dict[str, str]]:
-        brokers = (
-            self._current_producer_config.primary_brokers
-            if is_primary
-            else self._current_producer_config.secondary_brokers
-        )
-        if not brokers:
-            return None
-
-        return {
-            **self._current_producer_config.kafka_config,
-            "bootstrap.servers": brokers,
-        }
+        for producer in self._producers:
+            producer.init()
 
 
 class KafkaProducer:
@@ -106,18 +145,42 @@ class KafkaProducer:
     the description of the implementation: https://www.confluent.io/blog/kafka-python-asyncio-integration/
     """
 
-    def __init__(self, producer_config: Dict[str, str]):
-        self._real_producer = Producer(producer_config)
+    def __init__(self, producer_id: str, producer_conf: EventProducerConfig):
+        if "bootstrap.servers" not in producer_conf.kafka_config:
+            raise InitProducerError(
+                f'"bootstrap.servers" is required in producer {producer_id} config'
+            )
+
+        self._id = producer_id
+        self._config = producer_conf
         self._cancelled = False
-        self._poll_thread = Thread(target=self._poll_loop)
+        self._is_polling = False
+        self._real_producer = None
+        self._poll_thread = None
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    def init(self) -> None:
+        self._real_producer = Producer(self._config.kafka_config)
+        self._poll_thread = Thread(
+            target=self._poll,
+            name=f"KafkaProducer#{self._id}_poll",
+            daemon=True,
+        )
         self._poll_thread.start()
 
-    def _poll_loop(self):
-        while not self._cancelled:
-            self._real_producer.poll(0.1)
-
-        # make sure all messages to be sent after cancelled
-        self._real_producer.flush()
+    def update_config(self, producer_conf: EventProducerConfig):
+        # self._real_producer = Producer(producer_conf)
+        # old_poll_thread = self._poll_thread
+        # self._poll_thread = Thread(
+        #     target=self._poll,
+        #     name=f"KafkaProducer#{self._id}_poll",
+        #     daemon=True,
+        # )
+        # self._poll_thread.start()
+        pass
 
     # TODO add key
     def produce(self, topic, value, **kwargs) -> None:
@@ -143,8 +206,20 @@ class KafkaProducer:
         ref: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Producer.produce"""
         return self._real_producer.produce(topic, value, **kwargs)
 
-    def close(self, wait_to_be_finished=False) -> None:
+    async def close(self, block=False) -> None:
         """stop the poll thread"""
         self._cancelled = True
-        if wait_to_be_finished:
-            self._poll_thread.join()
+        if block:
+            while self._is_polling:
+                # TODO may use event to replace
+                await asyncio.sleep(0.1)
+
+    def _poll(self):
+        # TODO handler errors
+        self._is_polling = True
+        while not self._cancelled:
+            self._real_producer.poll(0.1)
+
+        # make sure all messages to be sent after cancelled
+        self._real_producer.flush()
+        self._is_polling = False

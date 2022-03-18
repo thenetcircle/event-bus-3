@@ -26,6 +26,10 @@ class EventValidationError(EventBusError):
     pass
 
 
+class NoMatchedKafkaTopicError(EventBusError):
+    pass
+
+
 class EventProducingError(EventBusError):
     # TODO add root cause
     pass

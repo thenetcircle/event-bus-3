@@ -28,8 +28,8 @@ class Sink(ABC):
 
 
 class HttpSink(Sink):
-    def __init__(self, config: EventConsumerConfig):
-        self._config = config
+    def __init__(self, consumer_conf: EventConsumerConfig):
+        self._config = consumer_conf
         self._client: Optional[ClientSession] = None
 
         self._max_retry_times = self._config.sink.max_retry_times

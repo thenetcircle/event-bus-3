@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from confluent_kafka.cimpl import TIMESTAMP_NOT_AVAILABLE, Message
 from pydantic import BaseModel, Field
@@ -42,6 +42,11 @@ class EventProcessStatus(str, Enum):
     DISCARD = "discard"
 
 
+def create_kafka_message(event: Event) -> Tuple[str, str]:
+    # TODO check whether same events goes to same topic
+    return event.id, event.payload
+
+
 def parse_kafka_message(msg: Message) -> KafkaEvent:
     try:
         json_body = json.loads(msg.value())
@@ -79,7 +84,7 @@ def parse_request_body(request_body: str) -> List[Event]:
             "id": _json.get("id"),
             "title": _json.get("title"),
             "published": _json.get("published"),
-            "payload": request_body,
+            "payload": json.dumps(_json),
         }
         return Event(**event_attrs)
 
