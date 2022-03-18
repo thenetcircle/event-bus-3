@@ -1,9 +1,49 @@
+import json
+from threading import Thread
+
 import pytest
+from pytest_mock import MockFixture
 
 from eventbus import config
 from eventbus.errors import EventProducingError
 from eventbus.producer import EventProducer
-from tests.utils import create_event_from_dict
+from tests.utils import create_event_from_dict, create_kafka_message_from_dict
+
+
+@pytest.fixture
+def mock_internal_kafka_producer(mocker: MockFixture):
+    def produce_mock(self, topic, value, **kwargs) -> None:
+        def delivery(err, msg):
+            Thread(target=kwargs["on_delivery"], args=(err, msg), daemon=True).start()
+
+        data = json.loads(value)
+
+        if data["title"] == "normal_event":
+            msg = create_kafka_message_from_dict({})
+            delivery(None, msg)
+        elif data["title"] == "exceptional_event":
+            delivery(RuntimeError("exceptional_event"), None)
+
+    mocker.patch("eventbus.config_watcher.watch_file")
+    mocker.patch("eventbus.producer.KafkaProducer.init")
+    mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
+
+    # mock InternalKafkaProducer
+    # def mock_init(self, producer_config: Dict[str, str]):
+    #     self.is_primary = producer_config["bootstrap.servers"] == "localhost:12181"
+    #
+    # mocker.patch("eventbus.producer.KafkaProducer.__init__", mock_init)
+
+    # if self.is_primary:
+    #     if topic == "primary-success":
+    #         kwargs["on_delivery"](None, primary_msg)
+    #     else:
+    #         kwargs["on_delivery"](KafkaException(), None)
+    # else:
+    #     if topic == "secondary-success":
+    #         kwargs["on_delivery"](None, secondary_msg)
+    #     else:
+    #         kwargs["on_delivery"](KafkaException(), None)
 
 
 @pytest.mark.asyncio

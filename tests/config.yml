@@ -30,6 +30,7 @@ consumer:
 
 http_app:
   producers: [p1]
+  max_response_time: 1
 
 default_kafka_config:
   producer:

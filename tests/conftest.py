@@ -29,33 +29,3 @@ def setup_config(request):
         config.update_from_yaml(config_path)
     yield
     config.reset()
-
-
-@pytest.fixture
-def mock_internal_kafka_producer(mocker: MockFixture):
-    # mock InternalKafkaProducer
-    # def mock_init(self, producer_config: Dict[str, str]):
-    #     self.is_primary = producer_config["bootstrap.servers"] == "localhost:12181"
-    #
-    # mocker.patch("eventbus.producer.KafkaProducer.__init__", mock_init)
-
-    def produce_mock(self, topic, value, **kwargs) -> None:
-        def delivery(err, msg):
-            Thread(target=kwargs["on_delivery"], args=(err, msg), daemon=True).start()
-
-        msg = create_kafka_message_from_dict({})
-        delivery(None, msg)
-
-        # if self.is_primary:
-        #     if topic == "primary-success":
-        #         kwargs["on_delivery"](None, primary_msg)
-        #     else:
-        #         kwargs["on_delivery"](KafkaException(), None)
-        # else:
-        #     if topic == "secondary-success":
-        #         kwargs["on_delivery"](None, secondary_msg)
-        #     else:
-        #         kwargs["on_delivery"](KafkaException(), None)
-
-    mocker.patch("eventbus.producer.KafkaProducer.init")
-    mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)

@@ -61,15 +61,39 @@ def test_send_an_event(client: TestClient):
     assert response.status_code == 200
     assert response.json()["status"] == "all_succ"
 
-    with pytest.raises(RuntimeError):
-        client.post(
-            "/new_events",
-            json={
-                "id": "e1",
-                "title": "exceptional_event",
-                "published": "2021-08-01T18:57:44+02:00",
-            },
-        )
+    response: Response = client.post(
+        "/new_events",
+        json={
+            "id": "e1",
+            "title": "exceptional_event",
+            "published": "2021-08-01T18:57:44+02:00",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "all_fail"
+
+
+def test_event_format(client: TestClient):
+    response: Response = client.post(
+        "/new_events",
+        json={"id": "e1"},
+    )
+    assert response.json()["status"] == "all_fail"
+    assert "EventValidationError" in response.json()["details"]["root"]
+
+    response: Response = client.post(
+        "/new_events",
+        json={
+            "id": "e1",
+            "title": "normal_event",
+            "published": "2021-08-01",
+        },
+    )
+    assert response.json()["status"] == "all_fail"
+    assert "EventValidationError" in response.json()["details"]["root"]
+
+
+# TODO test published date format
 
 
 def test_resp_format(client: TestClient):
@@ -110,4 +134,20 @@ def test_send_multiple_events(client: TestClient):
     assert response.json() == {
         "status": "part_succ",
         "details": {"e2": "<RuntimeError> exceptional_event"},
+    }
+
+
+def test_timeout(client: TestClient):
+    response: Response = client.post(
+        "/new_events",
+        json={
+            "id": "e1",
+            "title": "timeout_event",
+            "published": "2021-08-01T18:57:44+02:00",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "all_fail",
+        "details": {"e1": "<TimeoutError> "},
     }

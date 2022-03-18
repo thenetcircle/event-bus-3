@@ -1,5 +1,5 @@
 import asyncio
-from typing import List
+from typing import List, Union
 
 from loguru import logger
 from starlette.applications import Starlette
@@ -40,22 +40,35 @@ def show_config(request):
 async def receive_events(request):
     request_body = await request.body()
 
-    if "gzip" in request.query_params:
-        request_body = _ungzip_request_body(request_body)
-
     resp_format = 3
     if "resp_format" in request.query_params:
         resp_format = int(request.query_params["resp_format"])
 
-    events = parse_request_body(request_body)
-    if not events:
-        raise EventValidationError("Invalid format of request body.")
-    results = await handler_event(*events)
-    return _create_response(events, results, resp_format)
+    events = None
+    try:
+        if "gzip" in request.query_params:
+            request_body = _ungzip_request_body(request_body)
+
+        events = parse_request_body(request_body)
+        if not events:
+            raise EventValidationError("Invalid format of request body.")
+
+        results = await asyncio.wait_for(
+            handler_event(*events), config.get().http_app.max_response_time
+        )
+        return _create_response([e.id for e in events], results, resp_format)
+
+    except EventValidationError as ex:
+        event_ids = [e.id for e in events] if events else ["root"]
+        return _create_response(event_ids, [ex for _ in event_ids], resp_format)
+
+    except asyncio.TimeoutError as ex:
+        return _create_response(
+            [e.id for e in events], [ex for _ in events], resp_format
+        )
 
 
-# TODO test timeout
-async def handler_event(*events: Event) -> List[bool]:
+async def handler_event(*events: Event) -> List[Union[bool, Exception]]:
     tasks = []
     for event in events:
         if event_topic := topic_resolver.resolve(event):
@@ -68,12 +81,12 @@ async def handler_event(*events: Event) -> List[bool]:
 
 
 def _create_response(
-    events: List[Event], results: List[bool], resp_format: int
+    event_ids: List[str], results: List[Union[bool, Exception]], resp_format: int
 ) -> Response:
     succ_events_len = len(list(filter(lambda r: r == True, results)))
 
     if resp_format == 2:
-        if succ_events_len == len(events):
+        if succ_events_len == len(event_ids):
             resp = "ok"
         elif succ_events_len > 0:
             resp = "part_ok"
@@ -85,7 +98,7 @@ def _create_response(
     else:
         resp = {}
 
-        if succ_events_len == len(events):
+        if succ_events_len == len(event_ids):
             resp["status"] = "all_succ"
         elif succ_events_len > 0:
             resp["status"] = "part_succ"
@@ -93,10 +106,10 @@ def _create_response(
             resp["status"] = "all_fail"
 
         details = {}
-        for i, event in enumerate(events):
+        for i, event_id in enumerate(event_ids):
             result = results[i]
             if result != True:
-                details[event.id] = f"<{type(result).__name__}> {result}"
+                details[event_id] = f"<{type(result).__name__}> {result}"
         if details:
             resp["details"] = details
 

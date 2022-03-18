@@ -81,6 +81,7 @@ class ConsumerContainer(ConfigModel):
 
 class HttpAppConfig(ConfigModel):
     producers: List[str]
+    max_response_time: int = 10
 
 
 class Config(ConfigModel):

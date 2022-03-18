@@ -73,6 +73,7 @@ def parse_kafka_message(msg: Message) -> KafkaEvent:
     return KafkaEvent(**event_attrs)
 
 
+# TODO improve performance of this func
 def parse_request_body(request_body: str) -> List[Event]:
     try:
         json_body = json.loads(request_body)
@@ -80,13 +81,16 @@ def parse_request_body(request_body: str) -> List[Event]:
         raise EventValidationError(f"Request body must not an non-empty Json.")
 
     def create_event(_json: Dict[str, Any]) -> Event:
-        event_attrs = {
-            "id": _json.get("id"),
-            "title": _json.get("title"),
-            "published": _json.get("published"),
-            "payload": json.dumps(_json),
-        }
-        return Event(**event_attrs)
+        try:
+            event_attrs = {
+                "id": _json.get("id"),
+                "title": _json.get("title"),
+                "published": _json.get("published"),
+                "payload": json.dumps(_json),
+            }
+            return Event(**event_attrs)
+        except Exception as ex:
+            raise EventValidationError(str(ex))
 
     if isinstance(json_body, list):
         return [create_event(_json) for _json in json_body]
