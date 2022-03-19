@@ -6,8 +6,6 @@ import pytest_asyncio
 from confluent_kafka import KafkaError, KafkaException, Message
 from pytest_mock import MockFixture
 
-from eventbus import config
-from eventbus.errors import EventProducingError
 from eventbus.producer import EventProducer
 from tests.utils import create_event_from_dict, create_kafka_message_from_dict
 

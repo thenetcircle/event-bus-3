@@ -1,5 +1,5 @@
 import re
-from typing import Optional, Set
+from typing import Optional
 
 from eventbus import config, signals
 from eventbus.event import Event

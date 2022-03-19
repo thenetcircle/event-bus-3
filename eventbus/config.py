@@ -1,7 +1,7 @@
 import threading
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import yaml
 from loguru import logger
@@ -27,12 +27,6 @@ class ConfigModel(BaseModel):
 class TopicMapping(ConfigModel):
     topic: StrictStr
     patterns: List[StrictStr]
-
-
-class ProducerConfig(ConfigModel):
-    primary_brokers: StrictStr
-    secondary_brokers: Optional[StrictStr] = None
-    kafka_config: Dict[str, str]
 
 
 class HttpSinkMethod(str, Enum):
@@ -74,11 +68,6 @@ class EventConsumerConfig(ConfigModel):
     concurrent_per_partition: int = 1
 
 
-class ConsumerContainer(ConfigModel):
-    default_config: Optional[DefaultConsumerConfig] = None
-    instances: List[EventConsumerConfig]
-
-
 class HttpAppConfig(ConfigModel):
     producers: List[str]
     max_response_time: int = 10
@@ -87,8 +76,6 @@ class HttpAppConfig(ConfigModel):
 class Config(ConfigModel):
     env: Env
     debug: bool
-    producer: ProducerConfig
-    consumer: ConsumerContainer
     http_app: HttpAppConfig
     event_producers: Dict[str, EventProducerConfig]
     event_consumers: Dict[str, EventConsumerConfig]

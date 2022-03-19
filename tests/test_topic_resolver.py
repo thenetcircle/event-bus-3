@@ -4,7 +4,7 @@ import pytest
 from pytest_mock import MockFixture
 
 from eventbus import config
-from eventbus.config import Config, ConsumerContainer, Env, ProducerConfig, TopicMapping
+from eventbus.config import TopicMapping
 from eventbus.topic_resolver import TopicResolver
 from tests.utils import create_event_from_dict
 
@@ -32,15 +32,12 @@ SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str]]
         )
     ],
 )
-def test_resolve(mapping, test_cases, mocker: MockFixture):
-    patch_config_get_with_new_mapping(
-        mocker,
-        mapping,
-    )
+def test_resolve(mapping, test_cases):
+    _update_topic_mapping(mapping)
     resolver = TopicResolver()
     for case in test_cases:
         event = create_event_from_dict({"title": case[0]})
-        real = resolver.resolve(event.title)
+        real = resolver.resolve(event)
         assert real == case[1]
 
 
@@ -88,38 +85,25 @@ def test_resolve(mapping, test_cases, mocker: MockFixture):
         ),
     ],
 )
-def test_topic_mapping_update(
+def test_topic_mapping_signals(
     init_mapping, new_mapping, do_reindex, mocker: MockFixture
 ):
-    patch_config_get_with_new_mapping(mocker, init_mapping)
+    _update_topic_mapping(init_mapping)
 
     resolver = TopicResolver()
     mocker.patch.object(resolver, "reindex")
 
-    resolver.topic_mapping_subscriber()  # call first time
-    resolver.reindex.assert_not_called()
+    _update_topic_mapping(new_mapping)
 
-    patch_config_get_with_new_mapping(mocker, new_mapping)
-    resolver.topic_mapping_subscriber()  # call second time
     if do_reindex:
         resolver.reindex.assert_called_once()
     else:
         resolver.reindex.assert_not_called()
 
 
-def patch_config_get_with_new_mapping(
-    mocker: MockFixture, mapping: List[SIMPLIFIED_MAPPING_TYPE]
-) -> None:
-    mocker.patch.object(config, "get", lambda: create_config(mapping))
-
-
-def create_config(topic_mapping: List[SIMPLIFIED_MAPPING_TYPE]) -> Config:
-    return Config(
-        env=Env.TEST,
-        debug=True,
-        producer=ProducerConfig(primary_brokers="", kafka_config={}),
-        topic_mapping=[
-            TopicMapping(topic=ele[0], patterns=ele[1]) for ele in topic_mapping
-        ],
-        consumer=ConsumerContainer(kafka_config={}, instances=[]),
-    )
+def _update_topic_mapping(mapping: List[SIMPLIFIED_MAPPING_TYPE]):
+    config_dict = config.get().dict()
+    config_dict["topic_mapping"] = [
+        TopicMapping(topic=m[0], patterns=m[1]) for m in mapping
+    ]
+    config.update_from_dict(config_dict)

@@ -5,8 +5,8 @@ TODO:
 x optimize configs structure
 x optimize producer
 x test http_app
-- test producer
-- test topic_resolver
+x test producer
+x test topic_resolver
 - test signals on producer and topic_resolver 
 - try k8s, confirm the deployment and config change strategies
 - add producer into consumer
