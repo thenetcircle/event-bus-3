@@ -3,9 +3,11 @@ from threading import Thread
 
 import pytest
 import pytest_asyncio
+from config import EventProducerConfig
 from confluent_kafka import KafkaError, KafkaException, Message
 from pytest_mock import MockFixture
 
+from eventbus import config
 from eventbus.producer import EventProducer
 from tests.utils import create_event_from_dict, create_kafka_message_from_dict
 
@@ -65,7 +67,6 @@ async def mock_producer(mocker: MockFixture):
             else:
                 delivery(RuntimeError("p2_fail"), None)
 
-    mocker.patch("eventbus.config_watcher.watch_file")
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
 
@@ -97,3 +98,47 @@ async def test_produce_retry(mock_producer: EventProducer):
     msg = await mock_producer.produce("t1", e1)
     assert isinstance(msg, Message)
     assert msg.key() == "p1_retry_succ"
+
+
+@pytest.mark.asyncio
+async def test_config_subscriber(mocker: MockFixture):
+    producer = EventProducer("test", ["p1", "p2"])
+    mocker.patch("eventbus.producer.KafkaProducer.update_config")
+    await producer.init()
+
+    config_dict = config.get().dict()
+    config_dict["event_producers"]["p1"]["kafka_config"]["retries"] = 101
+    config.update_from_dict(config_dict)
+    producer._producers[0].update_config.assert_called_once()
+    producer._producers[0].update_config.assert_called_with(
+        EventProducerConfig(
+            kafka_config={
+                "enable.idempotence": "false",
+                "acks": "all",
+                "max.in.flight.requests.per.connection": "5",
+                "retries": "101",
+                "bootstrap.servers": "localhost:12811",
+                "compression.type": "none",
+            }
+        )
+    )
+    producer._producers[0].update_config.reset_mock()
+
+    config_dict = config.get().dict()
+    config_dict["event_producers"]["p2"]["kafka_config"][
+        "bootstrap.servers"
+    ] = "localhost:13000"
+    config.update_from_dict(config_dict)
+    producer._producers[0].update_config.assert_called_once()
+    producer._producers[0].update_config.assert_called_with(
+        EventProducerConfig(
+            kafka_config={
+                "enable.idempotence": "true",
+                "acks": "all",
+                "max.in.flight.requests.per.connection": "5",
+                "retries": "3",
+                "bootstrap.servers": "localhost:13000",
+                "compression.type": "gzip",
+            }
+        )
+    )

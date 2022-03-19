@@ -2,13 +2,13 @@ import asyncio
 import time
 from asyncio import Future
 from threading import Thread
-from typing import Callable, List, Tuple
+from typing import Callable, List, Set, Tuple
 
 from config import EventProducerConfig
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
-from eventbus import config
+from eventbus import config, signals
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
 
@@ -20,6 +20,7 @@ class EventProducer:
         self._producers: List[KafkaProducer] = []
         self._loop = None
         self._max_retry_times_in_one_producer = 3
+        signals.CONFIG_PRODUCER_CHANGED.connect(self._config_subscriber)
 
     async def init(self) -> None:
         await self._init_producers()
@@ -110,14 +111,13 @@ class EventProducer:
 
         return fut, fut_ack
 
-    # @signals.CONFIG_PRODUCER_CHANGED.connect
-    # def _config_subscriber(
-    #     self, sender, added: Set[str], removed: Set[str], changed: Set[str]
-    # ) -> None:
-    #     changed_producer_ids = changed.intersection(self._producer_ids)
-    #     for producer in self._producers:
-    #         if producer.id in changed_producer_ids:
-    #             producer.update_config(config.get().event_producers[producer.id])
+    def _config_subscriber(
+        self, sender, added: Set[str], removed: Set[str], changed: Set[str]
+    ) -> None:
+        changed_producer_ids = changed.intersection(self._producer_ids)
+        for producer in self._producers:
+            if producer.id in changed_producer_ids:
+                producer.update_config(config.get().event_producers[producer.id])
 
     async def _init_producers(self) -> None:
         for producer_id in self._producer_ids:
