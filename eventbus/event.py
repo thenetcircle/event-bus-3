@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from confluent_kafka.cimpl import TIMESTAMP_NOT_AVAILABLE, Message
+from confluent_kafka import TIMESTAMP_NOT_AVAILABLE, Message
 from pydantic import BaseModel, Field
 
 from eventbus.errors import EventValidationError

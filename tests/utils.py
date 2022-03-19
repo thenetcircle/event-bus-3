@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from unittest import mock
 
-from confluent_kafka.cimpl import TIMESTAMP_CREATE_TIME, TIMESTAMP_NOT_AVAILABLE
+from confluent_kafka import TIMESTAMP_CREATE_TIME, TIMESTAMP_NOT_AVAILABLE
 
 from eventbus.event import Event, KafkaEvent
 

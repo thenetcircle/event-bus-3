@@ -5,7 +5,7 @@ from asyncio import Queue as AsyncioQueue
 from typing import Dict, List, Optional, Tuple
 
 import janus
-from confluent_kafka.cimpl import Consumer, Message, TopicPartition
+from confluent_kafka import Consumer, Message, TopicPartition
 from janus import Queue as JanusQueue
 from loguru import logger
 
@@ -95,7 +95,7 @@ class EventConsumer:
         tp_name: str,
         tp_queue: AsyncioQueue,
     ) -> None:
-        logger.debug(f'Start consuming tp_queue "{tp_name}"')
+        logger.debug(f'Start consume tp_queue "{tp_name}"')
 
         while self._running:
             send_tasks = []
@@ -200,8 +200,9 @@ class KafkaConsumer:
                         )
                 except Exception as ex:
                     logger.error(
-                        "Pull events from Kafka failed with exception: {}, will retry",
-                        type(ex),
+                        "Pulling events from Kafka is failed with exception: <{}> {}, will retry",
+                        type(ex).__name__,
+                        ex,
                     )
                     time.sleep(0.1)
 
@@ -209,9 +210,10 @@ class KafkaConsumer:
                     event: KafkaEvent = parse_kafka_message(msg)
                 except Exception as ex:
                     logger.error(
-                        'Parse kafka message: "{}" failed with error: "{}"',
+                        'Parsing a kafka message "{}" is failed with error: <{}> {}',
                         msg.value(),
-                        type(ex),
+                        type(ex).__name__,
+                        ex,
                     )
                     # TODO trigger error
                     # skip this event if parse failed
@@ -238,9 +240,10 @@ class KafkaConsumer:
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                '_internal_send_events of KafkaConsumer "{}" is aborted by "{}"',
+                '_internal_send_events of KafkaConsumer "{}" is aborted by: <{}> {}',
                 self._config.id,
-                type(ex),
+                type(ex).__name__,
+                ex,
             )
 
     def _internal_commit_events(self, _commit_queue: JanusQueue) -> None:
@@ -270,16 +273,18 @@ class KafkaConsumer:
                     )
                 except Exception as ex:
                     logger.error(
-                        "Pull events from Kafka failed with exception: {}, will retry",
-                        type(ex),
+                        "Pull events from Kafka failed with exception: <{}> {}, will retry",
+                        type(ex).__name__,
+                        ex,
                     )
                     time.sleep(0.1)
 
         except (KeyboardInterrupt, ClosedError) as ex:
             logger.warning(
-                '_internal_commit_events of KafkaConsumer "{}" is aborted by "{}"',
+                '_internal_commit_events of KafkaConsumer "{}" is aborted by: <{}> {}',
                 self._config.id,
-                type(ex),
+                type(ex).__name__,
+                ex,
             )
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:

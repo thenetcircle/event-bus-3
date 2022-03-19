@@ -44,7 +44,7 @@ class EventProducer:
                 msg, retry_times = await self._do_produce(topic, event, producer, 0)
                 cost_time = time.time() - start_time
                 logger.info(
-                    'Has sent an event "{}" to producer "{}", topic: "{}", partition: {}, offset: {}.  '
+                    'Has sent an event "{}" to producer "{}" with topic: "{}", partition: {}, offset: {}.  '
                     "in {} seconds after {} times retries",
                     event,
                     producer.id,
@@ -57,11 +57,13 @@ class EventProducer:
                 return msg
 
             except Exception as ex:
+                cost_time = time.time() - start_time
                 logger.error(
-                    'Delivery an event "{}" to producer "{}" failed with error: {} {}',
+                    'Sending an event "{}" to producer "{}" is failed in {} seconds with error: <{}> {}',
                     event,
                     producer.id,
-                    type(ex),
+                    cost_time,
+                    type(ex).__name__,
                     ex,
                 )
                 if (i + 1) == len(self._producers):
@@ -85,15 +87,14 @@ class EventProducer:
 
         except KafkaException as ex:
             kafka_error: KafkaError = ex.args[0]
-            if (
-                kafka_error.retriable()
-                and retry_times < self._max_retry_times_in_one_producer
+            if kafka_error.retriable() and retry_times < (
+                self._max_retry_times_in_one_producer - 1
             ):
                 return await self._do_produce(topic, event, producer, retry_times + 1)
             else:
                 raise
 
-        except Exception:
+        except Exception as ex:
             # BufferError - if the internal producer message queue is full (queue.buffering.max.messages exceeded)
             # NotImplementedError – if timestamp is specified without underlying library support.
             raise

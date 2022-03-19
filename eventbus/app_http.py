@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Union
 
-from confluent_kafka.cimpl import Message
+from confluent_kafka import Message
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse, Response
