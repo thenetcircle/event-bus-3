@@ -16,12 +16,12 @@ from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_
 @pytest.fixture
 def consumer_conf():
     consumer_conf = EventConsumerConfig(
-        id="test_consumer",
         kafka_topics=["topic1"],
         kafka_config={
             "bootstrap.servers": "127.0.0.1:9093",
             "group.id": "test-group-1",
         },
+        producers=["p1", "p2"],
         include_events=[r"test\..*"],
         exclude_events=[r"test\.exclude"],
         sink=HttpSinkConfig(
@@ -70,12 +70,12 @@ async def coordinator(mocker, consumer_conf):
 
     mocker.patch("eventbus.sink.HttpSink.send_event", mock_send_event)
 
-    consumer = KafkaConsumer(consumer_conf)
+    consumer = KafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
     consumer._internal_consumer = mock_consumer
     # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
 
-    coordinator = EventConsumer(consumer_conf)
+    coordinator = EventConsumer("t1", consumer_conf)
     coordinator._consumer = consumer
     coordinator._send_queue: JanusQueue = JanusQueue(maxsize=100)
     coordinator._commit_queue = JanusQueue(maxsize=100)
@@ -87,7 +87,7 @@ async def coordinator(mocker, consumer_conf):
 async def test_send_events(consumer_conf):
     send_queue = JanusQueue(maxsize=100)
 
-    consumer = KafkaConsumer(consumer_conf)
+    consumer = KafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
     consumer._internal_consumer = mock_consumer
 
@@ -124,7 +124,7 @@ async def test_send_events(consumer_conf):
 async def test_commit_events(mocker, consumer_conf):
     commit_queue = JanusQueue(maxsize=100)
 
-    consumer = KafkaConsumer(consumer_conf)
+    consumer = KafkaConsumer("t1", consumer_conf)
     consumer._internal_consumer = MockInternalConsumer()
     commit_spy = mocker.spy(consumer._internal_consumer, "commit")
 

@@ -22,13 +22,18 @@ class EventProducer:
         self._max_retry_times_in_one_producer = 3
         signals.CONFIG_PRODUCER_CHANGED.connect(self._config_subscriber)
 
+    @property
+    def caller_id(self) -> str:
+        return self._caller_id
+
     async def init(self) -> None:
         await self._init_producers()
         self._loop = asyncio.get_running_loop()
 
     async def close(self):
-        logger.warning("Cloing EventProducer")
+        logger.info(f"Closing EventProducer#{self.caller_id}")
         await asyncio.gather(*[p.close() for p in self._producers])
+        logger.info(f"Closed EventProducer#{self.caller_id}")
 
     async def produce(self, topic: str, event: Event) -> Message:
         """
@@ -45,9 +50,10 @@ class EventProducer:
                 msg, retry_times = await self._do_produce(topic, event, producer, 0)
                 cost_time = time.time() - start_time
                 logger.info(
-                    'Has sent an event "{}" to producer "{}" with topic: "{}", partition: {}, offset: {}.  '
+                    'Has sent an event "{}" to producer "{}#{}" with topic: "{}", partition: {}, offset: {}.  '
                     "in {} seconds after {} times retries",
                     event,
+                    self.caller_id,
                     producer.id,
                     msg.topic(),
                     msg.partition(),
@@ -60,8 +66,9 @@ class EventProducer:
             except Exception as ex:
                 cost_time = time.time() - start_time
                 logger.error(
-                    'Sending an event "{}" to producer "{}" is failed in {} seconds with error: <{}> {}',
+                    'Sending an event "{}" to producer "{}#{}" is failed in {} seconds with error: <{}> {}',
                     event,
+                    self.caller_id,
                     producer.id,
                     cost_time,
                     type(ex).__name__,
@@ -141,12 +148,15 @@ class KafkaProducer:
     the description of the implementation: https://www.confluent.io/blog/kafka-python-asyncio-integration/
     """
 
-    def __init__(self, producer_id: str, producer_conf: EventProducerConfig):
+    def __init__(
+        self, caller_id: str, producer_id: str, producer_conf: EventProducerConfig
+    ):
         if "bootstrap.servers" not in producer_conf.kafka_config:
             raise InitProducerError(
                 f'"bootstrap.servers" is required in producer {producer_id} config'
             )
 
+        self._caller_id = caller_id
         self._id = producer_id
         self._config = producer_conf
         self._cancelled = False
@@ -155,25 +165,37 @@ class KafkaProducer:
         self._poll_thread = None
 
     @property
+    def caller_id(self) -> str:
+        return self._caller_id
+
+    @property
     def id(self) -> str:
         return self._id
 
     async def init(self) -> None:
+        logger.info(f"Initing KafkaProducer({self.caller_id}#{self._id})")
+
         self._real_producer = Producer(self._config.kafka_config)
         self._poll_thread = Thread(
             target=self._poll,
-            name=f"KafkaProducer#{self._id}_poll",
+            name=f"KafkaProducer({self.caller_id}#{self._id})_poll",
             daemon=True,
         )
         self._poll_thread.start()
 
+        logger.info(f"Inited KafkaProducer({self.caller_id}#{self._id})")
+
     async def close(self, block=False) -> None:
+        logger.info(f"Closing KafkaProducer({self.caller_id}#{self._id})")
+
         """stop the poll thread"""
         self._cancelled = True
         if block:
             while self._is_polling:
                 # TODO may use event to replace
                 await asyncio.sleep(0.1)
+
+        logger.info(f"Closed KafkaProducer({self.caller_id}#{self._id})")
 
     def update_config(self, producer_conf: EventProducerConfig):
         # self._real_producer = Producer(producer_conf)

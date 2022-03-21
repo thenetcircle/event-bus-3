@@ -66,6 +66,9 @@ class EventConsumerConfig(ConfigModel):
     include_events: Optional[List[StrictStr]] = None
     exclude_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
+    send_queue_size: int = 100
+    commit_queue_size: int = 50
+    tp_queue_size: int = 3
 
 
 class HttpAppConfig(ConfigModel):

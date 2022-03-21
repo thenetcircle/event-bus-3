@@ -1,24 +1,27 @@
 import asyncio
 import re
 import time
+from asyncio import AbstractEventLoop
 from asyncio import Queue as AsyncioQueue
 from typing import Dict, List, Optional, Tuple
 
 import janus
-from confluent_kafka import Consumer, Message, TopicPartition
+from confluent_kafka import Consumer, KafkaException, Message, TopicPartition
 from janus import Queue as JanusQueue
 from loguru import logger
+from producer import EventProducer
 
 from eventbus.config import EventConsumerConfig
-from eventbus.errors import ClosedError, EventConsumingError, InvalidArgumentError
+from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
 from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, consumer_conf: EventConsumerConfig):
+    def __init__(self, id: str, consumer_conf: EventConsumerConfig):
+        self._id = id
         self._config = consumer_conf
-        self._consumer = KafkaConsumer(consumer_conf)
+        self._consumer = KafkaConsumer(id, consumer_conf)
         self._sink: Sink = HttpSink(consumer_conf)
         self._running = False
         self._wait_task = None
@@ -26,11 +29,15 @@ class EventConsumer:
         self._send_queue: JanusQueue[KafkaEvent] = None
         self._commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]] = None
 
+    @property
+    def id(self):
+        return self._id
+
     async def init(self) -> None:
         await self._consumer.init()
         await self._sink.init()
-        self._send_queue = JanusQueue(maxsize=100)
-        self._commit_queue = JanusQueue(maxsize=100)
+        self._send_queue = JanusQueue(maxsize=self._config.send_queue_size)
+        self._commit_queue = JanusQueue(maxsize=self._config.commit_queue_size)
 
     async def run(
         self,
@@ -56,16 +63,15 @@ class EventConsumer:
 
     async def cancel(self) -> None:
         if self._running:
-            logger.warning('Cancelling ConsumerCoordinator of "{}"', self._config.id)
+            logger.info('Cancelling ConsumerCoordinator of "{}"', self.id)
             self._running = False
             self._wait_task.cancel()
             for t in self._tp_tasks:
                 t.cancel()
             await asyncio.gather(self._consumer.close(), self._sink.close())
-
             logger.info(
                 'ConsumerCoordinator of Consumer "{}" has been cancelled, current queue stats: send_queue: {}, commit_queue: {}',
-                self._config.id,
+                self.id,
                 self._send_queue.async_q.qsize(),
                 self._commit_queue.async_q.qsize(),
             )
@@ -75,14 +81,13 @@ class EventConsumer:
     ) -> None:
         self._tp_tasks = []
         tp_queues: Dict[str, AsyncioQueue] = {}
-        tp_queue_size = self._config.concurrent_per_partition * 3
 
         while self._running:
             event: KafkaEvent = await self._send_queue.async_q.get()
 
             tp_name = self._get_topic_partition_str(event)
             if tp_name not in tp_queues:
-                tp_queues[tp_name] = AsyncioQueue(maxsize=tp_queue_size)
+                tp_queues[tp_name] = AsyncioQueue(maxsize=self._config.tp_queue_size)
                 tp_task = asyncio.create_task(
                     self._send_tp_events(tp_name, tp_queues[tp_name])
                 )
@@ -131,20 +136,45 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, consumer_conf: EventConsumerConfig):
+    def __init__(self, id: str, consumer_conf: EventConsumerConfig):
+        self._id = id
         self._check_config(consumer_conf)
         self._config = consumer_conf
         self._closed = False
         self._internal_consumer: Optional[Consumer] = None
         self._is_commit_running = False
+        self._event_producer = EventProducer(
+            f"kafka_consumer#{id}", consumer_conf.producers
+        )
+        self._loop: AbstractEventLoop = None
+
+    @property
+    def id(self):
+        return self._id
 
     async def init(self) -> None:
+        self._loop = asyncio.get_running_loop()
         self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
         self._internal_consumer.subscribe(
             self._config.kafka_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
         )
+        await self._event_producer.init()
+
+    async def close(self) -> None:
+        if self._internal_consumer:
+            logger.warning("Closing KafkaConsumer#{}", self.id)
+            self._closed = True
+            while (
+                self._is_commit_running
+            ):  # wait for the pending events to be committed
+                await asyncio.sleep(0.1)
+            self._internal_consumer.close()
+            self._internal_consumer = None
+            logger.info("Closed KafkaConsumer#{}", self.id)
+
+        await self._event_producer.close()
 
     async def fetch_events(
         self,
@@ -163,22 +193,6 @@ class KafkaConsumer:
         )
         self._is_commit_running = False
 
-    async def close(self) -> None:
-        if self._internal_consumer:
-            logger.warning('Closing KafkaConsumer "{}"', self._config.id)
-
-            self._closed = True
-
-            while (
-                self._is_commit_running
-            ):  # wait for the pending events to be committed
-                await asyncio.sleep(0.1)
-
-            self._internal_consumer.close()
-            self._internal_consumer = None
-
-            logger.info('KafkaConsumer "{}" has closed', self._config.id)
-
     def _internal_fetch_events(self, send_queue: JanusQueue) -> None:
         try:
             skipped_events = 0
@@ -190,7 +204,7 @@ class KafkaConsumer:
                     if msg is None:
                         continue
                     if msg.error():
-                        raise EventConsumingError(msg.error())
+                        raise ConsumerPollingError(msg.error())
                     else:
                         logger.debug(
                             "Get a new Kafka Message from topic: {}-{}, offset: {}",
@@ -198,13 +212,16 @@ class KafkaConsumer:
                             msg.partition(),
                             msg.offset(),
                         )
+                except RuntimeError as ex:
+                    raise ClosedError(str(ex))
                 except Exception as ex:
-                    logger.error(
+                    logger.warning(
                         "Pulling events from Kafka is failed with exception: <{}> {}, will retry",
                         type(ex).__name__,
                         ex,
                     )
-                    time.sleep(0.1)
+                    # TODO trigger an alert
+                    continue
 
                 try:
                     event: KafkaEvent = parse_kafka_message(msg)
@@ -238,13 +255,19 @@ class KafkaConsumer:
                     except janus.SyncQueueFull:
                         pass
 
-        except (KeyboardInterrupt, ClosedError) as ex:
+        except ClosedError:
             logger.warning(
-                '_internal_send_events of KafkaConsumer "{}" is aborted by: <{}> {}',
-                self._config.id,
+                '_internal_send_events of KafkaConsumer "{}"  is closed', self.id
+            )
+
+        except Exception as ex:
+            logger.error(
+                '_internal_send_events of KafkaConsumer "{}"  is aborted by: <{}> {}',
+                self.id,
                 type(ex).__name__,
                 ex,
             )
+            raise
 
     def _internal_commit_events(self, _commit_queue: JanusQueue) -> None:
         try:
@@ -257,47 +280,82 @@ class KafkaConsumer:
                 except janus.SyncQueueEmpty:
                     continue
 
-                try:
-                    if status == EventProcessStatus.DONE:
-                        pass
+                # ---
 
-                    elif status == EventProcessStatus.RETRY_LATER:
-                        # TODO send to another topic
-                        pass
+                if status == EventProcessStatus.DONE:
+                    pass
 
-                    elif status == EventProcessStatus.DISCARD:
-                        pass
+                elif status == EventProcessStatus.DISCARD:
+                    pass
 
-                    self._internal_consumer.commit(
-                        offsets=self._get_topic_partitions(event)
-                    )
-                except Exception as ex:
-                    logger.error(
-                        "Pull events from Kafka failed with exception: <{}> {}, will retry",
-                        type(ex).__name__,
-                        ex,
-                    )
-                    time.sleep(0.1)
+                elif status == EventProcessStatus.RETRY_LATER:
+                    while not self._closed:
+                        try:
+                            topic = self._get_retry_topic(event)
+                            produce_future = asyncio.run_coroutine_threadsafe(
+                                self._event_producer.produce(topic, event), self._loop
+                            )
+                            produce_result = produce_future.result()
+                            break
+                        except Exception as ex:
+                            # TODO trigger alerts here or inside producer
+                            pass
 
-        except (KeyboardInterrupt, ClosedError) as ex:
+                # ---
+
+                commit_retry_times = 0
+                while self._check_closed(commit_retry_times >= 9):
+                    try:
+                        result = self._internal_consumer.commit(
+                            offsets=self._get_topic_partitions(event),
+                            asynchronous=False,
+                        )
+                        logger.info(
+                            "A new event {} and offset {} have been committed to Kafka after {} times retries.",
+                            event,
+                            result,
+                            commit_retry_times,
+                        )
+                        break
+
+                    except KafkaException as ex:
+                        logger.warning(
+                            "Commit an event to Kafka failed after {} times retires with exception: <{}> {}",
+                            commit_retry_times,
+                            type(ex).__name__,
+                            ex,
+                        )
+                        if commit_retry_times >= 9:
+                            time.sleep(0.1)
+                            # TODO need trigger alert here
+
+                        commit_retry_times += 1
+
+        except ClosedError:
             logger.warning(
-                '_internal_commit_events of KafkaConsumer "{}" is aborted by: <{}> {}',
-                self._config.id,
+                '_internal_commit_events of KafkaConsumer "{}"  is closed', self.id
+            )
+
+        except Exception as ex:
+            logger.error(
+                '_internal_commit_events of KafkaConsumer "{}"  is aborted by: <{}> {}',
+                self.id,
                 type(ex).__name__,
                 ex,
             )
+            raise
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
             'KafkaConsumer "{}" get assigned new TopicPartitions: "{}"',
-            self._config.id,
+            self.id,
             partitions,
         )
 
     def _on_revoke(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
             'KafkaConsumer "{}" get revoked TopicPartitions: "{}"',
-            self._config.id,
+            self.id,
             partitions,
         )
 
@@ -322,6 +380,10 @@ class KafkaConsumer:
             raise ClosedError
 
         return True
+
+    @staticmethod
+    def _get_retry_topic(event: KafkaEvent) -> str:
+        return f"{event.topic}_retry"
 
     @staticmethod
     def _get_topic_partitions(*events: KafkaEvent) -> List[TopicPartition]:
