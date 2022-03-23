@@ -3,11 +3,11 @@ from threading import Thread
 
 import pytest
 import pytest_asyncio
-from config import EventProducerConfig
 from confluent_kafka import KafkaError, KafkaException, Message
 from pytest_mock import MockFixture
 
 from eventbus import config
+from eventbus.config import EventProducerConfig
 from eventbus.producer import EventProducer
 from tests.utils import create_event_from_dict, create_kafka_message_from_dict
 
@@ -73,6 +73,7 @@ async def mock_producer(mocker: MockFixture):
     producer = EventProducer("test", ["p1", "p2"])
     await producer.init()
     yield producer
+    await producer.close()
 
 
 @pytest.mark.asyncio
@@ -102,8 +103,9 @@ async def test_produce_retry(mock_producer: EventProducer):
 
 @pytest.mark.asyncio
 async def test_config_subscriber(mocker: MockFixture):
-    producer = EventProducer("test", ["p1", "p2"])
+    mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.update_config")
+    producer = EventProducer("test", ["p1", "p2"])
     await producer.init()
 
     config_dict = config.get().dict()
@@ -142,3 +144,5 @@ async def test_config_subscriber(mocker: MockFixture):
             }
         )
     )
+
+    await producer.close()

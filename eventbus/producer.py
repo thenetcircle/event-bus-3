@@ -26,14 +26,20 @@ class EventProducer:
     def caller_id(self) -> str:
         return self._caller_id
 
+    @property
+    def full_name(self) -> str:
+        return f"EventProducer#{self.caller_id}"
+
     async def init(self) -> None:
+        logger.info("{} is initing", self.full_name)
         await self._init_producers()
         self._loop = asyncio.get_running_loop()
+        logger.info("{} is inited", self.full_name)
 
     async def close(self):
-        logger.info(f"Closing EventProducer#{self.caller_id}")
+        logger.info("{} is closing", self.full_name)
         await asyncio.gather(*[p.close() for p in self._producers])
-        logger.info(f"Closed EventProducer#{self.caller_id}")
+        logger.info("{} is closed", self.full_name)
 
     async def produce(self, topic: str, event: Event) -> Message:
         """
@@ -41,7 +47,7 @@ class EventProducer:
         """
         if not self._producers or not self._loop:
             raise InitProducerError(
-                "Need init producers before call the produce method."
+                f"Need init producers of {self.full_name} before call the produce method."
             )
 
         start_time = time.time()
@@ -107,6 +113,20 @@ class EventProducer:
             # NotImplementedError – if timestamp is specified without underlying library support.
             raise
 
+    async def _init_producers(self) -> None:
+        for producer_id in self._producer_ids:
+            if producer_id not in config.get().event_producers:
+                raise InitProducerError(
+                    f"Producer id {producer_id} can not be found in config"
+                )
+
+            producer = KafkaProducer(
+                self.caller_id, producer_id, config.get().event_producers[producer_id]
+            )
+            self._producers.append(producer)
+
+        await asyncio.gather(*[p.init() for p in self._producers])
+
     def _generate_fut_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
         fut = self._loop.create_future()
 
@@ -126,19 +146,6 @@ class EventProducer:
             if producer.id in changed_producer_ids:
                 producer.update_config(config.get().event_producers[producer.id])
 
-    async def _init_producers(self) -> None:
-        for producer_id in self._producer_ids:
-            if producer_id not in config.get().event_producers:
-                raise InitProducerError(
-                    f"Producer id {producer_id} can not be found in config"
-                )
-            producer = KafkaProducer(
-                producer_id, config.get().event_producers[producer_id]
-            )
-            self._producers.append(producer)
-
-        await asyncio.gather(*[p.init() for p in self._producers])
-
 
 class KafkaProducer:
     """
@@ -151,18 +158,15 @@ class KafkaProducer:
     def __init__(
         self, caller_id: str, producer_id: str, producer_conf: EventProducerConfig
     ):
-        if "bootstrap.servers" not in producer_conf.kafka_config:
-            raise InitProducerError(
-                f'"bootstrap.servers" is required in producer {producer_id} config'
-            )
-
         self._caller_id = caller_id
         self._id = producer_id
         self._config = producer_conf
-        self._cancelled = False
+        self._is_closed = False
         self._is_polling = False
         self._real_producer = None
-        self._poll_thread = None
+        self._poll_task = None
+
+        self._check_config()
 
     @property
     def caller_id(self) -> str:
@@ -172,30 +176,47 @@ class KafkaProducer:
     def id(self) -> str:
         return self._id
 
+    @property
+    def full_name(self) -> str:
+        return f"KafkaProducer#{self.caller_id}/{self._id}"
+
     async def init(self) -> None:
-        logger.info(f"Initing KafkaProducer({self.caller_id}#{self._id})")
+        logger.info("{} is initing", self.full_name)
 
         self._real_producer = Producer(self._config.kafka_config)
-        self._poll_thread = Thread(
-            target=self._poll,
-            name=f"KafkaProducer({self.caller_id}#{self._id})_poll",
-            daemon=True,
-        )
-        self._poll_thread.start()
+        self._poll_task = asyncio.create_task(self.poll())
+        logger.info("{} is inited", self.full_name)
 
-        logger.info(f"Inited KafkaProducer({self.caller_id}#{self._id})")
-
-    async def close(self, block=False) -> None:
-        logger.info(f"Closing KafkaProducer({self.caller_id}#{self._id})")
+    async def close(self, block=True) -> None:
+        logger.info("{} is closing", self.full_name)
 
         """stop the poll thread"""
-        self._cancelled = True
+        self._is_closed = True
         if block:
             while self._is_polling:
-                # TODO may use event to replace
                 await asyncio.sleep(0.1)
 
-        logger.info(f"Closed KafkaProducer({self.caller_id}#{self._id})")
+        # TODO does _real_producer need close?
+
+        logger.info("{} is closed", self.full_name)
+
+    async def poll(self):
+        logger.info("`poll` of {} is starting", self.full_name)
+
+        try:
+            self._is_polling = True
+            await asyncio.get_running_loop().run_in_executor(None, self._poll)
+            logger.warning("`poll` of {} is end", self.full_name)
+        except Exception as ex:
+            logger.error(
+                "`poll` of {} is aborted by: <{}> {}",
+                self.full_name,
+                type(ex).__name__,
+                ex,
+            )
+            raise
+        finally:
+            self._is_polling = False
 
     def update_config(self, producer_conf: EventProducerConfig):
         # self._real_producer = Producer(producer_conf)
@@ -232,12 +253,20 @@ class KafkaProducer:
         ref: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Producer.produce"""
         return self._real_producer.produce(topic, value, **kwargs)
 
-    def _poll(self):
-        # TODO handler errors
-        self._is_polling = True
-        while not self._cancelled:
-            self._real_producer.poll(0.1)
+    def _poll(self) -> None:
+        while not self._is_closed:
+            processed_callbacks = self._real_producer.poll(0.1)
+            logger.debug(
+                "`_poll` of real_producer of {} processed {} `on_delivery` callbacks",
+                self.full_name,
+                processed_callbacks,
+            )
 
         # make sure all messages to be sent after cancelled
         self._real_producer.flush()
-        self._is_polling = False
+
+    def _check_config(self) -> None:
+        if "bootstrap.servers" not in self._config.kafka_config:
+            raise InitProducerError(
+                f'"bootstrap.servers" is required in {self.full_name} config'
+            )
