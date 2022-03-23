@@ -7,7 +7,7 @@ import aiohttp
 from aiohttp import ClientSession
 from loguru import logger
 
-from eventbus.config import EventConsumerConfig
+from eventbus.config import ConsumerConfig
 from eventbus.event import EventProcessStatus, KafkaEvent
 
 
@@ -28,7 +28,7 @@ class Sink(ABC):
 
 
 class HttpSink(Sink):
-    def __init__(self, consumer_conf: EventConsumerConfig):
+    def __init__(self, consumer_conf: ConsumerConfig):
         self._config = consumer_conf
         self._client: Optional[ClientSession] = None
 

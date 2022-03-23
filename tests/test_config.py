@@ -31,21 +31,23 @@ def test_update_from_yaml():
             patterns=[r".*"],
         ),
     ]
-    assert config_data.event_producers == {
-        "p1": config.EventProducerConfig(
+    assert config_data.producers == {
+        "p1": config.ProducerConfig(
             kafka_config={
                 "enable.idempotence": "false",
                 "acks": "all",
                 "max.in.flight.requests.per.connection": 5,
+                "bootstrap.servers": "localhost:12811",
                 "retries": 3,
                 "compression.type": "none",
             },
         ),
-        "p2": config.EventProducerConfig(
+        "p2": config.ProducerConfig(
             kafka_config={
                 "enable.idempotence": "true",
                 "acks": "all",
                 "max.in.flight.requests.per.connection": 5,
+                "bootstrap.servers": "localhost:12811",
                 "retries": 3,
                 "compression.type": "gzip",
             },
@@ -113,9 +115,9 @@ def test_signals():
 
     reset_mocks()
     _config = config.get().dict(exclude_unset=True)
-    _config["event_producers"]["p1"]["kafka_config"]["compression.type"] = "snappy"
-    _config["event_producers"]["p3"] = {"kafka_config": {}}
-    del _config["event_producers"]["p2"]
+    _config["producers"]["p1"]["kafka_config"]["compression.type"] = "snappy"
+    _config["producers"]["p3"] = {"kafka_config": {}}
+    del _config["producers"]["p2"]
     config.update_from_dict(_config)
     mock1.assert_called_once()
     mock1.assert_called_with(
@@ -126,9 +128,9 @@ def test_signals():
 
     reset_mocks()
     _config = config.get().dict(exclude_unset=True)
-    _config["event_consumers"]["c1"]["kafka_config"]["group.id"] = "group11"
-    _config["event_consumers"]["c3"] = config.get().event_consumers["c2"].dict()
-    del _config["event_consumers"]["c2"]
+    _config["consumers"]["c1"]["kafka_config"]["group.id"] = "group11"
+    _config["consumers"]["c3"] = config.get().consumers["c2"].dict()
+    del _config["consumers"]["c2"]
     config.update_from_dict(_config)
     mock1.assert_not_called()
     mock2.assert_not_called()
@@ -220,19 +222,19 @@ def test_fill_config(tmpdir, mocker):
 
     _config = config.get()
 
-    assert len(_config.event_producers["p1"].kafka_config) == 5
-    assert _config.event_producers["p1"].kafka_config["enable.idempotence"] == "false"
-    assert _config.event_producers["p1"].kafka_config["compression.type"] == "none"
-    assert _config.event_producers["p1"].kafka_config["acks"] == "all"
-    assert len(_config.event_producers["p2"].kafka_config) == 5
-    assert _config.event_producers["p2"].kafka_config["enable.idempotence"] == "true"
-    assert _config.event_producers["p2"].kafka_config["compression.type"] == "gzip"
-    assert _config.event_producers["p2"].kafka_config["acks"] == "all"
+    assert len(_config.producers["p1"].kafka_config) == 6
+    assert _config.producers["p1"].kafka_config["enable.idempotence"] == "false"
+    assert _config.producers["p1"].kafka_config["compression.type"] == "none"
+    assert _config.producers["p1"].kafka_config["acks"] == "all"
+    assert len(_config.producers["p2"].kafka_config) == 6
+    assert _config.producers["p2"].kafka_config["enable.idempotence"] == "true"
+    assert _config.producers["p2"].kafka_config["compression.type"] == "gzip"
+    assert _config.producers["p2"].kafka_config["acks"] == "all"
 
-    assert len(_config.event_consumers["c1"].kafka_config) == 4
-    assert _config.event_consumers["c1"].kafka_config["group.id"] == "group1"
-    assert _config.event_consumers["c1"].kafka_config["max.poll.interval.ms"] == "100"
-    assert _config.event_consumers["c1"].kafka_config["enable.auto.commit"] == "false"
-    assert _config.event_consumers["c2"].kafka_config["group.id"] == "group2"
-    assert _config.event_consumers["c2"].kafka_config["max.poll.interval.ms"] == "80"
-    assert _config.event_consumers["c2"].kafka_config["enable.auto.commit"] == "false"
+    assert len(_config.consumers["c1"].kafka_config) == 5
+    assert _config.consumers["c1"].kafka_config["group.id"] == "group1"
+    assert _config.consumers["c1"].kafka_config["max.poll.interval.ms"] == "100"
+    assert _config.consumers["c1"].kafka_config["enable.auto.commit"] == "false"
+    assert _config.consumers["c2"].kafka_config["group.id"] == "group2"
+    assert _config.consumers["c2"].kafka_config["max.poll.interval.ms"] == "80"
+    assert _config.consumers["c2"].kafka_config["enable.auto.commit"] == "false"

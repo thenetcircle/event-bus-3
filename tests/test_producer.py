@@ -7,7 +7,7 @@ from confluent_kafka import KafkaError, KafkaException, Message
 from pytest_mock import MockFixture
 
 from eventbus import config
-from eventbus.config import EventProducerConfig
+from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.producer import EventProducer
 from tests.utils import create_event_from_dict, create_kafka_message_from_dict
 
@@ -70,7 +70,7 @@ async def mock_producer(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
 
-    producer = EventProducer("test", ["p1", "p2"])
+    producer = EventProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
     await producer.init()
     yield producer
     await producer.close()
@@ -105,15 +105,15 @@ async def test_produce_retry(mock_producer: EventProducer):
 async def test_config_subscriber(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.update_config")
-    producer = EventProducer("test", ["p1", "p2"])
+    producer = EventProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
     await producer.init()
 
     config_dict = config.get().dict()
-    config_dict["event_producers"]["p1"]["kafka_config"]["retries"] = 101
+    config_dict["producers"]["p1"]["kafka_config"]["retries"] = 101
     config.update_from_dict(config_dict)
     producer._producers[0].update_config.assert_called_once()
     producer._producers[0].update_config.assert_called_with(
-        EventProducerConfig(
+        ProducerConfig(
             kafka_config={
                 "enable.idempotence": "false",
                 "acks": "all",
@@ -127,13 +127,13 @@ async def test_config_subscriber(mocker: MockFixture):
     producer._producers[0].update_config.reset_mock()
 
     config_dict = config.get().dict()
-    config_dict["event_producers"]["p2"]["kafka_config"][
+    config_dict["producers"]["p2"]["kafka_config"][
         "bootstrap.servers"
     ] = "localhost:13000"
     config.update_from_dict(config_dict)
     producer._producers[0].update_config.assert_called_once()
     producer._producers[0].update_config.assert_called_with(
-        EventProducerConfig(
+        ProducerConfig(
             kafka_config={
                 "enable.idempotence": "true",
                 "acks": "all",

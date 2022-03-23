@@ -54,14 +54,20 @@ class DefaultKafkaConfig(ConfigModel):
     consumer: Optional[Dict[str, str]] = None
 
 
-class EventProducerConfig(ConfigModel):
+class ProducerConfig(ConfigModel):
+    max_retries: int = 3
     kafka_config: Optional[Dict[str, str]] = None
 
 
-class EventConsumerConfig(ConfigModel):
+class UseProducersConfig(ConfigModel):
+    producer_ids: List[str]
+    max_retries: int = 3
+
+
+class ConsumerConfig(ConfigModel):
     kafka_topics: List[StrictStr]
     kafka_config: Dict[str, str]
-    producers: List[str]
+    use_producers: UseProducersConfig
     sink: HttpSinkConfig
     include_events: Optional[List[StrictStr]] = None
     exclude_events: Optional[List[StrictStr]] = None
@@ -69,13 +75,13 @@ class EventConsumerConfig(ConfigModel):
     send_queue_size: int = 100
     commit_queue_size: int = 50
     tp_queue_size: int = 3
-    max_produce_retries = 9
+    max_produce_retries = 3
     max_commit_retries = 9
     max_skipped_events = 100
 
 
 class HttpAppConfig(ConfigModel):
-    producers: List[str]
+    use_producers: UseProducersConfig
     max_response_time: int = 10
 
 
@@ -83,8 +89,8 @@ class Config(ConfigModel):
     env: Env
     debug: bool
     http_app: HttpAppConfig
-    event_producers: Dict[str, EventProducerConfig]
-    event_consumers: Dict[str, EventConsumerConfig]
+    producers: Dict[str, ProducerConfig]
+    consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
     default_kafka_config: Optional[DefaultKafkaConfig] = None
 
@@ -158,13 +164,13 @@ def _fill_config(config: Config) -> Config:
 
     config_dict = config.dict()
 
-    for p_name, p_config in config_dict["event_producers"].items():
-        config_dict["event_producers"][p_name]["kafka_config"] = {
+    for p_name, p_config in config_dict["producers"].items():
+        config_dict["producers"][p_name]["kafka_config"] = {
             **default_kafka_producer_config,
             **(p_config["kafka_config"] or {}),
         }
-    for c_name, c_config in config_dict["event_consumers"].items():
-        config_dict["event_consumers"][c_name]["kafka_config"] = {
+    for c_name, c_config in config_dict["consumers"].items():
+        config_dict["consumers"][c_name]["kafka_config"] = {
             **default_kafka_consumer_config,
             **(c_config["kafka_config"] or {}),
         }
@@ -201,10 +207,10 @@ def _send_signals(old_config: Optional[Config]) -> None:
 
             return {"added": added, "removed": removed, "changed": changed}
 
-        if not old_config or old_config.event_producers != new_config.event_producers:
+        if not old_config or old_config.producers != new_config.producers:
             kwargs = compare_two_config(
-                old_config.event_producers if old_config else {},
-                new_config.event_producers,
+                old_config.producers if old_config else {},
+                new_config.producers,
             )
             receivers = signals.CONFIG_PRODUCER_CHANGED.send(sender, **kwargs)
             logger.info(
@@ -212,10 +218,10 @@ def _send_signals(old_config: Optional[Config]) -> None:
                 receivers,
             )
 
-        if not old_config or old_config.event_consumers != new_config.event_consumers:
+        if not old_config or old_config.consumers != new_config.consumers:
             kwargs = compare_two_config(
-                old_config.event_consumers if old_config else {},
-                new_config.event_consumers,
+                old_config.consumers if old_config else {},
+                new_config.consumers,
             )
             receivers = signals.CONFIG_CONSUMER_CHANGED.send(sender, **kwargs)
             logger.info(

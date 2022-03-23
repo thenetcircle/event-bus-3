@@ -1,10 +1,9 @@
 import asyncio
 import time
 from asyncio import Future
-from threading import Thread
 from typing import Callable, List, Set, Tuple
 
-from config import EventProducerConfig
+from config import ProducerConfig, UseProducersConfig
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
@@ -14,12 +13,12 @@ from eventbus.event import Event, create_kafka_message
 
 
 class EventProducer:
-    def __init__(self, caller_id: str, producer_ids: List[str]):
+    def __init__(self, caller_id: str, use_producers_conf: UseProducersConfig):
         self._caller_id = caller_id
-        self._producer_ids: List[str] = producer_ids
+        self._config = use_producers_conf
+        self._producer_ids: List[str] = use_producers_conf.producer_ids
         self._producers: List[KafkaProducer] = []
         self._loop = None
-        self._max_retry_times_in_one_producer = 3
         signals.CONFIG_PRODUCER_CHANGED.connect(self._config_subscriber)
 
     @property
@@ -101,9 +100,7 @@ class EventProducer:
 
         except KafkaException as ex:
             kafka_error: KafkaError = ex.args[0]
-            if kafka_error.retriable() and retry_times < (
-                self._max_retry_times_in_one_producer - 1
-            ):
+            if kafka_error.retriable() and retry_times < (self._config.max_retries - 1):
                 return await self._do_produce(topic, event, producer, retry_times + 1)
             else:
                 raise
@@ -115,13 +112,13 @@ class EventProducer:
 
     async def _init_producers(self) -> None:
         for producer_id in self._producer_ids:
-            if producer_id not in config.get().event_producers:
+            if producer_id not in config.get().producers:
                 raise InitProducerError(
                     f"Producer id {producer_id} can not be found in config"
                 )
 
             producer = KafkaProducer(
-                self.caller_id, producer_id, config.get().event_producers[producer_id]
+                self.caller_id, producer_id, config.get().producers[producer_id]
             )
             self._producers.append(producer)
 
@@ -144,7 +141,7 @@ class EventProducer:
         changed_producer_ids = changed.intersection(self._producer_ids)
         for producer in self._producers:
             if producer.id in changed_producer_ids:
-                producer.update_config(config.get().event_producers[producer.id])
+                producer.update_config(config.get().producers[producer.id])
 
 
 class KafkaProducer:
@@ -155,9 +152,7 @@ class KafkaProducer:
     the description of the implementation: https://www.confluent.io/blog/kafka-python-asyncio-integration/
     """
 
-    def __init__(
-        self, caller_id: str, producer_id: str, producer_conf: EventProducerConfig
-    ):
+    def __init__(self, caller_id: str, producer_id: str, producer_conf: ProducerConfig):
         self._caller_id = caller_id
         self._id = producer_id
         self._config = producer_conf
@@ -218,7 +213,7 @@ class KafkaProducer:
         finally:
             self._is_polling = False
 
-    def update_config(self, producer_conf: EventProducerConfig):
+    def update_config(self, producer_conf: ProducerConfig):
         # self._real_producer = Producer(producer_conf)
         # old_poll_thread = self._poll_thread
         # self._poll_thread = Thread(

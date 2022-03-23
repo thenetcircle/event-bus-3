@@ -7,7 +7,12 @@ import pytest
 import pytest_asyncio
 from janus import Queue as JanusQueue
 
-from eventbus.config import EventConsumerConfig, HttpSinkConfig, HttpSinkMethod
+from eventbus.config import (
+    ConsumerConfig,
+    HttpSinkConfig,
+    HttpSinkMethod,
+    UseProducersConfig,
+)
 from eventbus.consumer import EventConsumer, KafkaConsumer
 from eventbus.event import EventProcessStatus, KafkaEvent
 from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_dict
@@ -15,13 +20,13 @@ from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_
 
 @pytest.fixture
 def consumer_conf():
-    consumer_conf = EventConsumerConfig(
+    consumer_conf = ConsumerConfig(
         kafka_topics=["topic1"],
         kafka_config={
             "bootstrap.servers": "127.0.0.1:9093",
             "group.id": "test-group-1",
         },
-        producers=["p1", "p2"],
+        use_producers=UseProducersConfig(producer_ids=["p1", "p2"]),
         include_events=[r"test\..*"],
         exclude_events=[r"test\.exclude"],
         sink=HttpSinkConfig(

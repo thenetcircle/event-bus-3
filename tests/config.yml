@@ -2,7 +2,8 @@ env: test
 debug: true
 
 http_app:
-  producers: [p1]
+  use_producers:
+    producer_ids: [p1]
   max_response_time: 1
 
 default_kafka_config:
@@ -17,7 +18,7 @@ default_kafka_config:
     "auto.offset.reset": "latest"
     "max.poll.interval.ms": "50"
 
-event_producers:
+producers:
   p1:
     kafka_config:
       "bootstrap.servers": "localhost:12811"
@@ -28,14 +29,15 @@ event_producers:
       "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
 
-event_consumers:
+consumers:
   c1:
     kafka_topics: [ "topic1" ]
     kafka_config:
       "group.id": "group1"
       "max.poll.interval.ms": "100"
     include_events: [test\..*]
-    producers: [p1]
+    use_producers:
+      producer_ids: [ p1 ]
     sink:
       url: http://localhost:8001
       method: POST
@@ -46,7 +48,8 @@ event_consumers:
       "group.id": "group2"
       "max.poll.interval.ms": "80"
     include_events: [test2\..*]
-    producers: [p2]
+    use_producers:
+      producer_ids: [ p2 ]
     sink:
       url: http://localhost:8002
       method: POST

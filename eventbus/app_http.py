@@ -15,7 +15,7 @@ from eventbus.topic_resolver import TopicResolver
 
 config_watcher.watch_file_from_environ()
 topic_resolver = TopicResolver()
-producer = EventProducer("app_http", config.get().http_app.producers)
+producer = EventProducer("app_http", config.get().http_app.use_producers)
 
 
 async def startup():

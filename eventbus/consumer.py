@@ -11,14 +11,14 @@ from janus import Queue as JanusQueue
 from loguru import logger
 from producer import EventProducer
 
-from eventbus.config import EventConsumerConfig
+from eventbus.config import ConsumerConfig
 from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
 from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, id: str, consumer_conf: EventConsumerConfig):
+    def __init__(self, id: str, consumer_conf: ConsumerConfig):
         self._id = id
         self._config = consumer_conf
         self._consumer = KafkaConsumer(id, consumer_conf)
@@ -193,7 +193,7 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, id: str, consumer_conf: EventConsumerConfig):
+    def __init__(self, id: str, consumer_conf: ConsumerConfig):
         self._id = id
         self._check_config(consumer_conf)
         self._config = consumer_conf
@@ -202,7 +202,7 @@ class KafkaConsumer:
         self._is_fetching_events = False
         self._is_committing_events = False
         self._event_producer = EventProducer(
-            f"kafka_consumer#{id}", consumer_conf.producers
+            f"kafka_consumer#{id}", consumer_conf.use_producers
         )
         self._loop: AbstractEventLoop = None
 
@@ -470,7 +470,7 @@ class KafkaConsumer:
         ]
 
     @staticmethod
-    def _check_config(consumer_conf: EventConsumerConfig) -> None:
+    def _check_config(consumer_conf: ConsumerConfig) -> None:
         kafka_config = consumer_conf.kafka_config
         if "bootstrap.servers" not in kafka_config:
             raise InvalidArgumentError('"bootstrap.servers" is needed')
