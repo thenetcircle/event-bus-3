@@ -69,6 +69,9 @@ class EventConsumerConfig(ConfigModel):
     send_queue_size: int = 100
     commit_queue_size: int = 50
     tp_queue_size: int = 3
+    max_produce_retries = 9
+    max_commit_retries = 9
+    max_skipped_events = 100
 
 
 class HttpAppConfig(ConfigModel):

@@ -8,10 +8,12 @@ x test http_app
 x test producer
 x test topic_resolver
 x test signals on producer and topic_resolver 
+x remove old configs
 - try k8s, confirm the deployment and config change strategies
 x add producer into consumer
 - complete app_consumer
 - refactor thread exit mechanism
+- check producer error handler
 - producer update config
 x consumer config changes, and config producer config changes
 x if consumer downstream blocks, will the upstream be waiting? 

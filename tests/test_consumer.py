@@ -5,10 +5,10 @@ from typing import Optional
 
 import pytest
 import pytest_asyncio
-from consumer import EventConsumer, KafkaConsumer
 from janus import Queue as JanusQueue
 
 from eventbus.config import EventConsumerConfig, HttpSinkConfig, HttpSinkMethod
+from eventbus.consumer import EventConsumer, KafkaConsumer
 from eventbus.event import EventProcessStatus, KafkaEvent
 from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
@@ -37,11 +37,14 @@ class MockInternalConsumer:
         self.queue = JanusQueue(maxsize=100000)
         self.committed_data = []
         self.benchmark = False
+        self.closed = False
 
     def put(self, item, block: bool = True, timeout: Optional[float] = None):
         return self.queue.sync_q.put(item, block, timeout)
 
     def poll(self, timeout):
+        if self.closed:
+            raise RuntimeError
         try:
             msg = self.queue.sync_q.get(block=True, timeout=timeout)
             if self.benchmark:
@@ -59,11 +62,11 @@ class MockInternalConsumer:
             self.committed_data.append(offsets)
 
     def close(self):
-        pass
+        self.closed = True
 
 
 @pytest_asyncio.fixture
-async def coordinator(mocker, consumer_conf):
+async def event_consumer(mocker, consumer_conf):
     async def mock_send_event(self, event: KafkaEvent):
         # await asyncio.sleep(0.01)
         return event, EventProcessStatus.DONE
@@ -75,12 +78,12 @@ async def coordinator(mocker, consumer_conf):
     consumer._internal_consumer = mock_consumer
     # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
 
-    coordinator = EventConsumer("t1", consumer_conf)
-    coordinator._consumer = consumer
-    coordinator._send_queue: JanusQueue = JanusQueue(maxsize=100)
-    coordinator._commit_queue = JanusQueue(maxsize=100)
+    event_consumer = EventConsumer("t1", consumer_conf)
+    event_consumer._consumer = consumer
+    event_consumer._send_queue: JanusQueue = JanusQueue(maxsize=100)
+    event_consumer._commit_queue = JanusQueue(maxsize=100)
 
-    yield coordinator
+    yield event_consumer
 
 
 @pytest.mark.asyncio
@@ -145,11 +148,11 @@ async def test_commit_events(mocker, consumer_conf):
 
 
 @pytest.mark.asyncio
-async def test_consumer_coordinator(coordinator):
-    mock_consumer = coordinator._consumer._internal_consumer
+async def test_event_consumer(event_consumer):
+    mock_consumer = event_consumer._consumer._internal_consumer
 
     # let's do this two times to check if the coordinator are able to rerun
-    asyncio.create_task(coordinator.run())
+    asyncio.create_task(event_consumer.run())
 
     # check the whole pipeline, if can get all events in commit method
     test_events_amount = 10
@@ -159,7 +162,7 @@ async def test_consumer_coordinator(coordinator):
         )
 
     await asyncio.sleep(0.1)
-    await coordinator.cancel()
+    await event_consumer.cancel()
     assert len(mock_consumer.committed_data) == test_events_amount
 
     # check how it acts when new events come after the coordinator cancelled
@@ -185,19 +188,19 @@ async def test_consumer_coordinator(coordinator):
 
 
 @pytest.mark.asyncio
-async def test_consumer_coordinator_abnormal_cases(coordinator):
+async def test_event_consumer_abnormal_cases(event_consumer):
     pass
 
 
 @pytest.mark.asyncio
 @pytest.mark.benchmark
-async def test_consumer_coordinator_benchmark(coordinator):
+async def test_event_consumer_benchmark(event_consumer):
     import cProfile
     import io
     import pstats
     from pstats import SortKey
 
-    mock_consumer = coordinator._consumer._internal_consumer
+    mock_consumer = event_consumer._consumer._internal_consumer
     mock_consumer.benchmark = True
 
     start_time = time.time()
@@ -217,7 +220,7 @@ async def test_consumer_coordinator_benchmark(coordinator):
     pr.enable()
 
     # let's do this two times to check if the coordinator are able to rerun
-    asyncio.create_task(coordinator.run())
+    asyncio.create_task(event_consumer.run())
 
     # while True:
     #     await asyncio.sleep(0.1)
@@ -225,7 +228,7 @@ async def test_consumer_coordinator_benchmark(coordinator):
     #         break
 
     await asyncio.sleep(10)
-    await coordinator.cancel()
+    await event_consumer.cancel()
     await asyncio.sleep(1)
 
     print("\n---\n")
@@ -248,9 +251,9 @@ async def test_consumer_coordinator_benchmark(coordinator):
 
 
 @pytest.mark.asyncio
-async def test_consumer_coordinator_skip_events(coordinator):
-    mock_consumer = coordinator._consumer._internal_consumer
-    asyncio.create_task(coordinator.run())
+async def test_event_consumer_skip_events(event_consumer):
+    mock_consumer = event_consumer._consumer._internal_consumer
+    asyncio.create_task(event_consumer.run())
 
     mock_consumer.put(
         create_kafka_message_from_dict({"title": f"test.e1", "offset": 1})
@@ -268,7 +271,7 @@ async def test_consumer_coordinator_skip_events(coordinator):
         )
 
     await asyncio.sleep(0.5)
-    await coordinator.cancel()
+    await event_consumer.cancel()
     assert len(mock_consumer.committed_data) == 5
 
     # check the order of received commits
