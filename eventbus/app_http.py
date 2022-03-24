@@ -13,7 +13,7 @@ from eventbus.event import Event, parse_request_body
 from eventbus.producer import EventProducer
 from eventbus.topic_resolver import TopicResolver
 
-config_watcher.watch_file_from_environ()
+config_watcher.load_and_watch_file_from_environ()
 topic_resolver = TopicResolver()
 producer = EventProducer("app_http", config.get().http_app.use_producers)
 

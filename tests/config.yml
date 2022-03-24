@@ -1,11 +1,6 @@
 env: test
 debug: true
 
-http_app:
-  use_producers:
-    producer_ids: [p1]
-  max_response_time: 1
-
 default_kafka_config:
   producer:
     "enable.idempotence": "true"
@@ -28,6 +23,11 @@ producers:
     kafka_config:
       "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
+
+http_app:
+  use_producers:
+    producer_ids: [p1]
+  max_response_time: 1
 
 consumers:
   c1:

@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 from pathlib import Path
@@ -149,7 +150,8 @@ def test_signals():
 
 
 @pytest.mark.noconfig
-def test_watch_file(tmpdir, mocker):
+@pytest.mark.asyncio
+async def test_watch_file(tmpdir):
     with pytest.raises(ConfigNoneError):
         config.get()
 
@@ -173,9 +175,9 @@ def test_watch_file(tmpdir, mocker):
     signals.CONFIG_CHANGED.connect(mock1)
     signals.CONFIG_CHANGED.connect(mock2)
 
-    config_watcher.watch_file(config_file, checking_interval=0.1)
+    await config_watcher.load_and_watch_file(config_file, checking_interval=0.1)
 
-    time.sleep(0.3)  # waiting for the config_file to be loaded
+    await asyncio.sleep(0.3)  # waiting for the config_file to be loaded
     assert config.get().env == config.Env.TEST
     mock1.assert_called_once()
     mock2.assert_called_once()
@@ -199,7 +201,7 @@ def test_watch_file(tmpdir, mocker):
     with open(config_file, "w") as f:
         new_config_data = re.sub(r"env: test", "env: prod", origin_config_data)
         f.write(new_config_data)
-    time.sleep(0.3)  # waiting for the config_file to be reloaded
+    await asyncio.sleep(0.3)  # waiting for the config_file to be reloaded
     assert config.get().env == config.Env.PROD
     mock1.assert_called_once()
     mock2.assert_called_once()
@@ -207,12 +209,15 @@ def test_watch_file(tmpdir, mocker):
     assert mock4.call_times == 1
     reset_mocks()
 
-    time.sleep(0.3)  # waiting if another reloading happened
+    await asyncio.sleep(0.3)  # waiting if another reloading happened
     assert config.get().env == config.Env.PROD
     mock1.assert_not_called()
     mock2.assert_not_called()
     mock3.assert_not_called()
     assert mock4.call_times == 1
+
+    # task2.cancel()
+    # await asyncio.gather(task1, task2)
 
 
 @pytest.mark.noconfig
