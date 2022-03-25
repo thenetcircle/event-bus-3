@@ -1,14 +1,14 @@
+import os
 import threading
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 from loguru import logger
 from pydantic import BaseModel, StrictStr
 
-from eventbus import signals
-from eventbus.errors import ConfigNoneError, ConfigSubscribeError, ConfigUpdateError
+from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 
 class Env(str, Enum):
@@ -93,9 +93,8 @@ class Config(ConfigModel):
     consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
     default_kafka_config: Optional[DefaultKafkaConfig] = None
+    config_file_path: Optional[Union[str, Path]] = None
 
-
-Subscriber = Callable[[], None]
 
 _config: Optional[Config] = None
 _config_update_lock = threading.Lock()
@@ -127,11 +126,21 @@ def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
     try:
         with open(yaml_file_path.resolve()) as f:
             parsed_config = yaml.safe_load(f)
+            parsed_config["config_file_path"] = yaml_file_path
             update_from_dict(parsed_config, log=False)
     except ConfigUpdateError:
         raise
     except Exception:
         raise ConfigUpdateError
+
+
+def load_from_environ() -> None:
+    config_file_path = (
+        os.environ["EVENTBUS_CONFIG"]
+        if "EVENTBUS_CONFIG" in os.environ
+        else "config.yml"
+    )
+    update_from_yaml(config_file_path)
 
 
 def reset() -> None:
@@ -145,13 +154,10 @@ def get() -> Config:
     return _config
 
 
-def _update_config(new_config: Config) -> None:
+def _update_config(config: Config) -> None:
     with _config_update_lock:
         global _config
-        old_config = _config
-        _config = new_config
-
-        _send_signals(old_config)
+        _config = config
 
 
 def _fill_config(config: Config) -> Config:
@@ -176,66 +182,3 @@ def _fill_config(config: Config) -> Config:
         }
 
     return Config(**config_dict)
-
-
-def _send_signals(old_config: Optional[Config]) -> None:
-    try:
-        sender = "config"
-
-        new_config = _config
-        assert new_config is not None
-
-        if not old_config or old_config != new_config:
-            receivers = signals.CONFIG_CHANGED.send(sender)
-            logger.info(
-                "Config changed, sent CONFIG_CHANGED signal to receivers {}",
-                receivers,
-            )
-
-        def compare_two_config(
-            old: Dict[str, Any], new: Dict[str, Any]
-        ) -> Dict[str, set]:
-            old_keys = set(old.keys())
-            new_keys = set(new.keys())
-
-            removed = old_keys.difference(new_keys)
-            added = new_keys.difference(old_keys)
-            changed = set()
-            for k in old_keys.intersection(new_keys):
-                if old[k] != new[k]:
-                    changed.add(k)
-
-            return {"added": added, "removed": removed, "changed": changed}
-
-        if not old_config or old_config.producers != new_config.producers:
-            kwargs = compare_two_config(
-                old_config.producers if old_config else {},
-                new_config.producers,
-            )
-            receivers = signals.CONFIG_PRODUCER_CHANGED.send(sender, **kwargs)
-            logger.info(
-                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
-                receivers,
-            )
-
-        if not old_config or old_config.consumers != new_config.consumers:
-            kwargs = compare_two_config(
-                old_config.consumers if old_config else {},
-                new_config.consumers,
-            )
-            receivers = signals.CONFIG_CONSUMER_CHANGED.send(sender, **kwargs)
-            logger.info(
-                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
-                receivers,
-            )
-
-        if not old_config or old_config.topic_mapping != new_config.topic_mapping:
-            receivers = signals.CONFIG_TOPIC_MAPPING_CHANGED.send(sender)
-            logger.info(
-                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
-                receivers,
-            )
-
-    except Exception as ex:
-        logger.error("Sent ConfigSignals failed with error: {} {}", type(ex), ex)
-        raise ConfigSubscribeError

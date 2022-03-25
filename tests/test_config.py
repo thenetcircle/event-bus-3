@@ -1,6 +1,6 @@
 import asyncio
 import re
-import time
+import shutil
 from pathlib import Path
 from unittest import mock
 
@@ -85,7 +85,6 @@ def test_config_reset():
         config.get()
 
 
-@pytest.mark.noconfig
 def test_signals():
     def reset_mocks():
         mock1.reset_mock()
@@ -102,24 +101,17 @@ def test_signals():
     signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(mock2)
     signals.CONFIG_CONSUMER_CHANGED.connect(mock3)
 
-    test_update_from_yaml()
-    mock1.assert_called_once()
-    mock2.assert_called_once()
-    mock3.assert_called_once()
-
-    reset_mocks()
-    # update config again with same content
-    test_update_from_yaml()
-    mock1.assert_not_called()
-    mock2.assert_not_called()
-    mock3.assert_not_called()
+    def update_config_and_send_signals(_config: dict):
+        old_config = config.get()
+        config.update_from_dict(_config)
+        config_watcher._send_signals(old_config, config.get())
 
     reset_mocks()
     _config = config.get().dict(exclude_unset=True)
     _config["producers"]["p1"]["kafka_config"]["compression.type"] = "snappy"
     _config["producers"]["p3"] = {"kafka_config": {}}
     del _config["producers"]["p2"]
-    config.update_from_dict(_config)
+    update_config_and_send_signals(_config)
     mock1.assert_called_once()
     mock1.assert_called_with(
         signal_sender, added={"p3"}, removed={"p2"}, changed={"p1"}
@@ -132,7 +124,7 @@ def test_signals():
     _config["consumers"]["c1"]["kafka_config"]["group.id"] = "group11"
     _config["consumers"]["c3"] = config.get().consumers["c2"].dict()
     del _config["consumers"]["c2"]
-    config.update_from_dict(_config)
+    update_config_and_send_signals(_config)
     mock1.assert_not_called()
     mock2.assert_not_called()
     mock3.assert_called_once()
@@ -143,30 +135,24 @@ def test_signals():
     reset_mocks()
     _config = config.get().dict(exclude_unset=True)
     _config["topic_mapping"][0]["topic"] = "primary-success2"
-    config.update_from_dict(_config)
+    update_config_and_send_signals(_config)
     mock1.assert_not_called()
     mock2.assert_called_once()
     mock3.assert_not_called()
 
 
-@pytest.mark.noconfig
 @pytest.mark.asyncio
 async def test_watch_file(tmpdir):
-    with pytest.raises(ConfigNoneError):
-        config.get()
-
-    origin_config_file = Path(__file__).parent / "config.yml"
-    with open(origin_config_file, "r") as f:
-        origin_config_data = f.read()
-
-    config_file = tmpdir / "config.yml"
-    with open(config_file, "w") as f:
-        f.write(origin_config_data)
+    tmp_config_file = tmpdir / "config.yml"
+    shutil.copyfile(config.get().config_file_path, tmp_config_file)
+    with open(tmp_config_file, "r") as f:
+        tmp_config_data = f.read()
 
     def reset_mocks():
         mock1.reset_mock()
         mock2.reset_mock()
         mock3.reset_mock()
+        mock4.reset_mock()
 
     mock1 = mock.Mock(spec={})
     mock2 = mock.Mock(spec={})
@@ -174,16 +160,6 @@ async def test_watch_file(tmpdir):
 
     signals.CONFIG_CHANGED.connect(mock1)
     signals.CONFIG_CHANGED.connect(mock2)
-
-    await config_watcher.load_and_watch_file(config_file, checking_interval=0.1)
-
-    await asyncio.sleep(0.3)  # waiting for the config_file to be loaded
-    assert config.get().env == config.Env.TEST
-    mock1.assert_called_once()
-    mock2.assert_called_once()
-    reset_mocks()
-
-    # add some other subscribers after watching
     signals.CONFIG_CHANGED.connect(mock3)
 
     class Mock4:
@@ -191,16 +167,22 @@ async def test_watch_file(tmpdir):
             self.attr1 = "attr1"
             self.call_times = 0
 
-        def sub_method(self, *args):
+        def sub_method(self, *args, **kwargs):
             self.call_times += 1
             assert self.attr1 == "attr1"
+
+        def reset_mock(self):
+            self.call_times = 0
 
     mock4 = Mock4()
     signals.CONFIG_CHANGED.connect(mock4.sub_method)
 
-    with open(config_file, "w") as f:
-        new_config_data = re.sub(r"env: test", "env: prod", origin_config_data)
+    await config_watcher.watch_config_file(tmp_config_file, checking_interval=0.1)
+
+    with open(tmp_config_file, "w") as f:
+        new_config_data = re.sub(r"env: test", "env: prod", tmp_config_data)
         f.write(new_config_data)
+
     await asyncio.sleep(0.3)  # waiting for the config_file to be reloaded
     assert config.get().env == config.Env.PROD
     mock1.assert_called_once()
@@ -214,10 +196,7 @@ async def test_watch_file(tmpdir):
     mock1.assert_not_called()
     mock2.assert_not_called()
     mock3.assert_not_called()
-    assert mock4.call_times == 1
-
-    # task2.cancel()
-    # await asyncio.gather(task1, task2)
+    assert mock4.call_times == 0
 
 
 @pytest.mark.noconfig
