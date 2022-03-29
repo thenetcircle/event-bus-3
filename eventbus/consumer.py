@@ -22,8 +22,8 @@ class EventConsumer:
         self._id = id
         self._config = consumer_conf
         self._consumer = KafkaConsumer(id, consumer_conf)
-        self._sink: Sink = HttpSink(consumer_conf)
-        self._is_cancelled = False
+        self._sink: Sink = HttpSink(id, consumer_conf)
+        self._cancelling = False
         self._wait_task = None
         self._tp_tasks = []
         self._send_queue: JanusQueue[KafkaEvent] = None
@@ -43,7 +43,6 @@ class EventConsumer:
         self,
     ) -> None:
         try:
-            self._is_cancelled = False
             start_time = time.time()
 
             self._wait_task = asyncio.create_task(self._wait_events())
@@ -71,9 +70,8 @@ class EventConsumer:
             )
 
     async def cancel(self) -> None:
-        if not self._is_cancelled:
-            self._is_cancelled = True
-
+        if not self._cancelling:
+            self._cancelling = True
             logger.info("Cancelling EventConsumer#{}", self.id)
 
             cancelling_tasks = [self._consumer.close(), self._sink.close()]
@@ -88,13 +86,18 @@ class EventConsumer:
                 *cancelling_tasks, return_exceptions=True
             )
 
-            logger.warning(
+            logger.info(
                 "Cancelled EventConsumer#{}. send_queue: {}; commit_queue: {}. cancel_results: {}",
                 self.id,
                 self._send_queue.async_q.qsize(),
                 self._commit_queue.async_q.qsize(),
                 cancel_results,
             )
+            self._cancelling = False
+
+        else:
+            while self._cancelling:
+                await asyncio.sleep(0.1)
 
     async def _wait_events(
         self,
@@ -119,7 +122,7 @@ class EventConsumer:
                 await tp_queues[tp_name].put(event)
 
         except asyncio.CancelledError:
-            logger.warning(
+            logger.info(
                 "_wait_events of EventConsumer#{} is cancelled. send_queue: {}",
                 self.id,
                 self._send_queue.async_q.qsize(),
@@ -169,7 +172,7 @@ class EventConsumer:
                     await self._commit_queue.async_q.put(send_result)
 
         except asyncio.CancelledError:
-            logger.warning(
+            logger.info(
                 "_send_tp_events of tp#{} of EventConsumer#{} is cancelled. tp_queue: {}",
                 tp_name,
                 self.id,
@@ -202,7 +205,7 @@ class KafkaConsumer:
         self._is_fetching_events = False
         self._is_committing_events = False
         self._event_producer = EventProducer(
-            f"kafka_consumer#{id}", consumer_conf.use_producers
+            f"consumer_{id}", consumer_conf.use_producers
         )
         self._loop: AbstractEventLoop = None
 
@@ -224,7 +227,7 @@ class KafkaConsumer:
         if not self._is_closed:
             try:
                 self._is_closed = True
-                logger.warning("Closing KafkaConsumer#{}", self.id)
+                logger.info("Closing KafkaConsumer#{}", self.id)
 
                 while self._is_committing_events:
                     await asyncio.sleep(0.1)
@@ -234,6 +237,8 @@ class KafkaConsumer:
 
                 while self._is_fetching_events:
                     await asyncio.sleep(0.1)
+
+                logger.info("going to close producer")
 
                 await self._event_producer.close()
 
@@ -259,7 +264,7 @@ class KafkaConsumer:
                 None, self._internal_fetch_events, send_queue
             )
         except ClosedError:
-            logger.warning("fetch_events of KafkaConsumer#{} is closed", self.id)
+            logger.info("fetch_events of KafkaConsumer#{} is closed", self.id)
         except Exception as ex:
             logger.error(
                 "fetch_events of KafkaConsumer#{} is aborted by: <{}> {}",
@@ -282,7 +287,7 @@ class KafkaConsumer:
                 None, self._internal_commit_events, commit_queue
             )
         except ClosedError:
-            logger.warning("commit_events of KafkaConsumer#{} is closed", self.id)
+            logger.info("commit_events of KafkaConsumer#{} is closed", self.id)
 
         except Exception as ex:
             logger.error(

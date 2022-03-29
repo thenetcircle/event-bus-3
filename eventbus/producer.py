@@ -1,7 +1,7 @@
 import asyncio
 import time
 from asyncio import Future
-from typing import Callable, List, Set, Tuple
+from typing import Callable, List, Optional, Set, Tuple
 
 from config import ProducerConfig, UseProducersConfig
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
@@ -38,7 +38,7 @@ class EventProducer:
     async def close(self):
         logger.info("{} is closing", self.full_name)
         await asyncio.gather(*[p.close() for p in self._producers])
-        logger.info("{} is closed", self.full_name)
+        logger.warning("{} is closed", self.full_name)
 
     async def produce(self, topic: str, event: Event) -> Message:
         """
@@ -157,9 +157,8 @@ class KafkaProducer:
         self._id = producer_id
         self._config = producer_conf
         self._is_closed = False
-        self._is_polling = False
         self._real_producer = None
-        self._poll_task = None
+        self._poll_task: Optional[asyncio.Task] = None
 
         self._check_config()
 
@@ -187,11 +186,12 @@ class KafkaProducer:
 
         """stop the poll thread"""
         self._is_closed = True
-        if block:
-            while self._is_polling:
-                await asyncio.sleep(0.1)
+        if block and self._poll_task:
+            await self._poll_task
 
         # TODO does _real_producer need close?
+        # self._real_producer.close()
+        # self._real_producer = None
 
         logger.info("{} is closed", self.full_name)
 
@@ -199,9 +199,9 @@ class KafkaProducer:
         logger.info("`poll` of {} is starting", self.full_name)
 
         try:
-            self._is_polling = True
             await asyncio.get_running_loop().run_in_executor(None, self._poll)
-            logger.warning("`poll` of {} is end", self.full_name)
+            logger.info("`poll` of {} is over", self.full_name)
+
         except Exception as ex:
             logger.error(
                 "`poll` of {} is aborted by: <{}> {}",
@@ -210,8 +210,6 @@ class KafkaProducer:
                 ex,
             )
             raise
-        finally:
-            self._is_polling = False
 
     def update_config(self, producer_conf: ProducerConfig):
         # self._real_producer = Producer(producer_conf)

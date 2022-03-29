@@ -28,14 +28,20 @@ class Sink(ABC):
 
 
 class HttpSink(Sink):
-    def __init__(self, consumer_conf: ConsumerConfig):
+    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
+        self._consumer_id = consumer_id
         self._config = consumer_conf
         self._client: Optional[ClientSession] = None
 
         self._max_retry_times = self._config.sink.max_retry_times
         self._timeout = aiohttp.ClientTimeout(total=self._config.sink.timeout)
 
+    @property
+    def consumer_id(self):
+        return self._consumer_id
+
     async def init(self):
+        logger.info("Initing HttpSink#{}", self.consumer_id)
         self._client = ClientSession()
 
     async def send_event(
@@ -170,12 +176,12 @@ class HttpSink(Sink):
 
     async def close(self):
         if self._client:
-            logger.warning('Closing HttpSink "{}"', self._config.id)
+            logger.info("Closing HttpSink#{}", self.consumer_id)
 
             await self._client.close()
             self._client = None
 
-            logger.info('HttpSink "{}" has closed', self._config.id)
+            logger.info("HttpSink#{} is closed", self.consumer_id)
 
     @staticmethod
     def _get_cost_time(start_time: datetime) -> float:

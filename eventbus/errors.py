@@ -14,7 +14,7 @@ class ConfigUpdateError(EventBusError):
     pass
 
 
-class ConfigSubscribeError(EventBusError):
+class SendSignalError(EventBusError):
     pass
 
 
@@ -40,6 +40,10 @@ class InitProducerError(EventBusError):
 
 
 class InitConsumerError(EventBusError):
+    pass
+
+
+class EventConsumerNotFoundError(EventBusError):
     pass
 
 

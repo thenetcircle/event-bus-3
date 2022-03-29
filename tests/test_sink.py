@@ -55,6 +55,7 @@ async def test_httpsink_send_event(aiohttp_client):
     client = await aiohttp_client(app)
 
     sink = HttpSink(
+        "test_sink",
         ConsumerConfig(
             id="test_consumer",
             kafka_topics=["topic1"],
@@ -62,7 +63,7 @@ async def test_httpsink_send_event(aiohttp_client):
             sink=HttpSinkConfig(
                 url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
             ),
-        )
+        ),
     )
     sink._client = client
 
@@ -88,6 +89,7 @@ async def test_httpsink_send_event(aiohttp_client):
     assert (await sink.send_event(retry_event))[1] == EventProcessStatus.DONE
 
     sink2 = HttpSink(
+        "test_sink",
         ConsumerConfig(
             id="test_consumer2",
             kafka_topics=["topic1"],
@@ -98,7 +100,7 @@ async def test_httpsink_send_event(aiohttp_client):
                 timeout=0.2,
                 max_retry_times=3,
             ),
-        )
+        ),
     )
     sink2._client = client
     assert (await sink2.send_event(ok_event))[1] == EventProcessStatus.RETRY_LATER

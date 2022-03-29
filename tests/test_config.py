@@ -104,7 +104,7 @@ def test_signals():
     def update_config_and_send_signals(_config: dict):
         old_config = config.get()
         config.update_from_dict(_config)
-        config_watcher._send_signals(old_config, config.get())
+        config_watcher.send_signals(old_config, config.get())
 
     reset_mocks()
     _config = config.get().dict(exclude_unset=True)
@@ -177,7 +177,7 @@ async def test_watch_file(tmpdir):
     mock4 = Mock4()
     signals.CONFIG_CHANGED.connect(mock4.sub_method)
 
-    await config_watcher.watch_config_file(tmp_config_file, checking_interval=0.1)
+    await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
 
     with open(tmp_config_file, "w") as f:
         new_config_data = re.sub(r"env: test", "env: prod", tmp_config_data)

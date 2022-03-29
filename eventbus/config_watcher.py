@@ -3,29 +3,28 @@ import os
 import time
 from pathlib import Path
 from threading import Thread
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 from loguru import logger
 
 from eventbus import config, signals
 from eventbus.config import Config
-from eventbus.errors import ConfigSubscribeError
+from eventbus.errors import SendSignalError
 
 
-async def load_and_watch_file_from_environ(
-    checking_interval: float = 10,
-) -> None:
-    config_file_path = (
-        os.environ["EVENTBUS_CONFIG"]
-        if "EVENTBUS_CONFIG" in os.environ
-        else "config.yml"
-    )
-    await watch_config_file(config_file_path, checking_interval)
-
-
-async def watch_config_file(
+async def async_watch_config_file(
     config_file_path: Union[str, Path],
     checking_interval: float = 10,
+) -> None:
+    watch_config_file(
+        config_file_path, checking_interval, loop=asyncio.get_running_loop()
+    )
+
+
+def watch_config_file(
+    config_file_path: Union[str, Path],
+    checking_interval: float = 10,
+    loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
     config_file_path = Path(config_file_path)
     if not config_file_path.exists():
@@ -34,7 +33,6 @@ async def watch_config_file(
         raise ValueError("checking_interval must bigger than 0")
 
     logger.info("Start watching config file '{}'", config_file_path)
-    loop = asyncio.get_running_loop()
 
     watch_file_thread = Thread(
         target=_watch_file,
@@ -45,62 +43,7 @@ async def watch_config_file(
     watch_file_thread.start()
 
 
-def _watch_file(
-    config_file_path: Path, checking_interval: float, loop: asyncio.AbstractEventLoop
-) -> None:
-    last_update_time = os.path.getmtime(config_file_path.resolve())
-    logger.info(
-        '_watch_file on config file "{}" started, with checking_interval: {}, last_update_time: {}',
-        config_file_path,
-        checking_interval,
-        last_update_time,
-    )
-
-    while True:
-        try:
-            new_update_time = os.path.getmtime(config_file_path.resolve())
-
-            if last_update_time < new_update_time:
-                logger.info(
-                    'config file "{}" is detected changed, last_update_time: {}, new_update_time: {}',
-                    config_file_path,
-                    last_update_time,
-                    new_update_time,
-                )
-                loop.call_soon_threadsafe(_update_config, config_file_path)
-                last_update_time = new_update_time
-
-            time.sleep(checking_interval)
-        except Exception as ex:
-            logger.error(
-                '_watch_file on config file "{}" quit because of error: <{}> {}',
-                config_file_path,
-                type(ex).__name__,
-                ex,
-            )
-            # TODO trigger alert
-
-
-def _update_config(updated_config_file_path: Path) -> None:
-    logger.info('_update_config get a new config file "{}"', updated_config_file_path)
-
-    try:
-        old_config = config.get()
-
-        config.update_from_yaml(updated_config_file_path)
-
-        _send_signals(old_config, config.get())
-    except Exception as ex:
-        logger.error(
-            '_update_config updating config from file "{}" failed with error: <{}> {}',
-            updated_config_file_path,
-            type(ex).__name__,
-            ex,
-        )
-        # TODO trigger alert
-
-
-def _send_signals(old_config: Config, new_config: Config) -> None:
+def send_signals(old_config: Config, new_config: Config) -> None:
     try:
         signal_sender = "config"
 
@@ -157,4 +100,51 @@ def _send_signals(old_config: Config, new_config: Config) -> None:
 
     except Exception as ex:
         logger.error("Sent ConfigSignals failed with error: {} {}", type(ex), ex)
-        raise ConfigSubscribeError
+        # TODO trigger alert
+        raise SendSignalError
+
+
+def _watch_file(
+    config_file_path: Path,
+    checking_interval: float,
+    loop: Optional[asyncio.AbstractEventLoop] = None,
+) -> None:
+    last_update_time = os.path.getmtime(config_file_path.resolve())
+    logger.info(
+        '_watch_file on config file "{}" started, with checking_interval: {}, last_update_time: {}',
+        config_file_path,
+        checking_interval,
+        last_update_time,
+    )
+
+    while True:
+        try:
+            new_update_time = os.path.getmtime(config_file_path.resolve())
+
+            if last_update_time < new_update_time:
+                logger.info(
+                    'config file "{}" is detected changed, last_update_time: {}, new_update_time: {}',
+                    config_file_path,
+                    last_update_time,
+                    new_update_time,
+                )
+
+                config.update_from_yaml(config_file_path)
+
+                if loop:
+                    old_config = config.get_last()
+                    new_config = config.get()
+                    if old_config and new_config:
+                        loop.call_soon_threadsafe(send_signals, old_config, new_config)
+
+                last_update_time = new_update_time
+
+            time.sleep(checking_interval)
+        except Exception as ex:
+            logger.error(
+                '_watch_file on config file "{}" quit because of error: <{}> {}',
+                config_file_path,
+                type(ex).__name__,
+                ex,
+            )
+            # TODO trigger alert

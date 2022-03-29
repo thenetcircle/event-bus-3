@@ -13,13 +13,14 @@ from eventbus.event import Event, parse_request_body
 from eventbus.producer import EventProducer
 from eventbus.topic_resolver import TopicResolver
 
-config_watcher.load_and_watch_file_from_environ()
+config.load_from_environ()
 topic_resolver = TopicResolver()
 producer = EventProducer("app_http", config.get().http_app.use_producers)
 
 
 async def startup():
     logger.info("The app is starting up")
+    await config_watcher.async_watch_config_file(config.get().config_file_path)
     await topic_resolver.init()
     await producer.init()
 

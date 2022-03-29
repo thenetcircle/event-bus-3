@@ -1,5 +1,6 @@
 import os
 import threading
+from datetime import datetime, time
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -96,6 +97,8 @@ class Config(ConfigModel):
     config_file_path: Optional[Union[str, Path]] = None
 
 
+_last_config: Optional[Config] = None
+_last_update_time: Optional[datetime] = None
 _config: Optional[Config] = None
 _config_update_lock = threading.Lock()
 
@@ -143,6 +146,15 @@ def load_from_environ() -> None:
     update_from_yaml(config_file_path)
 
 
+def load_from_args(args: List[str]) -> None:
+    update_from_yaml(args[0])
+
+
+def reload() -> None:
+    if _config and _config.config_file_path:
+        update_from_yaml(_config.config_file_path)
+
+
 def reset() -> None:
     global _config
     _config = None
@@ -154,10 +166,19 @@ def get() -> Config:
     return _config
 
 
+def get_last() -> Optional[Config]:
+    return _last_config
+
+
+def get_last_update_time() -> Optional[datetime]:
+    return _last_update_time
+
+
 def _update_config(config: Config) -> None:
-    with _config_update_lock:
-        global _config
-        _config = config
+    global _last_config, _last_update_time, _config
+    _last_config = _config
+    _last_update_time = datetime.now()
+    _config = config
 
 
 def _fill_config(config: Config) -> Config:
