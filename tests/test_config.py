@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 import yaml
 
+import eventbus.config_watcher
 from eventbus import config, config_watcher, signals
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
@@ -97,9 +98,9 @@ def test_signals():
 
     signal_sender = "config"
 
-    signals.CONFIG_PRODUCER_CHANGED.connect(mock1)
-    signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(mock2)
-    signals.CONFIG_CONSUMER_CHANGED.connect(mock3)
+    eventbus.config_watcher.ConfigSignals.CONFIG_PRODUCER_CHANGED.connect(mock1)
+    eventbus.config_watcher.ConfigSignals.CONFIG_TOPIC_MAPPING_CHANGED.connect(mock2)
+    eventbus.config_watcher.ConfigSignals.CONFIG_CONSUMER_CHANGED.connect(mock3)
 
     def update_config_and_send_signals(_config: dict):
         old_config = config.get()
@@ -158,9 +159,9 @@ async def test_watch_file(tmpdir):
     mock2 = mock.Mock(spec={})
     mock3 = mock.Mock(spec={})
 
-    signals.CONFIG_CHANGED.connect(mock1)
-    signals.CONFIG_CHANGED.connect(mock2)
-    signals.CONFIG_CHANGED.connect(mock3)
+    eventbus.config_watcher.ConfigSignals.CONFIG_CHANGED.connect(mock1)
+    eventbus.config_watcher.ConfigSignals.CONFIG_CHANGED.connect(mock2)
+    eventbus.config_watcher.ConfigSignals.CONFIG_CHANGED.connect(mock3)
 
     class Mock4:
         def __init__(self):
@@ -175,7 +176,7 @@ async def test_watch_file(tmpdir):
             self.call_times = 0
 
     mock4 = Mock4()
-    signals.CONFIG_CHANGED.connect(mock4.sub_method)
+    eventbus.config_watcher.ConfigSignals.CONFIG_CHANGED.connect(mock4.sub_method)
 
     await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
 

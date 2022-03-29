@@ -7,6 +7,7 @@ from config import ProducerConfig, UseProducersConfig
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
+import eventbus.config_watcher
 from eventbus import config, signals
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
@@ -19,7 +20,9 @@ class EventProducer:
         self._producer_ids: List[str] = use_producers_conf.producer_ids
         self._producers: List[KafkaProducer] = []
         self._loop = None
-        signals.CONFIG_PRODUCER_CHANGED.connect(self._config_subscriber)
+        eventbus.config_watcher.ConfigSignals.CONFIG_PRODUCER_CHANGED.connect(
+            self._config_subscriber
+        )
 
     @property
     def caller_id(self) -> str:

@@ -1,6 +1,7 @@
 import re
 from typing import Optional
 
+import eventbus.config_watcher
 from eventbus import config, signals
 from eventbus.event import Event
 
@@ -10,7 +11,9 @@ class TopicResolver:
         self._index = {}
         self._current_topic_mapping = config.get().topic_mapping
         self.reindex()
-        signals.CONFIG_TOPIC_MAPPING_CHANGED.connect(self._handle_topic_mapping_signal)
+        eventbus.config_watcher.ConfigSignals.CONFIG_TOPIC_MAPPING_CHANGED.connect(
+            self._handle_topic_mapping_signal
+        )
 
     async def init(self) -> None:
         pass

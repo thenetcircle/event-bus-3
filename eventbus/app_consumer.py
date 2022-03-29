@@ -14,19 +14,7 @@ from eventbus import config, config_watcher
 from eventbus.config_watcher import watch_config_file
 from eventbus.consumer import EventConsumer
 from eventbus.errors import EventConsumerNotFoundError
-
-
-def setup_logger():
-    logger.remove()
-    logger.add(
-        sys.stdout,
-        level="INFO",
-        format="{thread} "
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "
-        "| <level>{level: <8}</level> "
-        "| <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
-        "- <level>{message}</level>",
-    )
+from eventbus.utils import setup_logger
 
 
 def consumer_main(consumer_id: str, config_file_path: str):

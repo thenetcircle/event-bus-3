@@ -5,11 +5,19 @@ from pathlib import Path
 from threading import Thread
 from typing import Any, Dict, Optional, Union
 
+from blinker import signal
 from loguru import logger
 
 from eventbus import config, signals
 from eventbus.config import Config
 from eventbus.errors import SendSignalError
+
+
+class ConfigSignals:
+    CONFIG_CHANGED = signal("config_changed")
+    CONFIG_PRODUCER_CHANGED = signal("config_producer_changed")
+    CONFIG_TOPIC_MAPPING_CHANGED = signal("config_topic_mapping_changed")
+    CONFIG_CONSUMER_CHANGED = signal("config_consumer_changed")
 
 
 async def async_watch_config_file(
@@ -48,7 +56,7 @@ def send_signals(old_config: Config, new_config: Config) -> None:
         signal_sender = "config"
 
         if old_config != new_config:
-            receivers = signals.CONFIG_CHANGED.send(signal_sender)
+            receivers = ConfigSignals.CONFIG_CHANGED.send(signal_sender)
             logger.info(
                 "Config changed, sent CONFIG_CHANGED signal to receivers {}",
                 receivers,
@@ -74,7 +82,9 @@ def send_signals(old_config: Config, new_config: Config) -> None:
                 old_config.producers,
                 new_config.producers,
             )
-            receivers = signals.CONFIG_PRODUCER_CHANGED.send(signal_sender, **kwargs)
+            receivers = ConfigSignals.CONFIG_PRODUCER_CHANGED.send(
+                signal_sender, **kwargs
+            )
             logger.info(
                 "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
                 receivers,
@@ -85,14 +95,16 @@ def send_signals(old_config: Config, new_config: Config) -> None:
                 old_config.consumers,
                 new_config.consumers,
             )
-            receivers = signals.CONFIG_CONSUMER_CHANGED.send(signal_sender, **kwargs)
+            receivers = ConfigSignals.CONFIG_CONSUMER_CHANGED.send(
+                signal_sender, **kwargs
+            )
             logger.info(
                 "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
                 receivers,
             )
 
         if old_config.topic_mapping != new_config.topic_mapping:
-            receivers = signals.CONFIG_TOPIC_MAPPING_CHANGED.send(signal_sender)
+            receivers = ConfigSignals.CONFIG_TOPIC_MAPPING_CHANGED.send(signal_sender)
             logger.info(
                 "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
                 receivers,
