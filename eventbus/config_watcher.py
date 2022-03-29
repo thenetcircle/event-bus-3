@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Union
 from blinker import signal
 from loguru import logger
 
-from eventbus import config, signals
+from eventbus import config
 from eventbus.config import Config
 from eventbus.errors import SendSignalError
 

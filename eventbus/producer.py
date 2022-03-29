@@ -8,7 +8,7 @@ from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
 import eventbus.config_watcher
-from eventbus import config, signals
+from eventbus import config
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
 

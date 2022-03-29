@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 import eventbus.config_watcher
-from eventbus import config, config_watcher, signals
+from eventbus import config, config_watcher
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 

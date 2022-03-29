@@ -2,7 +2,7 @@ import re
 from typing import Optional
 
 import eventbus.config_watcher
-from eventbus import config, signals
+from eventbus import config
 from eventbus.event import Event
 
 
