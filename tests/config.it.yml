@@ -3,6 +3,7 @@ debug: true
 
 default_kafka_config:
   producer:
+    "bootstrap.servers": "localhost:12811"
     "enable.idempotence": "true"
     "acks": "all"
     "max.in.flight.requests.per.connection": "5"
@@ -11,18 +12,16 @@ default_kafka_config:
   consumer:
     "bootstrap.servers": "localhost:12811"
     "enable.auto.commit": "false"
-    "auto.offset.reset": "latest"
+    "auto.offset.reset": "earliest"
     "max.poll.interval.ms": "50"
 
 producers:
   p1:
     kafka_config:
-      "bootstrap.servers": "localhost:12811"
       "enable.idempotence": "false"
       "compression.type": "none"
   p2:
     kafka_config:
-      "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
 
 http_app:
@@ -36,25 +35,13 @@ consumers:
     kafka_config:
       "group.id": "group1"
       "max.poll.interval.ms": "300100"
-    include_events: [test\..*]
     use_producers:
       producer_ids: [ p1 ]
+    concurrent_per_partition: 1
     sink:
-      url: http://localhost:8001
+      url: /
       method: POST
       timeout: 5
-  c2:
-    kafka_topics: [ "topic2" ]
-    kafka_config:
-      "group.id": "group2"
-      "max.poll.interval.ms": "300080"
-    include_events: [test2\..*]
-    use_producers:
-      producer_ids: [ p2 ]
-    sink:
-      url: http://localhost:8002
-      method: POST
-      timeout: 10
 
 topic_mapping:
   - topic: primary-success

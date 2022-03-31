@@ -38,7 +38,7 @@ xfail_strict = true
 testpaths = ["tests"]
 markers = [
     "noconfig: Don't load the config.yml automatically",
-    "benchmark: Benchmark tests"
+    "integration: Integration tests",
 ]
 
 [tool.mypy]

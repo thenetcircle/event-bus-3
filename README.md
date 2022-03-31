@@ -10,8 +10,9 @@ x test topic_resolver
 x test signals on producer and topic_resolver 
 x remove old configs
 - try k8s, confirm the deployment and config change strategies
+- try app_consumer update config
 x add producer into consumer
-- complete app_consumer
+x complete app_consumer
 x refactor thread exit mechanism
 x check producer error handler
 - producer update config

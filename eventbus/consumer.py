@@ -9,11 +9,11 @@ import janus
 from confluent_kafka import Consumer, KafkaException, Message, TopicPartition
 from janus import Queue as JanusQueue
 from loguru import logger
-from producer import EventProducer
 
 from eventbus.config import ConsumerConfig
 from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
+from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink, Sink
 
 
@@ -215,7 +215,7 @@ class KafkaConsumer:
 
     async def init(self) -> None:
         self._loop = asyncio.get_running_loop()
-        self._internal_consumer = Consumer(self._config.kafka_config, logger=logger)
+        self._internal_consumer = Consumer(self._config.kafka_config)
         self._internal_consumer.subscribe(
             self._config.kafka_topics,
             on_assign=self._on_assign,
@@ -469,8 +469,11 @@ class KafkaConsumer:
 
     @staticmethod
     def _get_topic_partitions(*events: KafkaEvent) -> List[TopicPartition]:
+        """Note: By convention, committed offsets reflect the next message to be consumed, not the last message consumed.
+        Refer: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.commit"""
+
         return [
-            TopicPartition(event.topic, event.partition, event.offset)
+            TopicPartition(event.topic, event.partition, event.offset + 1)
             for event in events
         ]
 

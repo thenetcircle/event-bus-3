@@ -3,12 +3,12 @@ import time
 from asyncio import Future
 from typing import Callable, List, Optional, Set, Tuple
 
-from config import ProducerConfig, UseProducersConfig
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
 import eventbus.config_watcher
 from eventbus import config
+from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
 
@@ -73,7 +73,9 @@ class EventProducer:
 
             except Exception as ex:
                 cost_time = time.time() - start_time
-                logger.error(
+                is_last_producer = (i + 1) == len(self._producers)
+                log_func = logger.error if is_last_producer else logger.warning
+                log_func(
                     'Sending an event "{}" to producer "{}#{}" is failed in {} seconds with error: <{}> {}',
                     event,
                     self.caller_id,
@@ -82,7 +84,7 @@ class EventProducer:
                     type(ex).__name__,
                     ex,
                 )
-                if (i + 1) == len(self._producers):
+                if is_last_producer:
                     raise
 
         raise RuntimeError('somehow reached the end of "produce" func')
@@ -108,10 +110,10 @@ class EventProducer:
             else:
                 raise
 
-        except Exception as ex:
-            # BufferError - if the internal producer message queue is full (queue.buffering.max.messages exceeded)
-            # NotImplementedError – if timestamp is specified without underlying library support.
-            raise
+        # except Exception as ex:
+        #     # BufferError - if the internal producer message queue is full (queue.buffering.max.messages exceeded)
+        #     # NotImplementedError – if timestamp is specified without underlying library support.
+        #     raise
 
     async def _init_producers(self) -> None:
         for producer_id in self._producer_ids:
@@ -130,9 +132,9 @@ class EventProducer:
     def _generate_fut_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
         fut = self._loop.create_future()
 
-        def fut_ack(err: Exception, msg: Message):
+        def fut_ack(err: KafkaError, msg: Message):
             if err:
-                self._loop.call_soon_threadsafe(fut.set_exception, err)
+                self._loop.call_soon_threadsafe(fut.set_exception, KafkaException(err))
             else:
                 self._loop.call_soon_threadsafe(fut.set_result, msg)
 

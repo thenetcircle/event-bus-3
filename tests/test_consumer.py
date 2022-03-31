@@ -198,7 +198,6 @@ async def test_event_consumer_abnormal_cases(event_consumer):
 
 
 @pytest.mark.asyncio
-@pytest.mark.benchmark
 async def test_event_consumer_benchmark(event_consumer):
     import cProfile
     import io
