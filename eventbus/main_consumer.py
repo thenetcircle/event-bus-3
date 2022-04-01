@@ -2,7 +2,6 @@ import asyncio
 import functools
 import os
 import signal
-import sys
 from asyncio import AbstractEventLoop
 from multiprocessing import Process
 from time import sleep, time
@@ -18,9 +17,8 @@ from eventbus.utils import setup_logger
 
 
 def consumer_main(consumer_id: str, config_file_path: str):
-    setup_logger()
-
     config.update_from_yaml(config_file_path)
+    setup_logger()
 
     if consumer_id not in config.get().consumers:
         logger.error('Consumer id "{}" can not be found from the configs', consumer_id)
@@ -69,13 +67,23 @@ def consumer_update_config_callback(consumer: EventConsumer):
 
 
 def main():
-    setup_logger()
+    import argparse
 
-    args = sys.argv[1:]
-    if len(args) > 0:
-        config.load_from_args(args)
+    parser = argparse.ArgumentParser(description="EventBus 3 Consumer")
+    parser.add_argument(
+        "-c",
+        "--config_file",
+        type=str,
+        help="Config file path. If not specified, it will look for environment variable `EVENTBUS_CONFIG`",
+    )
+    args = parser.parse_args()
+
+    if args.config_file:
+        config.update_from_yaml(args.config_file)
     else:
         config.load_from_environ()
+
+    setup_logger()
 
     grace_term_period = 10
     signal.signal(signal.SIGTERM, signal.SIG_IGN)

@@ -2,11 +2,11 @@ from typing import List, Tuple
 
 import pytest
 from pytest_mock import MockFixture
+from utils import create_event_from_dict
 
 from eventbus import config
 from eventbus.config import TopicMapping
 from eventbus.topic_resolver import TopicResolver
-from tests.utils import create_event_from_dict
 
 SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str]]
 

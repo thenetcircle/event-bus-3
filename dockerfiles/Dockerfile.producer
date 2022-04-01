@@ -1,0 +1,10 @@
+FROM python:3.8-slim-buster
+
+WORKDIR /app
+
+COPY . .
+
+RUN pip3 install gunicorn uvicorn
+RUN pip3 install .
+
+ENTRYPOINT [ "/usr/local/bin/gunicorn", "eventbus.main_producer:app", "-k uvicorn.workers.UvicornWorker" ]

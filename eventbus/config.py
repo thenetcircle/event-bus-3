@@ -94,7 +94,7 @@ class Config(ConfigModel):
     consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
     default_kafka_config: Optional[DefaultKafkaConfig] = None
-    config_file_path: Optional[Union[str, Path]] = None
+    config_file_path: Optional[str] = None
 
 
 _last_config: Optional[Config] = None
@@ -129,7 +129,7 @@ def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
     try:
         with open(yaml_file_path.resolve()) as f:
             parsed_config = yaml.safe_load(f)
-            parsed_config["config_file_path"] = yaml_file_path
+            parsed_config["config_file_path"] = str(yaml_file_path.resolve())
             update_from_dict(parsed_config, log=False)
     except ConfigUpdateError:
         raise
@@ -144,10 +144,6 @@ def load_from_environ() -> None:
         else "config.yml"
     )
     update_from_yaml(config_file_path)
-
-
-def load_from_args(args: List[str]) -> None:
-    update_from_yaml(args[0])
 
 
 def reload() -> None:

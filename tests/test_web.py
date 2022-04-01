@@ -25,11 +25,12 @@ def client(mocker: MockFixture):
         elif data["title"] == "exceptional_event":
             delivery(RuntimeError("exceptional_event"), None)
 
-    mocker.patch("eventbus.config_watcher.watch_file")
+    mocker.patch("eventbus.config_watcher.async_watch_config_file")
+    mocker.patch("eventbus.config.load_from_environ")
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
 
-    from eventbus.app_http import app
+    from eventbus.main_producer import app
 
     with TestClient(app) as client:
         yield client
@@ -133,7 +134,7 @@ def test_send_multiple_events(client: TestClient):
     assert response.status_code == 200
     assert response.json() == {
         "status": "part_succ",
-        "details": {"e2": "<RuntimeError> exceptional_event"},
+        "details": {"e2": "<KafkaException> exceptional_event"},
     }
 
 

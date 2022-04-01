@@ -6,6 +6,7 @@ from typing import Optional
 import pytest
 import pytest_asyncio
 from janus import Queue as JanusQueue
+from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 from eventbus.config import (
     ConsumerConfig,
@@ -15,7 +16,6 @@ from eventbus.config import (
 )
 from eventbus.consumer import EventConsumer, KafkaConsumer
 from eventbus.event import EventProcessStatus, KafkaEvent
-from tests.utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 
 @pytest.fixture
@@ -179,16 +179,7 @@ async def test_event_consumer(event_consumer):
 
     # check the order of received commits
     assert [m[0].offset for m in mock_consumer.committed_data] == [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
+        i for i in range(2, 12)
     ]
 
 
@@ -279,4 +270,4 @@ async def test_event_consumer_skip_events(event_consumer):
     assert len(mock_consumer.committed_data) == 5
 
     # check the order of received commits
-    assert [m[0].offset for m in mock_consumer.committed_data] == [1, 2, 104, 205, 306]
+    assert [m[0].offset for m in mock_consumer.committed_data] == [2, 3, 105, 206, 307]

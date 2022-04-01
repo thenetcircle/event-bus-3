@@ -105,7 +105,11 @@ class EventProducer:
 
         except KafkaException as ex:
             kafka_error: KafkaError = ex.args[0]
-            if kafka_error.retriable() and retry_times < (self._config.max_retries - 1):
+            if (
+                isinstance(ex.args[0], KafkaError)
+                and kafka_error.retriable
+                and retry_times < (self._config.max_retries - 1)
+            ):
                 return await self._do_produce(topic, event, producer, retry_times + 1)
             else:
                 raise

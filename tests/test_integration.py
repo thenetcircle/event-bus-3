@@ -12,18 +12,18 @@ from aiohttp import web
 from confluent_kafka import Consumer, Message, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from loguru import logger
+from utils import create_event_from_dict
 
 from eventbus import config
 from eventbus.config import UseProducersConfig
 from eventbus.consumer import EventConsumer
 from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink
-from tests.utils import create_event_from_dict
 
 
 @pytest.fixture
 def setup_kafka_cluster():
-    config_path = Path(__file__).parent / "config.it.yml"
+    config_path = Path(__file__).parent / "fixtures" / "config.it.yml"
     config.update_from_yaml(config_path)
 
     if "EVENTBUS_TEST_BROKERS" in os.environ:

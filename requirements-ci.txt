@@ -1,0 +1,9 @@
+flake8
+black
+isort
+mypy
+pytest==6.2.5
+pytest-mock
+pytest-asyncio
+pytest-aiohttp
+assertpy

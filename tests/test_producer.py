@@ -5,11 +5,11 @@ import pytest
 import pytest_asyncio
 from confluent_kafka import KafkaError, KafkaException, Message
 from pytest_mock import MockFixture
+from utils import create_event_from_dict, create_kafka_message_from_dict
 
 from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.producer import EventProducer
-from tests.utils import create_event_from_dict, create_kafka_message_from_dict
 
 
 @pytest_asyncio.fixture
@@ -37,23 +37,19 @@ async def mock_producer(mocker: MockFixture):
                     )
                 else:
                     delivery(
-                        KafkaException(
-                            KafkaError(
-                                error=KafkaError.BROKER_NOT_AVAILABLE,
-                                fatal=False,
-                                retriable=True,
-                            )
+                        KafkaError(
+                            error=KafkaError.BROKER_NOT_AVAILABLE,
+                            fatal=False,
+                            retriable=True,
                         ),
                         None,
                     )
             elif data["title"] == "p1_retry_fail":
                 delivery(
-                    KafkaException(
-                        KafkaError(
-                            error=KafkaError.BROKER_NOT_AVAILABLE,
-                            fatal=False,
-                            retriable=True,
-                        )
+                    KafkaError(
+                        error=KafkaError.BROKER_NOT_AVAILABLE,
+                        fatal=False,
+                        retriable=True,
                     ),
                     None,
                 )
@@ -91,7 +87,7 @@ async def test_produce_succeed(mock_producer: EventProducer):
 
 @pytest.mark.asyncio
 async def test_produce_retry(mock_producer: EventProducer):
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KafkaException):
         e1 = create_event_from_dict({"payload": {"title": "p1_retry_fail"}})
         msg = await mock_producer.produce("t1", e1)
 

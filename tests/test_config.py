@@ -14,7 +14,7 @@ from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 def test_update_from_yaml():
     # comment these, because they are already in the auto-use fixture
-    config_path = Path(__file__).parent / "config.yml"
+    config_path = Path(__file__).parent / "fixtures" / "config.yml"
     config.update_from_yaml(config_path)
 
     config_data = config.get()
@@ -41,6 +41,7 @@ def test_update_from_yaml():
                 "max.in.flight.requests.per.connection": 5,
                 "bootstrap.servers": "localhost:12811",
                 "retries": 3,
+                "delivery.timeout.ms": "2000",
                 "compression.type": "none",
             },
         ),
@@ -51,6 +52,7 @@ def test_update_from_yaml():
                 "max.in.flight.requests.per.connection": 5,
                 "bootstrap.servers": "localhost:12811",
                 "retries": 3,
+                "delivery.timeout.ms": "2000",
                 "compression.type": "gzip",
             },
         ),
@@ -71,7 +73,7 @@ def test_invalid_data():
 def test_hot_update():
     test_update_from_yaml()
 
-    config_path = Path(__file__).parent / "config.yml"
+    config_path = Path(__file__).parent / "fixtures" / "config.yml"
     with open(config_path) as f:
         new_config = yaml.safe_load(f)
         new_config["env"] = "prod"
@@ -202,24 +204,24 @@ async def test_watch_file(tmpdir):
 
 @pytest.mark.noconfig
 def test_fill_config(tmpdir, mocker):
-    config_path = Path(__file__).parent / "config.yml"
+    config_path = Path(__file__).parent / "fixtures" / "config.yml"
     config.update_from_yaml(config_path)
 
     _config = config.get()
 
-    assert len(_config.producers["p1"].kafka_config) == 6
+    assert len(_config.producers["p1"].kafka_config) == 7
     assert _config.producers["p1"].kafka_config["enable.idempotence"] == "false"
     assert _config.producers["p1"].kafka_config["compression.type"] == "none"
     assert _config.producers["p1"].kafka_config["acks"] == "all"
-    assert len(_config.producers["p2"].kafka_config) == 6
+    assert len(_config.producers["p2"].kafka_config) == 7
     assert _config.producers["p2"].kafka_config["enable.idempotence"] == "true"
     assert _config.producers["p2"].kafka_config["compression.type"] == "gzip"
     assert _config.producers["p2"].kafka_config["acks"] == "all"
 
     assert len(_config.consumers["c1"].kafka_config) == 5
     assert _config.consumers["c1"].kafka_config["group.id"] == "group1"
-    assert _config.consumers["c1"].kafka_config["max.poll.interval.ms"] == "100"
+    assert _config.consumers["c1"].kafka_config["max.poll.interval.ms"] == "300100"
     assert _config.consumers["c1"].kafka_config["enable.auto.commit"] == "false"
     assert _config.consumers["c2"].kafka_config["group.id"] == "group2"
-    assert _config.consumers["c2"].kafka_config["max.poll.interval.ms"] == "80"
+    assert _config.consumers["c2"].kafka_config["max.poll.interval.ms"] == "300080"
     assert _config.consumers["c2"].kafka_config["enable.auto.commit"] == "false"

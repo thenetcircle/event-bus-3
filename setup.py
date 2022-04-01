@@ -28,26 +28,11 @@ INSTALL_REQUIRES = [
     "loguru>=0.5.0",
     "confluent-kafka>=1.6.0",
     "starlette>=0.16.0",
-    "requests>=2.25.0",
-    "uvicorn[standard]>=0.14.0",
     "pydantic>=1.0.0",
     "PyYAML>=5.4.*",
     "aiohttp>=3.7.0",
-    "aioredis[hiredis]>=2.0.0",
     "janus>=1.0.0",
     "blinker>=1.4",
-]
-
-DEV_REQUIRES = [
-    "flake8",
-    "black",
-    "isort",
-    "mypy",
-    "pytest==6.2.5",
-    "pytest-mock",
-    "pytest-asyncio",
-    "pytest-aiohttp",
-    "assertpy",
 ]
 
 setup(
@@ -66,9 +51,6 @@ setup(
     license="Apache License, Version 2.0",
     packages=find_packages(include=("eventbus*",)),
     install_requires=INSTALL_REQUIRES,
-    extras_require={
-        "dev": DEV_REQUIRES,
-    },
     keywords=("event-bus eventbus eventhub messagehub event-driven micro-services"),
     classifiers=[
         # Trove classifiers

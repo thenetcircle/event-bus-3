@@ -12,8 +12,10 @@ from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
 from eventbus.producer import EventProducer
 from eventbus.topic_resolver import TopicResolver
+from eventbus.utils import setup_logger
 
 config.load_from_environ()
+setup_logger()
 topic_resolver = TopicResolver()
 producer = EventProducer("app_http", config.get().http_app.use_producers)
 
