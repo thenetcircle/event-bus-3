@@ -152,3 +152,6 @@ def test_timeout(client: TestClient):
         "status": "all_fail",
         "details": {"e1": "<TimeoutError> "},
     }
+
+
+# TODO test different sort of events

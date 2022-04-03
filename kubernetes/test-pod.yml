@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: eventbus-test
+spec:
+  containers:
+    - name: test-container
+      image: registry.cn-hangzhou.aliyuncs.com/google_containers/busybox
+      command: [ "/bin/sh", "-c", "while true; do ls -l /configfiles; sleep 1; done" ]
+      volumeMounts:
+        - name: ec-volumn
+          mountPath: /configfiles
+  restartPolicy: Never
+  volumes:
+    - name: ec-volumn
+      configMap:
+        name: eventbus-config
+        items:
+          - key: common
+            path: common.yml
+          - key: consumers
+            path: consumers.yml

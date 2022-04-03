@@ -1,14 +1,15 @@
 env: test
-debug: true
+debug: false
+last_update_time: 1648880369 # int(time.time())
 
 default_kafka_config:
   producer:
     "bootstrap.servers": "localhost:12811"
     "enable.idempotence": "true"
     "acks": "all"
-    "max.in.flight.requests.per.connection": "5"
-    "retries": "3"
-    "delivery.timeout.ms": "2000" # 1 seconds
+    # "max.in.flight.requests.per.connection": "5"
+    # "retries": "3"
+    # "delivery.timeout.ms": "2000" # 1 seconds
   consumer:
     "bootstrap.servers": "localhost:12811"
     "enable.auto.commit": "false"

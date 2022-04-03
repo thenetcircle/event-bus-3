@@ -98,47 +98,27 @@ async def test_produce_retry(mock_producer: EventProducer):
 
 
 @pytest.mark.asyncio
-async def test_config_subscriber(mocker: MockFixture):
+async def test_config_change_signal(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
-    mocker.patch("eventbus.producer.KafkaProducer.update_config")
+    update_config_mock = mocker.patch("eventbus.producer.KafkaProducer.update_config")
     producer = EventProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
     await producer.init()
 
-    config_dict = config.get().dict()
-    config_dict["producers"]["p1"]["kafka_config"]["retries"] = 101
-    config.update_from_dict(config_dict)
-    producer._producers[0].update_config.assert_called_once()
-    producer._producers[0].update_config.assert_called_with(
-        ProducerConfig(
-            kafka_config={
-                "enable.idempotence": "false",
-                "acks": "all",
-                "max.in.flight.requests.per.connection": "5",
-                "retries": "101",
-                "bootstrap.servers": "localhost:12811",
-                "compression.type": "none",
-            }
+    for p_id in ["p1", "p2"]:
+        _config = config.get().dict(exclude_unset=True)
+        _config["producers"][p_id]["kafka_config"]["bootstrap.servers"] = "88888"
+        config.update_from_dict(_config)
+        config.send_signals()
+        update_config_mock.assert_called_once()
+        update_config_mock.assert_called_with(
+            ProducerConfig(
+                max_retries=3,
+                kafka_config={
+                    **config.get().producers[p_id].kafka_config,
+                    **{"bootstrap.servers": "88888"},
+                },
+            )
         )
-    )
-    producer._producers[0].update_config.reset_mock()
-
-    config_dict = config.get().dict()
-    config_dict["producers"]["p2"]["kafka_config"][
-        "bootstrap.servers"
-    ] = "localhost:13000"
-    config.update_from_dict(config_dict)
-    producer._producers[0].update_config.assert_called_once()
-    producer._producers[0].update_config.assert_called_with(
-        ProducerConfig(
-            kafka_config={
-                "enable.idempotence": "true",
-                "acks": "all",
-                "max.in.flight.requests.per.connection": "5",
-                "retries": "3",
-                "bootstrap.servers": "localhost:13000",
-                "compression.type": "gzip",
-            }
-        )
-    )
+        update_config_mock.reset_mock()
 
     await producer.close()

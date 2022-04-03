@@ -18,11 +18,11 @@ from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, id: str, consumer_conf: ConsumerConfig):
-        self._id = id
+    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
+        self._id = consumer_id
         self._config = consumer_conf
-        self._consumer = KafkaConsumer(id, consumer_conf)
-        self._sink: Sink = HttpSink(id, consumer_conf)
+        self._consumer = KafkaConsumer(consumer_id, consumer_conf)
+        self._sink: Sink = HttpSink(consumer_id, consumer_conf)
         self._cancelling = False
         self._wait_task = None
         self._tp_tasks = []
@@ -196,8 +196,8 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, id: str, consumer_conf: ConsumerConfig):
-        self._id = id
+    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
+        self._id = consumer_id
         self._check_config(consumer_conf)
         self._config = consumer_conf
         self._is_closed = False
@@ -205,7 +205,7 @@ class KafkaConsumer:
         self._is_fetching_events = False
         self._is_committing_events = False
         self._event_producer = EventProducer(
-            f"consumer_{id}", consumer_conf.use_producers
+            f"consumer_{consumer_id}", consumer_conf.use_producers
         )
         self._loop: AbstractEventLoop = None
 

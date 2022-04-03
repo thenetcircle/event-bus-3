@@ -12,10 +12,11 @@ from aiohttp import web
 from confluent_kafka import Consumer, Message, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from loguru import logger
+from pytest_mock import MockFixture
 from utils import create_event_from_dict
 
 from eventbus import config
-from eventbus.config import UseProducersConfig
+from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.consumer import EventConsumer
 from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink
@@ -25,6 +26,8 @@ from eventbus.sink import HttpSink
 def setup_kafka_cluster():
     config_path = Path(__file__).parent / "fixtures" / "config.it.yml"
     config.update_from_yaml(config_path)
+
+    assert "EVENTBUS_TEST_BROKERS" in os.environ
 
     if "EVENTBUS_TEST_BROKERS" in os.environ:
         brokers = os.environ["EVENTBUS_TEST_BROKERS"]
@@ -54,6 +57,20 @@ def setup_kafka_cluster():
         yield
 
 
+def assert_produced_msgs(temp_topic: str, events_num: int):
+    consumer_conf = config.get().consumers["c1"].kafka_config
+    #  consumer_conf["auto.offset.reset"] = "earliest"
+    consumer = Consumer(consumer_conf)
+    consumer.assign([TopicPartition(temp_topic, i) for i in range(3)])
+    msgs: List[Message] = consumer.consume(events_num, timeout=5.0)
+    msg_values = set([m.value().decode("utf-8") for m in msgs if not m.error()])
+    msg_partitions = set([m.partition() for m in msgs if not m.error()])
+    assert len(msg_values) == events_num
+    for i in range(events_num):
+        assert f'"event{i}"' in msg_values
+    assert len(msg_partitions) == 3
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_producer(setup_kafka_cluster, producer_ids=None):
@@ -75,22 +92,12 @@ async def test_producer(setup_kafka_cluster, producer_ids=None):
         finally:
             await event_producer.close()
 
-        consumer_conf = config.get().consumers["c1"].kafka_config
-        #  consumer_conf["auto.offset.reset"] = "earliest"
-        consumer = Consumer(consumer_conf)
-        consumer.assign([TopicPartition(temp_topic, i) for i in range(3)])
-        msgs: List[Message] = consumer.consume(events_num, timeout=5.0)
-        msg_values = set([m.value().decode("utf-8") for m in msgs if not m.error()])
-        msg_partitions = set([m.partition() for m in msgs if not m.error()])
-        assert len(msg_values) == events_num
-        for i in range(events_num):
-            assert f'"event{i}"' in msg_values
-        assert len(msg_partitions) == 3
+        assert_produced_msgs(temp_topic, events_num)
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_switch_producer(setup_kafka_cluster):
+async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
     if setup_kafka_cluster:
         config_dict = config.get().dict()
         config_dict["producers"]["p1"]["kafka_config"][
@@ -98,6 +105,53 @@ async def test_switch_producer(setup_kafka_cluster):
         ] = "localhost:11111"
         config.update_from_dict(config_dict)
         await test_producer(setup_kafka_cluster, ["p1", "p2"])
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFixture):
+    if setup_kafka_cluster:
+        temp_topic, admin_client = setup_kafka_cluster
+
+        event_producer = EventProducer("it", UseProducersConfig(producer_ids=["p1"]))
+        await event_producer.init()
+        update_config_spy = mocker.spy(event_producer._producers[0], "update_config")
+
+        events_num = 100
+        try:
+            half_events_num = int(events_num / 2)
+            for i in range(half_events_num):
+                event = create_event_from_dict(
+                    {"id": str(i + 100), "payload": f"event{i}"}
+                )
+                await event_producer.produce(temp_topic, event)
+
+            _config = config.get().dict(exclude_unset=True)
+            _config["producers"]["p1"]["kafka_config"]["retries"] = "2222"
+            config.update_from_dict(_config)
+            config.send_signals()
+            update_config_spy.assert_called_once()
+            update_config_spy.assert_called_with(
+                ProducerConfig(
+                    max_retries=3,
+                    kafka_config={
+                        **config.get().producers["p1"].kafka_config,
+                        **{"retries": "2222"},
+                    },
+                )
+            )
+            update_config_spy.reset_mock()
+
+            for i in range(half_events_num, half_events_num * 2):
+                event = create_event_from_dict(
+                    {"id": str(i + 100), "payload": f"event{i}"}
+                )
+                await event_producer.produce(temp_topic, event)
+
+        finally:
+            await event_producer.close()
+
+        assert_produced_msgs(temp_topic, events_num)
 
 
 @pytest.mark.integration

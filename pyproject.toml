@@ -33,12 +33,13 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rsxX -l --tb=short --strict-markers"
+addopts = "-rsxX -l --tb=short --strict-markers -m 'not integration and not benchmark'"
 xfail_strict = true
 testpaths = ["tests"]
 markers = [
     "noconfig: Don't load the config.yml automatically",
     "integration: Integration tests",
+    "benchmark: Benchmark tests",
 ]
 
 [tool.mypy]

@@ -6,7 +6,6 @@ from typing import Callable, List, Optional, Set, Tuple
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
 
-import eventbus.config_watcher
 from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.errors import InitProducerError
@@ -17,12 +16,9 @@ class EventProducer:
     def __init__(self, caller_id: str, use_producers_conf: UseProducersConfig):
         self._caller_id = caller_id
         self._config = use_producers_conf
-        self._producer_ids: List[str] = use_producers_conf.producer_ids
         self._producers: List[KafkaProducer] = []
         self._loop = None
-        eventbus.config_watcher.ConfigSignals.CONFIG_PRODUCER_CHANGED.connect(
-            self._config_subscriber
-        )
+        config.ConfigSignals.PRODUCER_CHANGE.connect(self._handle_config_change_signal)
 
     @property
     def caller_id(self) -> str:
@@ -120,7 +116,7 @@ class EventProducer:
         #     raise
 
     async def _init_producers(self) -> None:
-        for producer_id in self._producer_ids:
+        for producer_id in self._config.producer_ids:
             if producer_id not in config.get().producers:
                 raise InitProducerError(
                     f"Producer id {producer_id} can not be found in config"
@@ -144,10 +140,10 @@ class EventProducer:
 
         return fut, fut_ack
 
-    def _config_subscriber(
+    def _handle_config_change_signal(
         self, sender, added: Set[str], removed: Set[str], changed: Set[str]
     ) -> None:
-        changed_producer_ids = changed.intersection(self._producer_ids)
+        changed_producer_ids = changed.intersection(self._config.producer_ids)
         for producer in self._producers:
             if producer.id in changed_producer_ids:
                 producer.update_config(config.get().producers[producer.id])
@@ -166,7 +162,7 @@ class KafkaProducer:
         self._id = producer_id
         self._config = producer_conf
         self._is_closed = False
-        self._real_producer = None
+        self._real_producer: Optional[Producer] = None
         self._poll_task: Optional[asyncio.Task] = None
 
         self._check_config()
@@ -190,17 +186,13 @@ class KafkaProducer:
         self._poll_task = asyncio.create_task(self.poll())
         logger.info("{} is inited", self.full_name)
 
-    async def close(self, block=True) -> None:
+    async def close(self) -> None:
         logger.info("{} is closing", self.full_name)
 
         """stop the poll thread"""
         self._is_closed = True
-        if block and self._poll_task:
+        if self._poll_task:
             await self._poll_task
-
-        # TODO does _real_producer need close?
-        # self._real_producer.close()
-        # self._real_producer = None
 
         logger.info("{} is closed", self.full_name)
 
@@ -221,15 +213,18 @@ class KafkaProducer:
             raise
 
     def update_config(self, producer_conf: ProducerConfig):
-        # self._real_producer = Producer(producer_conf)
-        # old_poll_thread = self._poll_thread
-        # self._poll_thread = Thread(
-        #     target=self._poll,
-        #     name=f"KafkaProducer#{self._id}_poll",
-        #     daemon=True,
-        # )
-        # self._poll_thread.start()
-        pass
+        old_real_producer = self._real_producer
+
+        # start new producer
+        new_real_producer = Producer(producer_conf.kafka_config)
+        self._config = producer_conf
+
+        # switch to new producer
+        self._real_producer = new_real_producer
+
+        # close old producer
+        if old_real_producer:
+            old_real_producer.flush()
 
     # TODO add key
     def produce(self, topic, value, **kwargs) -> None:

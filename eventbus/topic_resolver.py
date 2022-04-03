@@ -1,7 +1,6 @@
 import re
 from typing import Optional
 
-import eventbus.config_watcher
 from eventbus import config
 from eventbus.event import Event
 
@@ -10,13 +9,12 @@ class TopicResolver:
     def __init__(self):
         self._index = {}
         self._current_topic_mapping = config.get().topic_mapping
-        self.reindex()
-        eventbus.config_watcher.ConfigSignals.CONFIG_TOPIC_MAPPING_CHANGED.connect(
-            self._handle_topic_mapping_signal
-        )
 
     async def init(self) -> None:
-        pass
+        self.reindex()
+        config.ConfigSignals.TOPIC_MAPPING_CHANGE.connect(
+            self._handle_config_change_signal
+        )
 
     # TODO add cache
     def resolve(self, event: Event) -> Optional[str]:
@@ -38,7 +36,7 @@ class TopicResolver:
                     new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
 
-    def _handle_topic_mapping_signal(self, sender) -> None:
+    def _handle_config_change_signal(self, sender, **kwargs) -> None:
         """Subscribing the topic mapping changes signal, and update related index accordingly."""
         self._current_topic_mapping = config.get().topic_mapping
         self.reindex()

@@ -1,5 +1,6 @@
 env: test
 debug: true
+last_update_time: 1648880369 # int(time.time())
 
 default_kafka_config:
   producer:

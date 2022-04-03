@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
+from blinker import signal
 from loguru import logger
 from pydantic import BaseModel, StrictStr
 
-from eventbus.errors import ConfigNoneError, ConfigUpdateError
+from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
 
 
 class Env(str, Enum):
@@ -89,6 +90,7 @@ class HttpAppConfig(ConfigModel):
 class Config(ConfigModel):
     env: Env
     debug: bool
+    last_update_time: int
     http_app: HttpAppConfig
     producers: Dict[str, ProducerConfig]
     consumers: Dict[str, ConsumerConfig]
@@ -97,8 +99,14 @@ class Config(ConfigModel):
     config_file_path: Optional[str] = None
 
 
-_last_config: Optional[Config] = None
-_last_update_time: Optional[datetime] = None
+class ConfigSignals:
+    ANY_CHANGE = signal("any_config_change")
+    PRODUCER_CHANGE = signal("producer_config_change")
+    TOPIC_MAPPING_CHANGE = signal("topic_mapping_config_change")
+    CONSUMER_CHANGE = signal("consumer_config_change")
+
+
+_old_config: Optional[Config] = None
 _config: Optional[Config] = None
 _config_update_lock = threading.Lock()
 
@@ -122,19 +130,25 @@ def update_from_dict(data: Dict[str, Any], log=True) -> None:
 
 def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
     logger.info("Going to update config from an yaml file '{}'", yaml_file_path)
+
+    try:
+        parsed_config = parse_yaml_config(yaml_file_path)
+        update_from_dict(parsed_config, log=False)
+    except (ConfigUpdateError, FileNotFoundError):
+        raise
+    except Exception:
+        raise ConfigUpdateError
+
+
+def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:
     yaml_file_path = Path(yaml_file_path)
     if not yaml_file_path.exists():
         raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
 
-    try:
-        with open(yaml_file_path.resolve()) as f:
-            parsed_config = yaml.safe_load(f)
-            parsed_config["config_file_path"] = str(yaml_file_path.resolve())
-            update_from_dict(parsed_config, log=False)
-    except ConfigUpdateError:
-        raise
-    except Exception:
-        raise ConfigUpdateError
+    with open(yaml_file_path.resolve()) as f:
+        parsed_config = yaml.safe_load(f)
+        parsed_config["config_file_path"] = str(yaml_file_path.resolve())
+        return parsed_config
 
 
 def load_from_environ() -> None:
@@ -162,18 +176,85 @@ def get() -> Config:
     return _config
 
 
-def get_last() -> Optional[Config]:
-    return _last_config
+def get_old() -> Optional[Config]:
+    return _old_config
 
 
-def get_last_update_time() -> Optional[datetime]:
-    return _last_update_time
+def send_signals() -> None:
+    try:
+        old_config = _old_config
+        new_config = _config
+
+        if not old_config or not new_config:
+            # won't send any signal if either old_config and new_config is empty
+            return
+
+        signal_sender = "config"
+
+        if old_config != new_config:
+            receivers = ConfigSignals.ANY_CHANGE.send(signal_sender)
+            logger.info(
+                "Config changed, sent CONFIG_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        def compare_two_config(
+            old: Dict[str, Any], new: Dict[str, Any]
+        ) -> Dict[str, set]:
+            old_keys = set(old.keys())
+            new_keys = set(new.keys())
+
+            removed = old_keys.difference(new_keys)
+            added = new_keys.difference(old_keys)
+            changed = set()
+            for k in old_keys.intersection(new_keys):
+                if old[k] != new[k]:
+                    changed.add(k)
+
+            return {"added": added, "removed": removed, "changed": changed}
+
+        if old_config.producers != new_config.producers:
+            kwargs = compare_two_config(
+                old_config.producers,
+                new_config.producers,
+            )
+            receivers = ConfigSignals.PRODUCER_CHANGE.send(signal_sender, **kwargs)
+            logger.info(
+                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        if old_config.consumers != new_config.consumers:
+            kwargs = compare_two_config(
+                old_config.consumers,
+                new_config.consumers,
+            )
+            receivers = ConfigSignals.CONSUMER_CHANGE.send(signal_sender, **kwargs)
+            logger.info(
+                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+        if old_config.topic_mapping != new_config.topic_mapping:
+
+            receivers = ConfigSignals.TOPIC_MAPPING_CHANGE.send(signal_sender)
+
+            logger.info(
+                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
+                receivers,
+            )
+
+    except Exception as ex:
+        logger.error(
+            "Sent ConfigSignals failed with error: {} {}", type(ex).__name__, ex
+        )
+        # TODO trigger alert
+        raise SendSignalError
 
 
 def _update_config(config: Config) -> None:
-    global _last_config, _last_update_time, _config
-    _last_config = _config
-    _last_update_time = datetime.now()
+    global _old_config, _config
+    _old_config = _config
     _config = config
 
 

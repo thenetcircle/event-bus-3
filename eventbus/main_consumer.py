@@ -9,7 +9,7 @@ from typing import List
 
 from loguru import logger
 
-from eventbus import config, config_watcher
+from eventbus import config
 from eventbus.config_watcher import watch_config_file
 from eventbus.consumer import EventConsumer
 from eventbus.errors import EventConsumerNotFoundError
@@ -62,8 +62,7 @@ def consumer_update_config_callback(consumer: EventConsumer):
         consumer.id,
     )
     config.reload()
-    if config.get_last():
-        config_watcher.send_signals(config.get_last(), config.get())
+    config.send_signals()
 
 
 def main():
@@ -94,14 +93,14 @@ def main():
         p = Process(
             target=consumer_main,
             name=f"Consumer#{consumer_id}",
-            args=(consumer_id, str(config.get().config_file_path.resolve())),
+            args=(consumer_id, config.get().config_file_path),
             daemon=True,
         )
         p.start()
         consumer_procs.append(p)
 
     watch_config_file(config.get().config_file_path, checking_interval=10)
-    local_config_last_update_time = config.get_last_update_time()
+    local_config_last_update_time = config.get().last_update_time
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -118,11 +117,11 @@ def main():
     try:
         while alive_procs := get_alive_procs():
             # check if config get changed
-            if config.get_last_update_time() > local_config_last_update_time:
+            if config.get().last_update_time > local_config_last_update_time:
                 for p in alive_procs:
                     logger.warning("Sending SIGUSR1 to {}", p)
                     os.kill(p.pid, signal.SIGUSR1)
-                local_config_last_update_time = config.get_last_update_time()
+                local_config_last_update_time = config.get().last_update_time
 
             sleep(0.1)
 
