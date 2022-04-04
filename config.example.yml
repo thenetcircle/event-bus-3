@@ -1,10 +1,12 @@
 env: test
 debug: false
+last_update_time: 1648880390 # int(time.time())
+# sentry_dsn: ...
 
 default_kafka_config: # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
   producer:
     "enable.idempotence": "true"
-    "delivery.timeout.ms": "3000" # 3 seconds, default is "300000"
+    "delivery.timeout.ms": "2600" # 2.6 seconds, default is "300000"
     "acks": "all"
     # "max.in.flight.requests.per.connection":  default is "1000000", after idempotence is "5"
     # "retries": default is "2147483647", after idempotence is INT32_MAX
@@ -14,30 +16,28 @@ default_kafka_config: # https://github.com/edenhill/librdkafka/blob/master/CONFI
     "enable.auto.commit": "false"
     "auto.offset.reset": "latest"
     "max.poll.interval.ms": "50"
+    # "allow.auto.create.topics": "true" -- doesn't work
 
 producers:
   p1:
     kafka_config:
       "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-      "enable.idempotence": "false"
-      "compression.type": "none"
   p2:
     kafka_config:
       "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-      "compression.type": "gzip"
 
 http_app:
   use_producers:
     producer_ids: [p1]
-  max_response_time: 1
+  max_response_time: 6
 
 consumers:
   c1:
-    kafka_topics: [ "topic1" ]
+    kafka_topics: [ "^event-v3-.*" ]
     kafka_config:
-      "group.id": "group1"
+      "group.id": "event-v3-test-group1"
       "max.poll.interval.ms": "300100"
-    include_events: [test\..*]
+    include_events: []
     use_producers:
       producer_ids: [ p1 ]
     sink:
@@ -45,11 +45,11 @@ consumers:
       method: POST
       timeout: 5
   c2:
-    kafka_topics: [ "topic2" ]
+    kafka_topics: [ "event-v3-test-topic4" ]
     kafka_config:
-      "group.id": "group2"
-      "max.poll.interval.ms": "300080"
-    include_events: [test2\..*]
+      "group.id": "event-v3-test-group2"
+      "max.poll.interval.ms": "300082"
+    include_events: []
     use_producers:
       producer_ids: [ p2 ]
     sink:
@@ -58,12 +58,9 @@ consumers:
       timeout: 10
 
 topic_mapping:
-  - topic: primary-success
+  - topic: event-v3-test-topic5
     patterns:
-      - test\.primary-success
-  - topic: secondary-success
-    patterns:
-      - test\.secondary-success
-  - topic: event-v3-${env}-default
+      - test\.event1
+  - topic: event-v3-default
     patterns:
       - .*

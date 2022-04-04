@@ -97,6 +97,7 @@ class Config(ConfigModel):
     topic_mapping: List[TopicMapping]
     default_kafka_config: Optional[DefaultKafkaConfig] = None
     config_file_path: Optional[str] = None
+    sentry_dsn: Optional[str] = None
 
 
 class ConfigSignals:

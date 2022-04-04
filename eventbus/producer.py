@@ -72,8 +72,10 @@ class EventProducer:
                 is_last_producer = (i + 1) == len(self._producers)
                 log_func = logger.error if is_last_producer else logger.warning
                 log_func(
-                    'Sending an event "{}" to producer "{}#{}" is failed in {} seconds with error: <{}> {}',
+                    'Sending an event "{}" to topic "{}" through producer "{}#{}" '
+                    "is failed in {} seconds with error: <{}> {}",
                     event,
+                    topic,
                     self.caller_id,
                     producer.id,
                     cost_time,
@@ -144,9 +146,13 @@ class EventProducer:
         self, sender, added: Set[str], removed: Set[str], changed: Set[str]
     ) -> None:
         changed_producer_ids = changed.intersection(self._config.producer_ids)
-        for producer in self._producers:
-            if producer.id in changed_producer_ids:
-                producer.update_config(config.get().producers[producer.id])
+        logger.info(
+            "Handling config change signals for producers: {}", changed_producer_ids
+        )
+        if changed_producer_ids:
+            for producer in self._producers:
+                if producer.id in changed_producer_ids:
+                    producer.update_config(config.get().producers[producer.id])
 
 
 class KafkaProducer:
@@ -213,6 +219,8 @@ class KafkaProducer:
             raise
 
     def update_config(self, producer_conf: ProducerConfig):
+        logger.info("Updating config of {}", self.full_name)
+
         old_real_producer = self._real_producer
 
         # start new producer
@@ -225,6 +233,8 @@ class KafkaProducer:
         # close old producer
         if old_real_producer:
             old_real_producer.flush()
+
+        logger.info("Config of {} updated", self.full_name)
 
     # TODO add key
     def produce(self, topic, value, **kwargs) -> None:

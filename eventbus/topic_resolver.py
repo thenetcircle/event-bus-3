@@ -1,6 +1,8 @@
 import re
 from typing import Optional
 
+from loguru import logger
+
 from eventbus import config
 from eventbus.event import Event
 
@@ -38,5 +40,7 @@ class TopicResolver:
 
     def _handle_config_change_signal(self, sender, **kwargs) -> None:
         """Subscribing the topic mapping changes signal, and update related index accordingly."""
+        logger.info("Handling topic mapping signal")
         self._current_topic_mapping = config.get().topic_mapping
         self.reindex()
+        logger.info("Topic mapping signal handled")

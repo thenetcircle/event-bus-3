@@ -28,7 +28,7 @@ producers:
 
 http_app:
   use_producers:
-    producer_ids: [p1]
+    producer_ids: [ p1 ]
   max_response_time: 1
 
 consumers:
@@ -37,7 +37,7 @@ consumers:
     kafka_config:
       "group.id": "group1"
       "max.poll.interval.ms": "300100"
-    include_events: [test\..*]
+    include_events: [ test\..* ]
     use_producers:
       producer_ids: [ p1 ]
     sink:
@@ -49,7 +49,7 @@ consumers:
     kafka_config:
       "group.id": "group2"
       "max.poll.interval.ms": "300080"
-    include_events: [test2\..*]
+    include_events: [ test2\..* ]
     use_producers:
       producer_ids: [ p2 ]
     sink:

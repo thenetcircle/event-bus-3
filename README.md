@@ -10,20 +10,39 @@ x test topic_resolver
 x test signals on producer and topic_resolver 
 x remove old configs
 - try k8s, confirm the deployment and config change strategies
-- try app_consumer update config
+x try app_consumer update config
 x add producer into consumer 
 x complete app_consumer
 x refactor thread exit mechanism
 x check producer error handler
-- producer update config 
+x producer update config 
 x consumer config changes, and config producer config changes
 x if consumer downstream blocks, will the upstream be waiting? 
 x producer log with caller id
 - Sentry
 - test consumer abnormal cases
-
+x test consumer for new created topics
 x try config map updates
-- fix the config change function
-  - split config files
-  - make sure if that the config is invalid does not affect running status    
+x fix the config change function
+  d split config files
+  x make sure if that the config is invalid does not affect running status    
 - k8s scripts
+x after update producer config -- can not reproduce
+```shell
+Exception in callback <built-in method set_exception of _asyncio.Future object at 0x1067917c0>
+handle: <Handle Future.set_exception>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+asyncio.exceptions.InvalidStateError: invalid state
+Exception in callback <built-in method set_exception of _asyncio.Future object at 0x1067915c0>
+handle: <Handle Future.set_exception>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+asyncio.exceptions.InvalidStateError: invalid state
+Exception in callback <built-in method set_exception of _asyncio.Future object at 0x10679f840>
+handle: <Handle Future.set_exception>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+asyncio.exceptions.InvalidStateError: invalid state
+[2022-04-03 22:54:21 +0800] [74503] [INFO] Handling signal: winch
+```

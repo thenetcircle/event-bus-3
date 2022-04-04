@@ -5,7 +5,7 @@ import signal
 from asyncio import AbstractEventLoop
 from multiprocessing import Process
 from time import sleep, time
-from typing import List
+from typing import Dict, List, Set
 
 from loguru import logger
 
@@ -84,12 +84,24 @@ def main():
 
     setup_logger()
 
+    # --- handler system signals ---
+
     grace_term_period = 10
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    consumer_procs: List[Process] = []
-    for consumer_id, _ in config.get().consumers.items():
+    consumer_procs: Dict[str, Process] = {}
+
+    def start_new_consumer(consumer_id):
+        if consumer_id in consumer_procs and consumer_procs[consumer_id].is_alive():
+            # TODO trigger alert on all errors
+            logger.error(
+                "Consumer#{} already in consumer_procs and is alive, something wrong happened",
+                consumer_id,
+            )
+            return
+
+        logger.info("Starting new consumer {}", consumer_id)
         p = Process(
             target=consumer_main,
             name=f"Consumer#{consumer_id}",
@@ -97,10 +109,10 @@ def main():
             daemon=True,
         )
         p.start()
-        consumer_procs.append(p)
+        consumer_procs[consumer_id] = p
 
-    watch_config_file(config.get().config_file_path, checking_interval=10)
-    local_config_last_update_time = config.get().last_update_time
+    for consumer_id, _ in config.get().consumers.items():
+        start_new_consumer(consumer_id)
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -111,16 +123,62 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler("SIGTERM"))
     signal.signal(signal.SIGINT, signal_handler("SIGINT"))
 
+    # --- handler config change signals ---
+
+    def handle_producer_config_change_signal(
+        sender, added: Set[str], removed: Set[str], changed: Set[str]
+    ):
+        if changed:
+            for _, proc in consumer_procs.items():
+                if proc.is_alive():
+                    logger.warning("Sending SIGUSR1 to {}", proc)
+                    os.kill(proc.pid, signal.SIGUSR1)
+
+    def handle_consumer_config_change_signal(
+        sender, added: Set[str], removed: Set[str], changed: Set[str]
+    ):
+        for new_cid in added:
+            start_new_consumer(new_cid)
+
+        removed_cids = removed.intersection(list(consumer_procs.keys()))
+        for cid in removed_cids:
+            p = consumer_procs[cid]
+            if p.is_alive():
+                logger.warning("Sending SIGTERM to {}", p)
+                os.kill(p.pid, signal.SIGTERM)
+
+        changed_cids = changed.intersection(list(consumer_procs.keys()))
+        for cid in changed_cids:
+            p = consumer_procs[cid]
+            if p.is_alive():
+                logger.warning("Sending SIGTERM to {}", p)
+                os.kill(p.pid, signal.SIGTERM)
+
+                t = time()
+                while p.is_alive():
+                    if time() > t + grace_term_period:
+                        logger.warning("Sending SIGKILL to {}", p)
+                        p.kill()
+                    sleep(0.01)
+            start_new_consumer(cid)
+
+    config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
+    config.ConfigSignals.CONSUMER_CHANGE.connect(handle_consumer_config_change_signal)
+
+    # --- monitor config change and sub-processes ---
+
     def get_alive_procs() -> List[Process]:
-        return [p for p in consumer_procs if p.is_alive()]
+        return [proc for proc in list(consumer_procs.values()) if proc.is_alive()]
+
+    local_config_last_update_time = config.get().last_update_time
+    watch_config_file(config.get().config_file_path, checking_interval=10)
 
     try:
         while alive_procs := get_alive_procs():
-            # check if config get changed
-            if config.get().last_update_time > local_config_last_update_time:
-                for p in alive_procs:
-                    logger.warning("Sending SIGUSR1 to {}", p)
-                    os.kill(p.pid, signal.SIGUSR1)
+            if (
+                config.get().last_update_time > local_config_last_update_time
+            ):  # if config get updated by another thread
+                config.send_signals()
                 local_config_last_update_time = config.get().last_update_time
 
             sleep(0.1)

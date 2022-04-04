@@ -220,6 +220,7 @@ class KafkaConsumer:
             self._config.kafka_topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
+            on_lost=self._on_lost,
         )
         await self._event_producer.init()
 
@@ -437,6 +438,13 @@ class KafkaConsumer:
     def _on_revoke(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
             'KafkaConsumer#{} get revoked TopicPartitions: "{}"',
+            self.id,
+            partitions,
+        )
+
+    def _on_lost(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
+        logger.info(
+            'KafkaConsumer#{} lost TopicPartitions: "{}"',
             self.id,
             partitions,
         )
