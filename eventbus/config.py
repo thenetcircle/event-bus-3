@@ -42,6 +42,8 @@ class HttpSinkConfig(ConfigModel):
     headers: Optional[Dict[str, str]] = None
     timeout: float = 300  # seconds
     max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
 
 
 class DefaultConsumerConfig(ConfigModel):
@@ -87,9 +89,9 @@ class HttpAppConfig(ConfigModel):
 
 
 class Config(ConfigModel):
+    last_update_time: int
     env: Env
     debug: bool
-    last_update_time: int
     http_app: HttpAppConfig
     producers: Dict[str, ProducerConfig]
     consumers: Dict[str, ConsumerConfig]

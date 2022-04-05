@@ -46,3 +46,11 @@ Traceback (most recent call last):
 asyncio.exceptions.InvalidStateError: invalid state
 [2022-04-03 22:54:21 +0800] [74503] [INFO] Handling signal: winch
 ```
+
+FOLLOWING PLAN:
+- lab env
+- staging and prod env
+- new kafka cluster
+- consume from backup cluster
+- CI/CD
+- monitoring

@@ -1,6 +1,6 @@
+last_update_time: 1648880393 # from: int(time.time()), this must be in first online
 env: test
 debug: false
-last_update_time: 1648880390 # int(time.time())
 # sentry_dsn: ...
 
 default_kafka_config: # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -37,27 +37,32 @@ consumers:
     kafka_config:
       "group.id": "event-v3-test-group1"
       "max.poll.interval.ms": "300100"
-    include_events: []
+    exclude_events: [ ^stress_test\..* ]
     use_producers:
       producer_ids: [ p1 ]
     sink:
-      url: http://localhost:8001
+      url: http://localhost:8081
       method: POST
       timeout: 5
   c2:
-    kafka_topics: [ "event-v3-test-topic4" ]
+    kafka_topics: [ "event-v3-stress-test" ]
     kafka_config:
       "group.id": "event-v3-test-group2"
       "max.poll.interval.ms": "300082"
     include_events: []
+    concurrent_per_partition: 1
     use_producers:
       producer_ids: [ p2 ]
     sink:
-      url: http://localhost:8002
+      url: http://localhost:8081/receive_events
       method: POST
       timeout: 10
+      backoff_retry_max_time: 3
 
 topic_mapping:
+  - topic: event-v3-stress-test
+    patterns:
+      - stress_test\..*
   - topic: event-v3-test-topic5
     patterns:
       - test\.event1

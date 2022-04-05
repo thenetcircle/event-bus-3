@@ -129,17 +129,22 @@ class HttpSink(Sink):
                 aiohttp.InvalidURL,
                 asyncio.exceptions.TimeoutError,
             ) as ex:
+                sleep_time = self._get_backoff_sleep_time(retry_times)
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'because of "{}", details: {}, '
+                    "will retry after {} seconds",
                     event,
                     req_url,
                     self._get_cost_time(start_time),
+                    retry_times,
                     type(ex),
                     ex,
+                    sleep_time,
                 )
                 # TODO trigger alert
                 # keep retry
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(sleep_time)
 
             except (
                 aiohttp.ClientResponseError,  # this is mostly the response related error
@@ -149,10 +154,12 @@ class HttpSink(Sink):
                 # at least we shouldn't block other subsequence events
                 # so just return retry_later
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of "{}", details: {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'because of "{}", details: {}',
                     event,
                     req_url,
                     self._get_cost_time(start_time),
+                    retry_times,
                     type(ex),
                     ex,
                 )
@@ -160,17 +167,22 @@ class HttpSink(Sink):
                 return event, EventProcessStatus.RETRY_LATER
 
             except Exception as ex:
+                sleep_time = self._get_backoff_sleep_time(retry_times)
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds because of a unknown exception "{}", details : {}',
+                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'because of a unknown exception "{}", details : {}, '
+                    "will retry after {} seconds",
                     event,
                     req_url,
                     self._get_cost_time(start_time),
+                    retry_times,
                     type(ex),
                     ex,
+                    sleep_time,
                 )
                 # TODO trigger alert
                 # keep retry until fixed
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(sleep_time)
 
             retry_times += 1
 
@@ -182,6 +194,14 @@ class HttpSink(Sink):
             self._client = None
 
             logger.info("HttpSink#{} is closed", self.consumer_id)
+
+    def _get_backoff_sleep_time(self, retry_times: int) -> float:
+        return min(
+            [
+                (retry_times + 1) * self._config.sink.backoff_retry_step,
+                self._config.sink.backoff_retry_max_time,
+            ]
+        )
 
     @staticmethod
     def _get_cost_time(start_time: datetime) -> float:

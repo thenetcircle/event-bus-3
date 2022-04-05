@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -55,8 +56,15 @@ def _watch_file(
 
     while True:
         try:
-            parsed_config = config.parse_yaml_config(config_file_path)
-            new_update_time = int(parsed_config["last_update_time"])
+            new_update_time = 0
+            with open(config_file_path.resolve()) as f:
+                first_line = f.readline()
+                if _match := re.match(r"last_update_time: ([0-9]+)", first_line):
+                    new_update_time = int(_match.group(1))
+                else:
+                    logger.error(
+                        "No last_update_time found in config file {}", config_file_path
+                    )
 
             if new_update_time > last_update_time:
                 logger.info(
@@ -71,6 +79,13 @@ def _watch_file(
                     loop.call_soon_threadsafe(config.send_signals)
 
                 last_update_time = new_update_time
+
+            elif new_update_time != 0 and new_update_time != last_update_time:
+                logger.warning(
+                    "Get new_update_time {} but less than last_update_time {}",
+                    new_update_time,
+                    last_update_time,
+                )
 
             time.sleep(checking_interval)
         except Exception as ex:

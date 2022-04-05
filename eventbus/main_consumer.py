@@ -1,8 +1,6 @@
 import asyncio
-import functools
 import os
 import signal
-from asyncio import AbstractEventLoop
 from multiprocessing import Process
 from time import sleep, time
 from typing import Dict, List, Set
@@ -29,40 +27,33 @@ def consumer_main(consumer_id: str, config_file_path: str):
     consumer = EventConsumer(consumer_id, consumer_conf)
 
     # run consumer
-    asyncio.run(consumer_run(consumer))
+    asyncio.run(run_consumer(consumer))
 
 
-async def consumer_run(consumer: EventConsumer):
+async def run_consumer(consumer: EventConsumer):
     loop = asyncio.get_event_loop()
 
+    def term_callback():
+        logger.info(
+            "Get TERM signals, going to terminate the consumer {}.", consumer.id
+        )
+        asyncio.run_coroutine_threadsafe(consumer.cancel(), loop)
+
+    def update_config_callback():
+        logger.info(
+            "Get Config Updated signals, going to reload the config for consumer {}.",
+            consumer.id,
+        )
+        config.reload()
+        config.send_signals()
+
     # add signals handlers
-    term_callback = functools.partial(consumer_term_callback, consumer, loop)
     loop.add_signal_handler(signal.SIGTERM, term_callback)
     loop.add_signal_handler(signal.SIGINT, term_callback)
-    loop.add_signal_handler(
-        signal.SIGUSR1,
-        functools.partial(consumer_update_config_callback, consumer),
-    )
+    loop.add_signal_handler(signal.SIGUSR1, update_config_callback)
 
     await consumer.init()
     await consumer.run()
-
-
-def consumer_term_callback(
-    consumer: EventConsumer,
-    loop: AbstractEventLoop,
-):
-    logger.info("Get TERM signals, going to terminate the consumer {}.", consumer.id)
-    asyncio.run_coroutine_threadsafe(consumer.cancel(), loop)
-
-
-def consumer_update_config_callback(consumer: EventConsumer):
-    logger.info(
-        "Get Config Updated signals, going to reload the config for consumer {}.",
-        consumer.id,
-    )
-    config.reload()
-    config.send_signals()
 
 
 def main():
