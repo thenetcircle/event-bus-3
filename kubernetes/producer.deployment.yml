@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-bus-3-producer-deploy
+  labels:
+    app: event-bus-3
+spec:
+  selector:
+    matchLabels:
+      app: event-bus-3
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: event-bus-3
+    spec:
+      containers:
+        - name: event-bus-3-producer
+          image: event-bus-3-producer:latest
+          command: [ "-w 1" ]
+          volumeMounts:
+            - name: event-bus-3-config-volume
+              mountPath: /app-config
+          ports:
+            - containerPort: 8000
+          env:
+            - name: EVENTBUS_CONFIG
+              value: /app-config/config.yml
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+      restartPolicy: Always
+      volumes:
+        - name: event-bus-3-config-volume
+          configMap:
+            name: event-bus-3-config
+            items:
+              - key: config
+                path: config.yml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-bus-3-producer-deploy
+  labels:
+    app: event-bus-3
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      name: flask
+  selector:
+    app: event-bus-3
+  type: LoadBalancer

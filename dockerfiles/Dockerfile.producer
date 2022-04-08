@@ -7,4 +7,6 @@ COPY . .
 RUN pip3 install gunicorn uvicorn
 RUN pip3 install .
 
-ENTRYPOINT [ "/usr/local/bin/gunicorn", "eventbus.main_producer:app", "-k uvicorn.workers.UvicornWorker" ]
+EXPOSE 8000
+
+ENTRYPOINT [ "/usr/local/bin/gunicorn", "eventbus.main_producer:app", "-k uvicorn.workers.UvicornWorker" "-b 127.0.0.1:8000" ]
