@@ -100,11 +100,12 @@ async def test_produce_retry(mock_producer: EventProducer):
 @pytest.mark.asyncio
 async def test_config_change_signal(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
-    update_config_mock = mocker.patch("eventbus.producer.KafkaProducer.update_config")
     producer = EventProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
     await producer.init()
 
     for p_id in ["p1", "p2"]:
+        kafka_producer = [p for p in producer._producers if p.id == p_id][0]
+        update_config_mock = mocker.patch.object(kafka_producer, "update_config")
         _config = config.get().dict(exclude_unset=True)
         _config["producers"][p_id]["kafka_config"]["bootstrap.servers"] = "88888"
         config.update_from_dict(_config)
