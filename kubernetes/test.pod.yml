@@ -8,7 +8,7 @@ spec:
       image: registry.cn-hangzhou.aliyuncs.com/google_containers/busybox
       command: [ "/bin/sh", "-c", "while true; do ls -l /configfiles; sleep 1; done" ]
       volumeMounts:
-        - name: ec-volumn
+        - name: event-bus-3-config-volume
           mountPath: /configfiles
   restartPolicy: Never
   volumes:
