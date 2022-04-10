@@ -143,7 +143,7 @@ def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
 
 
 def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:
-    yaml_file_path = Path(yaml_file_path).resolve()
+    yaml_file_path = Path(yaml_file_path)
     if not yaml_file_path.exists():
         raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
 

@@ -57,7 +57,7 @@ def _watch_file(
     while True:
         try:
             new_update_time = 0
-            with open(config_file_path.resolve()) as f:
+            with open(config_file_path) as f:
                 first_line = f.readline()
                 if _match := re.match(r"last_update_time: ([0-9]+)", first_line):
                     new_update_time = int(_match.group(1))
