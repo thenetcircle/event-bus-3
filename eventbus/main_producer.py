@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import List, Union
 
 from confluent_kafka import Message

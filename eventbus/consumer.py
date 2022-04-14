@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 import time
 from asyncio import AbstractEventLoop
@@ -215,7 +216,10 @@ class KafkaConsumer:
 
     async def init(self) -> None:
         self._loop = asyncio.get_running_loop()
-        self._internal_consumer = Consumer(self._config.kafka_config)
+        self._internal_consumer = Consumer(
+            self._config.kafka_config,
+            logger=logging.getLogger(f"KafkaConsumer#{self.id}"),
+        )
         self._internal_consumer.subscribe(
             self._config.kafka_topics,
             on_assign=self._on_assign,

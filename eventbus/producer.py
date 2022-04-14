@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from asyncio import Future
 from typing import Callable, List, Optional, Set, Tuple
@@ -187,8 +188,9 @@ class KafkaProducer:
 
     async def init(self) -> None:
         logger.info("{} is initing", self.full_name)
-
-        self._real_producer = Producer(self._config.kafka_config)
+        self._real_producer = Producer(
+            self._config.kafka_config, logger=logging.getLogger(self.full_name)
+        )
         self._poll_task = asyncio.create_task(self.poll())
         logger.info("{} is inited", self.full_name)
 
