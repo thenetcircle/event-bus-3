@@ -1,8 +1,10 @@
-FROM python:3.8-slim-buster
+FROM python:3.8
 
 WORKDIR /app
 
-COPY . .
+COPY requirements.txt ./
+COPY requirements-ci.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements-ci.txt
 
-RUN pip3 install -r requirements-ci.txt
-RUN pip3 install .
+COPY . .

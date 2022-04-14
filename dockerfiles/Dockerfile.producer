@@ -1,12 +1,14 @@
-FROM python:3.8-slim-buster
+FROM python:3.8
 
 WORKDIR /app
 
-COPY . .
+RUN pip3 install --no-cache-dir gunicorn uvicorn
 
-RUN pip3 install gunicorn uvicorn
-RUN pip3 install .
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
+
+COPY . .
 
 ENTRYPOINT [ "/usr/local/bin/gunicorn", "eventbus.main_producer:app", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "-w", "1" ]
