@@ -9,6 +9,6 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
 
-COPY . .
+COPY eventbus eventbus
 
 ENTRYPOINT [ "/usr/local/bin/gunicorn", "eventbus.main_producer:app", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "-w", "1" ]
