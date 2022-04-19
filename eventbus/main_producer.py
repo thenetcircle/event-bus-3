@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from typing import List, Union
 
 from confluent_kafka import Message
@@ -128,7 +127,7 @@ def _ungzip_request_body(request_body: str) -> str:
 routes = [
     Route("/", home),
     Route("/config", show_config),
-    Route("/new_events", receive_events, methods=["POST"]),
+    Route("/events", receive_events, methods=["POST"]),
 ]
 
 app = Starlette(
