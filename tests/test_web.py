@@ -52,7 +52,7 @@ def test_show_config(client: TestClient):
 
 def test_send_an_event(client: TestClient):
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json={
             "id": "e1",
             "title": "normal_event",
@@ -63,7 +63,7 @@ def test_send_an_event(client: TestClient):
     assert response.json()["status"] == "all_succ"
 
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json={
             "id": "e1",
             "title": "exceptional_event",
@@ -76,14 +76,14 @@ def test_send_an_event(client: TestClient):
 
 def test_event_format(client: TestClient):
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json={"id": "e1"},
     )
     assert response.json()["status"] == "all_fail"
     assert "EventValidationError" in response.json()["details"]["root"]
 
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json={
             "id": "e1",
             "title": "normal_event",
@@ -99,7 +99,7 @@ def test_event_format(client: TestClient):
 
 def test_resp_format(client: TestClient):
     response: Response = client.post(
-        "/new_events?resp_format=2",
+        "/events?resp_format=2",
         json={
             "id": "e1",
             "title": "normal_event",
@@ -112,7 +112,7 @@ def test_resp_format(client: TestClient):
 
 def test_send_multiple_events(client: TestClient):
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json=[
             {
                 "id": "e1",
@@ -140,7 +140,7 @@ def test_send_multiple_events(client: TestClient):
 
 def test_timeout(client: TestClient):
     response: Response = client.post(
-        "/new_events",
+        "/events",
         json={
             "id": "e1",
             "title": "timeout_event",
