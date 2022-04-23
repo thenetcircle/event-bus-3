@@ -85,7 +85,7 @@ class ConsumerConfig(ConfigModel):
 
 class HttpAppConfig(ConfigModel):
     use_producers: UseProducersConfig
-    max_response_time: int = 10
+    max_response_time: int = 3
 
 
 class Config(ConfigModel):

@@ -9,7 +9,7 @@ debug: false
 default_kafka_config:
   producer:
     "enable.idempotence": "true"
-    "delivery.timeout.ms": "2600" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
+    "delivery.timeout.ms": "1500" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
     "acks": "all"
     "socket.keepalive.enable": "true"
     "metadata.max.age.ms": "180000"
@@ -47,7 +47,7 @@ consumers:
     use_producers:
       producer_ids: [ p1 ]
     sink:
-      url: http://localhost:8081
+      url: http://localhost:8081/events
       method: POST
       timeout: 5
   c2:
@@ -57,7 +57,7 @@ consumers:
     use_producers:
       producer_ids: [ p2 ]
     sink:
-      url: http://localhost:8081/receive_events
+      url: http://localhost:8081/events
       method: POST
       timeout: 10
       backoff_retry_max_time: 3

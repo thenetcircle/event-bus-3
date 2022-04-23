@@ -151,6 +151,9 @@ def main():
                         logger.warning("Sending SIGKILL to {}", p)
                         p.kill()
                     sleep(0.01)
+
+            # waiting for all other consumers to be terminated before start new one
+            sleep(5)
             start_new_consumer(cid)
 
     config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
@@ -162,7 +165,7 @@ def main():
         return [proc for proc in list(consumer_procs.values()) if proc.is_alive()]
 
     local_config_last_update_time = config.get().last_update_time
-    watch_config_file(config.get().config_file_path, checking_interval=10)
+    watch_config_file(config.get().config_file_path, checking_interval=5)
 
     try:
         while alive_procs := get_alive_procs():

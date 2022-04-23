@@ -22,7 +22,8 @@ cat << EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: event-bus-3-config
+  name: event-bus-3-config-{comm}
+  namespace: service-team
 data:
   config: |
 $YAML_DATA
