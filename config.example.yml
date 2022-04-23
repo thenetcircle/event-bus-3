@@ -1,27 +1,37 @@
-last_update_time: 1648880393 # from: int(time.time()), this must be in first online
+last_update_time: 1648880402 # from: int(time.time()), this must be in first online
+project_id: example
 env: test
 debug: false
 # sentry_dsn: ...
 
-default_kafka_config: # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+# https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
+# https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+default_kafka_config:
   producer:
     "enable.idempotence": "true"
-    "delivery.timeout.ms": "2600" # 2.6 seconds, default is "300000"
+    "delivery.timeout.ms": "2600" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
     "acks": "all"
-    # "max.in.flight.requests.per.connection":  default is "1000000", after idempotence is "5"
-    # "retries": default is "2147483647", after idempotence is INT32_MAX
-    # "queue.buffering.max.messages": 100000
+    "socket.keepalive.enable": "true"
+    "metadata.max.age.ms": "180000"
+    "partitioner": "consistent_random"
+    "compression.codec": "none"
   consumer:
-    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.auto.commit": "false"
+    "enable.auto.offset.store": "false"
     "auto.offset.reset": "latest"
-    "max.poll.interval.ms": "50"
-    # "allow.auto.create.topics": "true" -- doesn't work
+    "max.poll.interval.ms": "600000" # offset commit failures because of rebalancing
+    "socket.keepalive.enable": "true"
+    "topic.metadata.refresh.interval.ms": "180000"
+    "metadata.max.age.ms": "180000"
+    "heartbeat.interval.ms": "3000"
+    "session.timeout.ms": "60000" # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
+    "allow.auto.create.topics": "true" # doesn't work
 
 producers:
   p1:
     kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
   p2:
     kafka_config:
       "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
@@ -33,11 +43,7 @@ http_app:
 
 consumers:
   c1:
-    kafka_topics: [ "^event-v3-.*" ]
-    kafka_config:
-      "group.id": "event-v3-test-group1"
-      "max.poll.interval.ms": "300100"
-    exclude_events: [ ^stress_test\..* ]
+    kafka_topics: [ "^event-v3-test-.*" ]
     use_producers:
       producer_ids: [ p1 ]
     sink:
@@ -45,10 +51,7 @@ consumers:
       method: POST
       timeout: 5
   c2:
-    kafka_topics: [ "event-v3-stress-test" ]
-    kafka_config:
-      "group.id": "event-v3-test-group2"
-      "max.poll.interval.ms": "300082"
+    kafka_topics: [ "event-v3-stress-test-4" ]
     include_events: []
     concurrent_per_partition: 1
     use_producers:
@@ -60,12 +63,12 @@ consumers:
       backoff_retry_max_time: 3
 
 topic_mapping:
-  - topic: event-v3-stress-test
+  - topic: event-v3-stress-test-4
     patterns:
       - stress_test\..*
   - topic: event-v3-test-topic5
     patterns:
       - test\.event1
-  - topic: event-v3-default
+  - topic: event-v3-test-default5
     patterns:
       - .*

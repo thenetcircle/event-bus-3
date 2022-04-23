@@ -1,17 +1,18 @@
 last_update_time: 1648880369 # int(time.time())
+project_id: it
 env: test
 debug: false
 
 default_kafka_config:
   producer:
-    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.idempotence": "true"
     "acks": "all"
     # "max.in.flight.requests.per.connection": "5"
     # "retries": "3"
     # "delivery.timeout.ms": "2000" # 1 seconds
   consumer:
-    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.auto.commit": "false"
     "auto.offset.reset": "earliest"
     "max.poll.interval.ms": "50"

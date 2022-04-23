@@ -48,6 +48,10 @@ async def receive_events(request):
     if "resp_format" in request.query_params:
         resp_format = int(request.query_params["resp_format"])
 
+    max_resp_time = config.get().http_app.max_response_time  # seconds
+    if "max_resp_time" in request.query_params:
+        max_resp_time = int(request.query_params["max_resp_time"])
+
     events = None
     try:
         if "gzip" in request.query_params:
@@ -57,9 +61,7 @@ async def receive_events(request):
         if not events:
             raise EventValidationError("Invalid format of request body.")
 
-        results = await asyncio.wait_for(
-            handler_event(*events), config.get().http_app.max_response_time
-        )
+        results = await asyncio.wait_for(handler_event(*events), max_resp_time)
         return _create_response([e.id for e in events], results, resp_format)
 
     except EventValidationError as ex:

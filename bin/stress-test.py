@@ -76,10 +76,11 @@ async def start(request):
 async def receive_events(request):
     request_body = await request.body()
     data = json.loads(request_body)
-    id = int(data["id"])
-    # new_pb = datetime.strptime(data["published"], dateformat)
-    new_pb = datetime.now()
-    msgs[id]["rt"] = (new_pb - msgs[id]["pb"]).microseconds * pow(10, -6)
+    if isinstance(data, dict):
+        id = int(data["id"])
+        # new_pb = datetime.strptime(data["published"], dateformat)
+        new_pb = datetime.now()
+        msgs[id]["rt"] = (new_pb - msgs[id]["pb"]).microseconds * pow(10, -6)
     return PlainTextResponse("ok")
 
 

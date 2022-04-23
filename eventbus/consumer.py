@@ -325,7 +325,7 @@ class KafkaConsumer:
             except RuntimeError as ex:
                 raise ClosedError(str(ex))
             except Exception as ex:
-                logger.warning(
+                logger.error(
                     "Pulling events from Kafka is failed with exception: <{}> {}, will retry",
                     type(ex).__name__,
                     ex,
@@ -407,14 +407,18 @@ class KafkaConsumer:
             current_commit_retries = 0
             while True:
                 try:
+                    offsets = self._get_offsets_from_events(event)
                     result = self._internal_consumer.commit(
-                        offsets=self._get_topic_partitions(event),
+                        offsets=offsets,
                         asynchronous=False,
                     )
                     logger.info(
-                        "A new event {} and offset {} have been committed to Kafka after {} times retries.",
-                        event,
+                        '[EventsCommitting] Consumer group "{}" '
+                        'has committed offsets "{}" (from events: "{}") to Kafka brokers '
+                        "after {} times retries.",
+                        self._config.kafka_config["group.id"],
                         result,
+                        event,
                         current_commit_retries,
                     )
                     break
@@ -477,10 +481,10 @@ class KafkaConsumer:
 
     @staticmethod
     def _get_retry_topic(event: KafkaEvent) -> str:
-        return f"{event.topic}_retry"
+        return re.sub(r"^(event-v[0-9]-)?", "\\1retry-", event.topic)
 
     @staticmethod
-    def _get_topic_partitions(*events: KafkaEvent) -> List[TopicPartition]:
+    def _get_offsets_from_events(*events: KafkaEvent) -> List[TopicPartition]:
         """Note: By convention, committed offsets reflect the next message to be consumed, not the last message consumed.
         Refer: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.commit"""
 

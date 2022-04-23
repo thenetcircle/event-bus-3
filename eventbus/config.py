@@ -69,9 +69,9 @@ class UseProducersConfig(ConfigModel):
 
 class ConsumerConfig(ConfigModel):
     kafka_topics: List[StrictStr]
-    kafka_config: Dict[str, str]
     use_producers: UseProducersConfig
     sink: HttpSinkConfig
+    kafka_config: Optional[Dict[str, str]] = None
     include_events: Optional[List[StrictStr]] = None
     exclude_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
@@ -90,6 +90,7 @@ class HttpAppConfig(ConfigModel):
 
 class Config(ConfigModel):
     last_update_time: int
+    project_id: StrictStr
     env: Env
     debug: bool
     http_app: HttpAppConfig
@@ -276,9 +277,14 @@ def _fill_config(config: Config) -> Config:
             **(p_config["kafka_config"] or {}),
         }
     for c_name, c_config in config_dict["consumers"].items():
-        config_dict["consumers"][c_name]["kafka_config"] = {
+        merged_kafka_consumer_config = {
             **default_kafka_consumer_config,
             **(c_config["kafka_config"] or {}),
         }
+        if "group.id" not in merged_kafka_consumer_config:
+            merged_kafka_consumer_config[
+                "group.id"
+            ] = f"event-bus-3-consumer-{config.project_id}-{config.env}-{c_name}"
+        config_dict["consumers"][c_name]["kafka_config"] = merged_kafka_consumer_config
 
     return Config(**config_dict)
