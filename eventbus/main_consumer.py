@@ -153,7 +153,7 @@ def main():
                     sleep(0.01)
 
             # waiting for all other consumers to be terminated before start new one
-            sleep(5)
+            sleep(15)
             start_new_consumer(cid)
 
     config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
