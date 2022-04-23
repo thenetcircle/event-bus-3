@@ -1,8 +1,16 @@
 last_update_time: 1648880402 # from: int(time.time()), this must be in first online
-project_id: example
-env: test
-debug: false
-# sentry_dsn: ...
+
+app:
+  project_id: example
+  env: test
+  debug: false
+  # sentry_dsn: ...
+  producer:
+    use_producers:
+      producer_ids: [p1]
+    max_response_time: 6
+  consumer:
+    deferred_start_time: 10
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -35,11 +43,6 @@ producers:
   p2:
     kafka_config:
       "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-
-http_app:
-  use_producers:
-    producer_ids: [p1]
-  max_response_time: 6
 
 consumers:
   c1:

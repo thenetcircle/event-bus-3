@@ -16,7 +16,7 @@ def setup_logger():
         "- <level>{message}</level>"
     )
 
-    if config.get().debug:
+    if config.get().app.debug:
         logger.add(sys.stderr, level="DEBUG", format=format)
     else:
         logger.add(sys.stderr, level="INFO", format=format)

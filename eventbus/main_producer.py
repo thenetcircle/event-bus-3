@@ -17,7 +17,7 @@ from eventbus.utils import setup_logger
 config.load_from_environ()
 setup_logger()
 topic_resolver = TopicResolver()
-producer = EventProducer("app_http", config.get().http_app.use_producers)
+producer = EventProducer("app_http", config.get().app.producer.use_producers)
 
 
 async def startup():
@@ -48,7 +48,7 @@ async def receive_events(request):
     if "resp_format" in request.query_params:
         resp_format = int(request.query_params["resp_format"])
 
-    max_resp_time = config.get().http_app.max_response_time  # seconds
+    max_resp_time = config.get().app.producer.max_response_time  # seconds
     if "max_resp_time" in request.query_params:
         max_resp_time = int(request.query_params["max_resp_time"])
 
@@ -133,7 +133,7 @@ routes = [
 ]
 
 app = Starlette(
-    debug=config.get().debug,
+    debug=config.get().app.debug,
     routes=routes,
     on_startup=[startup],
     on_shutdown=[shutdown],

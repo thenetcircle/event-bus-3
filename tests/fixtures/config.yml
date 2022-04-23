@@ -1,7 +1,15 @@
 last_update_time: 1648880369 # int(time.time())
-project_id: test
-env: test
-debug: true
+
+app:
+  project_id: test
+  env: test
+  debug: true
+  producer:
+    use_producers:
+      producer_ids: [ p1 ]
+    max_response_time: 1
+  consumer:
+    deferred_start_time: 10
 
 default_kafka_config:
   producer:
@@ -26,11 +34,6 @@ producers:
     kafka_config:
       "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
-
-http_app:
-  use_producers:
-    producer_ids: [ p1 ]
-  max_response_time: 1
 
 consumers:
   c1:

@@ -83,17 +83,26 @@ class ConsumerConfig(ConfigModel):
     max_skipped_events = 100
 
 
-class HttpAppConfig(ConfigModel):
+class AppProducerConfig(ConfigModel):
     use_producers: UseProducersConfig
     max_response_time: int = 3
 
 
-class Config(ConfigModel):
-    last_update_time: int
+class AppConsumerConfig(ConfigModel):
+    deferred_start_time: int
+
+
+class AppConfig(ConfigModel):
     project_id: StrictStr
     env: Env
     debug: bool
-    http_app: HttpAppConfig
+    producer: AppProducerConfig
+    consumer: AppConsumerConfig
+
+
+class Config(ConfigModel):
+    last_update_time: int
+    app: AppConfig
     producers: Dict[str, ProducerConfig]
     consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
@@ -284,7 +293,7 @@ def _fill_config(config: Config) -> Config:
         if "group.id" not in merged_kafka_consumer_config:
             merged_kafka_consumer_config[
                 "group.id"
-            ] = f"event-bus-3-consumer-{config.project_id}-{config.env}-{c_name}"
+            ] = f"event-bus-3-consumer-{config.app.project_id}-{config.app.env}-{c_name}"
         config_dict["consumers"][c_name]["kafka_config"] = merged_kafka_consumer_config
 
     return Config(**config_dict)

@@ -47,7 +47,7 @@ def test_show_config(client: TestClient):
     assert response.status_code == 200
     assert response.headers.get("content-type") == "application/json"
     resp_json = json.loads(response.content)
-    assert resp_json["env"] == "test"
+    assert resp_json["app"]["env"] == "test"
 
 
 def test_send_an_event(client: TestClient):

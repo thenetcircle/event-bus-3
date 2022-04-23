@@ -53,6 +53,9 @@ async def run_consumer(consumer: EventConsumer):
     loop.add_signal_handler(signal.SIGUSR1, update_config_callback)
 
     await consumer.init()
+    # waiting for all other consumers to be started before run
+    if config.get().app.consumer.deferred_start_time > 0:
+        await asyncio.sleep(config.get().app.consumer.deferred_start_time)
     await consumer.run()
 
 
@@ -151,9 +154,6 @@ def main():
                         logger.warning("Sending SIGKILL to {}", p)
                         p.kill()
                     sleep(0.01)
-
-            # waiting for all other consumers to be terminated before start new one
-            sleep(15)
             start_new_consumer(cid)
 
     config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)

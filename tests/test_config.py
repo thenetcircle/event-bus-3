@@ -14,7 +14,7 @@ from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 def test_update_from_yaml():
     config_data = config.get()
-    assert config_data.env == config.Env.TEST
+    assert config_data.app.env == config.Env.TEST
     assert config_data.topic_mapping == [
         config.TopicMapping(
             topic="primary-success",
@@ -70,10 +70,10 @@ def test_hot_update():
     config_path = Path(__file__).parent / "fixtures" / "config.yml"
     with open(config_path) as f:
         new_config = yaml.safe_load(f)
-        new_config["env"] = "prod"
+        new_config["app"]["env"] = "prod"
         config.update_from_dict(new_config)
 
-    assert config.get().env == config.Env.PROD
+    assert config.get().app.env == config.Env.PROD
 
 
 @pytest.mark.noconfig
@@ -163,7 +163,7 @@ async def test_watch_file(tmpdir):
         f.write(new_config_data)
 
     await asyncio.sleep(0.3)  # waiting for the config_file to be reloaded
-    assert config.get().env == config.Env.PROD
+    assert config.get().app.env == config.Env.PROD
     mock1.assert_called_once()
     assert last_called_thread == threading.current_thread().ident
     mock2.assert_called_once()
@@ -172,7 +172,7 @@ async def test_watch_file(tmpdir):
     reset_mocks()
 
     await asyncio.sleep(0.3)  # waiting if another reloading happened
-    assert config.get().env == config.Env.PROD
+    assert config.get().app.env == config.Env.PROD
     mock1.assert_not_called()
     mock2.assert_not_called()
     mock3.assert_not_called()

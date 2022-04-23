@@ -31,8 +31,12 @@ class EventConsumer:
         self._commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]] = None
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._id
+
+    @property
+    def config(self) -> ConsumerConfig:
+        return self._config
 
     async def init(self) -> None:
         await self._consumer.init()
