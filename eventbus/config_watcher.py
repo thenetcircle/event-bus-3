@@ -1,5 +1,5 @@
 import asyncio
-import re
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -47,26 +47,19 @@ def _watch_file(
     checking_interval: float,
     loop: Optional[asyncio.AbstractEventLoop] = None,
 ) -> None:
+    last_update_time = _get_file_mtime(config_file_path)
     logger.info(
-        '_watch_file on config file "{}" started, with checking_interval: {}',
+        '_watch_file on config file "{}" started, with checking_interval: {}, last_update_time: {}',
         config_file_path,
         checking_interval,
+        last_update_time,
     )
-    last_update_time: int = config.get().last_update_time
 
     while True:
         try:
-            new_update_time = 0
-            with open(config_file_path) as f:
-                first_line = f.readline()
-                if _match := re.match(r"last_update_time: ([0-9]+)", first_line):
-                    new_update_time = int(_match.group(1))
-                else:
-                    logger.error(
-                        "No last_update_time found in config file {}", config_file_path
-                    )
+            new_update_time = _get_file_mtime(config_file_path)
 
-            if new_update_time > last_update_time:
+            if last_update_time < new_update_time:
                 logger.info(
                     'config file "{}" is detected changed, last_update_time: {}, new_update_time: {}',
                     config_file_path,
@@ -80,14 +73,8 @@ def _watch_file(
 
                 last_update_time = new_update_time
 
-            elif new_update_time != 0 and new_update_time != last_update_time:
-                logger.warning(
-                    "Get new_update_time {} but less than last_update_time {}",
-                    new_update_time,
-                    last_update_time,
-                )
-
             time.sleep(checking_interval)
+
         except Exception as ex:
             logger.error(
                 '_watch_file on config file "{}" quit because of error: <{}> {}',
@@ -96,3 +83,7 @@ def _watch_file(
                 ex,
             )
             # TODO trigger alert
+
+
+def _get_file_mtime(config_file_path: Path) -> float:
+    return os.path.getmtime(config_file_path.resolve())

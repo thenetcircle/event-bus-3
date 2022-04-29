@@ -154,12 +154,7 @@ async def test_watch_file(tmpdir):
     await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
 
     with open(tmp_config_file, "w") as f:
-        new_config_data = re.sub(
-            r"last_update_time: 1648880369",
-            "last_update_time: 1648880417",
-            re.sub(r"env: test", "env: prod", tmp_config_data),
-        )
-
+        new_config_data = re.sub(r"env: test", "env: prod", tmp_config_data)
         f.write(new_config_data)
 
     await asyncio.sleep(0.3)  # waiting for the config_file to be reloaded

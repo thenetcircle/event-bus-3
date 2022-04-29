@@ -1,4 +1,4 @@
-last_update_time: 1648880402 # from: int(time.time()), this must be in first online
+# last_update_time: 1648880402 # from: int(time.time()), this must be in first online
 
 app:
   project_id: example
@@ -8,9 +8,9 @@ app:
   producer:
     use_producers:
       producer_ids: [p1]
-    max_response_time: 6
+    max_response_time: 5
   consumer:
-    deferred_start_time: 10
+    deferred_start_time: 0
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
@@ -28,7 +28,7 @@ default_kafka_config:
     "enable.auto.commit": "false"
     "enable.auto.offset.store": "false"
     "auto.offset.reset": "latest"
-    "max.poll.interval.ms": "600000" # offset commit failures because of rebalancing
+    "max.poll.interval.ms": "600000" # offset commit failures because of rebalance
     "socket.keepalive.enable": "true"
     "topic.metadata.refresh.interval.ms": "180000"
     "metadata.max.age.ms": "180000"
@@ -54,7 +54,7 @@ consumers:
       method: POST
       timeout: 5
   c2:
-    kafka_topics: [ "event-v3-stress-test-4" ]
+    kafka_topics: [ "event-v3-stress-test-5" ]
     include_events: []
     concurrent_per_partition: 1
     use_producers:

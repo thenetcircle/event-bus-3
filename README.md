@@ -47,6 +47,12 @@ asyncio.exceptions.InvalidStateError: invalid state
 [2022-04-03 22:54:21 +0800] [74503] [INFO] Handling signal: winch
 ```
 
+- check filemtime on kubenetes [y]
+- refactor to use filemtime [y]
+- improve config structure
+- test delay rebalance on local
+- refactor commit offset to use store
+
 FOLLOWING PLAN:
 - lab env
 - staging and prod env

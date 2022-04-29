@@ -48,6 +48,8 @@ class EventConsumer:
         self,
     ) -> None:
         try:
+            logger.info("Running KafkaConsumer#{}", self.id)
+
             start_time = time.time()
 
             self._wait_task = asyncio.create_task(self._wait_events())
@@ -288,7 +290,7 @@ class KafkaConsumer:
     async def commit_events(
         self, commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]]
     ):
-        logger.info("fetch_events of KafkaConsumer#{} is starting")
+        logger.info("commit_events of KafkaConsumer#{} is starting")
 
         try:
             self._is_committing_events = True

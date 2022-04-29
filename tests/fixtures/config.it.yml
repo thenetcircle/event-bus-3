@@ -1,4 +1,4 @@
-last_update_time: 1648880369 # int(time.time())
+# last_update_time: 1648880369 # int(time.time())
 
 app:
   project_id: it

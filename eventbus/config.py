@@ -1,5 +1,6 @@
 import os
 import threading
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -79,7 +80,7 @@ class ConsumerConfig(ConfigModel):
     commit_queue_size: int = 50
     tp_queue_size: int = 3
     max_produce_retries = 3
-    max_commit_retries = 9
+    max_commit_retries = 3
     max_skipped_events = 100
 
 
@@ -89,7 +90,7 @@ class AppProducerConfig(ConfigModel):
 
 
 class AppConsumerConfig(ConfigModel):
-    deferred_start_time: int
+    deferred_start_time: int = 0
 
 
 class AppConfig(ConfigModel):
@@ -101,11 +102,11 @@ class AppConfig(ConfigModel):
 
 
 class Config(ConfigModel):
-    last_update_time: int
     app: AppConfig
     producers: Dict[str, ProducerConfig]
     consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
+    last_update_time: Optional[float] = None
     default_kafka_config: Optional[DefaultKafkaConfig] = None
     config_file_path: Optional[str] = None
     sentry_dsn: Optional[str] = None
@@ -206,7 +207,7 @@ def send_signals() -> None:
         if old_config != new_config:
             receivers = ConfigSignals.ANY_CHANGE.send(signal_sender)
             logger.info(
-                "Config changed, sent CONFIG_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_CHANGED signal to receivers: {}",
                 receivers,
             )
 
@@ -232,8 +233,9 @@ def send_signals() -> None:
             )
             receivers = ConfigSignals.PRODUCER_CHANGE.send(signal_sender, **kwargs)
             logger.info(
-                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers: {}, with kwargs: {}",
                 receivers,
+                kwargs,
             )
 
         if old_config.consumers != new_config.consumers:
@@ -243,16 +245,15 @@ def send_signals() -> None:
             )
             receivers = ConfigSignals.CONSUMER_CHANGE.send(signal_sender, **kwargs)
             logger.info(
-                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers: {}, with kwargs: {}",
                 receivers,
+                kwargs,
             )
 
         if old_config.topic_mapping != new_config.topic_mapping:
-
             receivers = ConfigSignals.TOPIC_MAPPING_CHANGE.send(signal_sender)
-
             logger.info(
-                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers {}",
+                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers: {}",
                 receivers,
             )
 
@@ -267,7 +268,7 @@ def send_signals() -> None:
 def _update_config(config: Config) -> None:
     global _old_config, _config
     _old_config = _config
-    _config = config
+    _config = config.copy(update={"last_update_time": datetime.now().timestamp()})
 
 
 def _fill_config(config: Config) -> Config:
