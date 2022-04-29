@@ -151,9 +151,12 @@ async def test_watch_file(tmpdir):
     mock4 = Mock4()
     config.ConfigSignals.ANY_CHANGE.connect(mock4.sub_method)
 
-    await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
+    tmp_config_file = Path(tmp_config_file).resolve()
 
-    with open(Path(tmp_config_file).resolve(), "w") as f:
+    await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
+    await asyncio.sleep(1)
+
+    with open(tmp_config_file, "w") as f:
         new_config_data = re.sub(r"env: test", "env: prod", tmp_config_data)
         f.write(new_config_data)
 

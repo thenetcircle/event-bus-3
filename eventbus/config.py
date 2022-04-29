@@ -135,8 +135,8 @@ def update_from_dict(data: Dict[str, Any], log=True) -> None:
 
     try:
         new_config = _fill_config(Config(**data))
-    except Exception:
-        raise ConfigUpdateError
+    except Exception as ex:
+        raise ConfigUpdateError(str(ex))
 
     _update_config(new_config)
 
@@ -149,8 +149,8 @@ def update_from_yaml(yaml_file_path: Union[str, Path]) -> None:
         update_from_dict(parsed_config, log=False)
     except (ConfigUpdateError, FileNotFoundError):
         raise
-    except Exception:
-        raise ConfigUpdateError
+    except Exception as ex:
+        raise ConfigUpdateError(str(ex))
 
 
 def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:

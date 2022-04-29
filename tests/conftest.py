@@ -9,8 +9,16 @@ from eventbus import config
 
 @pytest.fixture(autouse=True)
 def init_logger():
+    format = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "
+        "| <level>{level: <8}</level> "
+        "| <cyan>{process.name}</cyan>:<cyan>{thread.name}</cyan> "
+        "| <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
+        "- <level>{message}</level>"
+    )
+
     loguru.logger.remove()
-    loguru.logger.add(sys.stderr, level="INFO")
+    loguru.logger.add(sys.stderr, level="INFO", format=format)
 
 
 @pytest.fixture(autouse=True)
