@@ -165,7 +165,7 @@ def main():
         return [proc for proc in list(consumer_procs.values()) if proc.is_alive()]
 
     local_config_last_update_time = config.get().last_update_time
-    watch_config_file(config.get().config_file_path, checking_interval=2)
+    watch_config_file(config.get().config_file_path, checking_interval=3)
 
     try:
         while alive_procs := get_alive_procs():

@@ -157,7 +157,7 @@ async def test_watch_file(tmpdir):
         new_config_data = re.sub(r"env: test", "env: prod", tmp_config_data)
         f.write(new_config_data)
 
-    await asyncio.sleep(0.3)  # waiting for the config_file to be reloaded
+    await asyncio.sleep(0.5)  # waiting for the config_file to be reloaded
     assert config.get().app.env == config.Env.PROD
     mock1.assert_called_once()
     assert last_called_thread == threading.current_thread().ident

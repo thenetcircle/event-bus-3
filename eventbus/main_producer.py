@@ -22,7 +22,9 @@ producer = EventProducer("app_http", config.get().app.producer.use_producers)
 
 async def startup():
     logger.info("The app is starting up")
-    await config_watcher.async_watch_config_file(config.get().config_file_path)
+    await config_watcher.async_watch_config_file(
+        config.get().config_file_path, checking_interval=3
+    )
     await topic_resolver.init()
     await producer.init()
 
