@@ -59,7 +59,6 @@ class DefaultKafkaConfig(ConfigModel):
 
 
 class ProducerConfig(ConfigModel):
-    max_retries: int = 3
     kafka_config: Optional[Dict[str, str]] = None
 
 
@@ -89,16 +88,11 @@ class AppProducerConfig(ConfigModel):
     max_response_time: int = 3
 
 
-class AppConsumerConfig(ConfigModel):
-    deferred_start_time: int = 0
-
-
 class AppConfig(ConfigModel):
     project_id: StrictStr
     env: Env
     debug: bool
     producer: AppProducerConfig
-    consumer: AppConsumerConfig
 
 
 class Config(ConfigModel):
@@ -107,7 +101,8 @@ class Config(ConfigModel):
     consumers: Dict[str, ConsumerConfig]
     topic_mapping: List[TopicMapping]
     last_update_time: Optional[float] = None
-    default_kafka_config: Optional[DefaultKafkaConfig] = None
+    default_producer_config: Optional[Dict[str, Any]] = None
+    default_consumer_config: Optional[Dict[str, Any]] = None
     config_file_path: Optional[str] = None
     sentry_dsn: Optional[str] = None
 
@@ -134,7 +129,8 @@ def update_from_dict(data: Dict[str, Any], log=True) -> None:
         logger.info("Going to update config from dict: {}", data)
 
     try:
-        new_config = _fill_config(Config(**data))
+        merged_data = _merge_default_config(data)
+        new_config = Config(**merged_data)
     except Exception as ex:
         raise ConfigUpdateError(str(ex))
 
@@ -271,30 +267,26 @@ def _update_config(config: Config) -> None:
     _config = config.copy(update={"last_update_time": datetime.now().timestamp()})
 
 
-def _fill_config(config: Config) -> Config:
-    if config.default_kafka_config:
-        default_kafka_producer_config = config.default_kafka_config.producer or {}
-        default_kafka_consumer_config = config.default_kafka_config.consumer or {}
-    else:
-        default_kafka_producer_config = {}
-        default_kafka_consumer_config = {}
+def _merge_default_config(data: Dict[str, Any]) -> Dict[str, Any]:
+    def deep_merge_two_dict(dict1, dict2):
+        for key, val in dict1.items():
+            if isinstance(val, dict):
+                dict2_node = dict2.setdefault(key, {})
+                deep_merge_two_dict(val, dict2_node)
+            else:
+                if key not in dict2:
+                    dict2[key] = val
+        return dict2
 
-    config_dict = config.dict()
-
-    for p_name, p_config in config_dict["producers"].items():
-        config_dict["producers"][p_name]["kafka_config"] = {
-            **default_kafka_producer_config,
-            **(p_config["kafka_config"] or {}),
-        }
-    for c_name, c_config in config_dict["consumers"].items():
-        merged_kafka_consumer_config = {
-            **default_kafka_consumer_config,
-            **(c_config["kafka_config"] or {}),
-        }
-        if "group.id" not in merged_kafka_consumer_config:
-            merged_kafka_consumer_config[
-                "group.id"
-            ] = f"event-bus-3-consumer-{config.app.project_id}-{config.app.env}-{c_name}"
-        config_dict["consumers"][c_name]["kafka_config"] = merged_kafka_consumer_config
-
-    return Config(**config_dict)
+    new_data = data.copy()
+    if "default_producer_config" in data:
+        for p_name, p_config in data["producers"].items():
+            new_data["producers"][p_name] = deep_merge_two_dict(
+                data["default_producer_config"], p_config
+            )
+    if "default_consumer_config" in data:
+        for c_name, c_config in data["consumers"].items():
+            new_data["consumers"][c_name] = deep_merge_two_dict(
+                data["default_consumer_config"], c_config
+            )
+    return new_data

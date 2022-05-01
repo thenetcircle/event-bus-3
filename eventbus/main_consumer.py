@@ -54,9 +54,6 @@ async def run_consumer(consumer: EventConsumer):
     loop.add_signal_handler(signal.SIGUSR1, update_config_callback)
 
     await consumer.init()
-    # waiting for all other consumers to be started before run
-    if config.get().app.consumer.deferred_start_time > 0:
-        await asyncio.sleep(config.get().app.consumer.deferred_start_time)
     await consumer.run()
 
 

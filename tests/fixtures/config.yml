@@ -6,21 +6,14 @@ app:
     use_producers:
       producer_ids: [ p1 ]
     max_response_time: 1
-  consumer:
-    deferred_start_time: 10
 
-default_kafka_config:
-  producer:
+default_producer_config:
+  kafka_config:
     "enable.idempotence": "true"
     "acks": "all"
     "max.in.flight.requests.per.connection": "5"
     "retries": "3"
     "delivery.timeout.ms": "2000" # 1 seconds
-  consumer:
-    "bootstrap.servers": "localhost:12811"
-    "enable.auto.commit": "false"
-    "auto.offset.reset": "latest"
-    "max.poll.interval.ms": "50"
 
 producers:
   p1:
@@ -33,6 +26,17 @@ producers:
       "bootstrap.servers": "localhost:12811"
       "compression.type": "gzip"
 
+default_consumer_config:
+  kafka_config:
+    "bootstrap.servers": "localhost:12811"
+    "enable.auto.commit": "false"
+    "auto.offset.reset": "latest"
+    "max.poll.interval.ms": "50"
+  sink:
+    url: http://localhost:8001
+    method: POST
+    timeout: 5
+
 consumers:
   c1:
     kafka_topics: [ "topic1" ]
@@ -42,10 +46,6 @@ consumers:
     include_events: [ test\..* ]
     use_producers:
       producer_ids: [ p1 ]
-    sink:
-      url: http://localhost:8001
-      method: POST
-      timeout: 5
   c2:
     kafka_topics: [ "topic2" ]
     kafka_config:
@@ -55,8 +55,6 @@ consumers:
     use_producers:
       producer_ids: [ p2 ]
     sink:
-      url: http://localhost:8002
-      method: POST
       timeout: 10
 
 topic_mapping:

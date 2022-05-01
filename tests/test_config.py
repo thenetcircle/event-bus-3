@@ -83,7 +83,7 @@ def test_config_reset():
 
 
 @pytest.mark.noconfig
-def test_fill_config(tmpdir, mocker):
+def test_merge_default_config(tmpdir, mocker):
     config_path = Path(__file__).parent / "fixtures" / "config.yml"
     config.update_from_yaml(config_path)
 
@@ -93,18 +93,29 @@ def test_fill_config(tmpdir, mocker):
     assert _config.producers["p1"].kafka_config["enable.idempotence"] == "false"
     assert _config.producers["p1"].kafka_config["compression.type"] == "none"
     assert _config.producers["p1"].kafka_config["acks"] == "all"
+
     assert len(_config.producers["p2"].kafka_config) == 7
     assert _config.producers["p2"].kafka_config["enable.idempotence"] == "true"
     assert _config.producers["p2"].kafka_config["compression.type"] == "gzip"
     assert _config.producers["p2"].kafka_config["acks"] == "all"
 
     assert len(_config.consumers["c1"].kafka_config) == 5
+    assert _config.consumers["c1"].kafka_topics == ["topic1"]
     assert _config.consumers["c1"].kafka_config["group.id"] == "group1"
     assert _config.consumers["c1"].kafka_config["max.poll.interval.ms"] == "300100"
     assert _config.consumers["c1"].kafka_config["enable.auto.commit"] == "false"
+    assert _config.consumers["c1"].include_events == ["test\\..*"]
+    assert _config.consumers["c1"].sink.url == "http://localhost:8001"
+    assert _config.consumers["c1"].sink.timeout == 5
+
+    assert len(_config.consumers["c2"].kafka_config) == 5
+    assert _config.consumers["c2"].kafka_topics == ["topic2"]
     assert _config.consumers["c2"].kafka_config["group.id"] == "group2"
     assert _config.consumers["c2"].kafka_config["max.poll.interval.ms"] == "300080"
     assert _config.consumers["c2"].kafka_config["enable.auto.commit"] == "false"
+    assert _config.consumers["c2"].include_events == ["test2\\..*"]
+    assert _config.consumers["c2"].sink.url == "http://localhost:8001"
+    assert _config.consumers["c2"].sink.timeout == 10
 
 
 @pytest.mark.asyncio

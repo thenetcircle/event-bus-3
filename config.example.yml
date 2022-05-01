@@ -1,5 +1,3 @@
-# last_update_time: 1648880402 # from: int(time.time()), this must be in first online
-
 app:
   project_id: example
   env: test
@@ -9,13 +7,11 @@ app:
     use_producers:
       producer_ids: [p1]
     max_response_time: 5
-  consumer:
-    deferred_start_time: 0
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-default_kafka_config:
-  producer:
+default_producer_config:
+  kafka_config:
     "enable.idempotence": "true"
     "delivery.timeout.ms": "1500" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
     "acks": "all"
@@ -23,7 +19,17 @@ default_kafka_config:
     "metadata.max.age.ms": "180000"
     "partitioner": "consistent_random"
     "compression.codec": "none"
-  consumer:
+
+producers:
+  p1:
+    kafka_config:
+      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
+  p2:
+    kafka_config:
+      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+
+default_consumer_config:
+  kafka_config:
     "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.auto.commit": "false"
     "enable.auto.offset.store": "false"
@@ -36,14 +42,6 @@ default_kafka_config:
     "session.timeout.ms": "60000" # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
     "allow.auto.create.topics": "true" # doesn't work
     "partition.assignment.strategy": "cooperative-sticky"
-
-producers:
-  p1:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
-  p2:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
 
 consumers:
   c1:

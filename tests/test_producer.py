@@ -113,7 +113,6 @@ async def test_config_change_signal(mocker: MockFixture):
         update_config_mock.assert_called_once()
         update_config_mock.assert_called_with(
             ProducerConfig(
-                max_retries=3,
                 kafka_config={
                     **config.get().producers[p_id].kafka_config,
                     **{"bootstrap.servers": "88888"},

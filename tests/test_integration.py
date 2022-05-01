@@ -128,7 +128,6 @@ async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFi
         update_config_spy.assert_called_once()
         update_config_spy.assert_called_with(
             ProducerConfig(
-                max_retries=3,
                 kafka_config={
                     **config.get().producers["p1"].kafka_config,
                     **{"retries": "2222"},
@@ -217,7 +216,7 @@ async def test_consumer(
 
             await asyncio.sleep(0.1)
 
-    await asyncio.wait_for(asyncio.gather(consumer.run(), check_reqs()), timeout=30.0)
+    await asyncio.wait_for(asyncio.gather(consumer.run(), check_reqs()), timeout=60.0)
 
     assert len(received_reqs) == events_num
     assert sorted([int(r["id"]) for r in received_reqs]) == [
