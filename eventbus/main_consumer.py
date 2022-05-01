@@ -25,7 +25,7 @@ def consumer_main(consumer_id: str, config_file_path: str):
         raise EventConsumerNotFoundError
 
     consumer_conf = config.get().consumers[consumer_id]
-    consumer = EventConsumer(consumer_id, consumer_conf)
+    consumer = EventConsumer(f"{consumer_id}_{socket.gethostname()}", consumer_conf)
 
     # run consumer
     asyncio.run(run_consumer(consumer))
