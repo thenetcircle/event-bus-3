@@ -35,6 +35,7 @@ default_kafka_config:
     "heartbeat.interval.ms": "3000"
     "session.timeout.ms": "60000" # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
     "allow.auto.create.topics": "true" # doesn't work
+    "partition.assignment.strategy": "cooperative-sticky"
 
 producers:
   p1:

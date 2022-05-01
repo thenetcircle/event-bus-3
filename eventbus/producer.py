@@ -26,19 +26,19 @@ class EventProducer:
         return self._caller_id
 
     @property
-    def full_name(self) -> str:
+    def fullname(self) -> str:
         return f"EventProducer#{self.caller_id}"
 
     async def init(self) -> None:
-        logger.info("{} is initing", self.full_name)
+        logger.info("{} is initing", self.fullname)
         await self._init_producers()
         self._loop = asyncio.get_running_loop()
-        logger.info("{} is inited", self.full_name)
+        logger.info("{} is inited", self.fullname)
 
     async def close(self):
-        logger.info("{} is closing", self.full_name)
+        logger.info("{} is closing", self.fullname)
         await asyncio.gather(*[p.close() for p in self._producers])
-        logger.warning("{} is closed", self.full_name)
+        logger.warning("{} is closed", self.fullname)
 
     async def produce(self, topic: str, event: Event) -> Message:
         """
@@ -46,7 +46,7 @@ class EventProducer:
         """
         if not self._producers or not self._loop:
             raise InitProducerError(
-                f"Need init producers of {self.full_name} before call the produce method."
+                f"Need init producers of {self.fullname} before call the produce method."
             )
 
         start_time = time.time()

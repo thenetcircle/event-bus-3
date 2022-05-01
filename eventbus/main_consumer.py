@@ -1,6 +1,7 @@
 import asyncio
 import os
 import signal
+import socket
 from multiprocessing import Process
 from time import sleep, time
 from typing import Dict, List, Set
@@ -98,7 +99,7 @@ def main():
         logger.info("Starting new consumer {}", consumer_id)
         p = Process(
             target=consumer_main,
-            name=f"Consumer#{consumer_id}",
+            name=f"Consumer#{consumer_id}_{socket.gethostname()}",
             args=(consumer_id, config.get().config_file_path),
             daemon=True,
         )

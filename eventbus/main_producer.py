@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from typing import List, Union
 
 from confluent_kafka import Message
@@ -17,7 +18,9 @@ from eventbus.utils import setup_logger
 config.load_from_environ()
 setup_logger()
 topic_resolver = TopicResolver()
-producer = EventProducer("app_http", config.get().app.producer.use_producers)
+producer = EventProducer(
+    f"app_http_{socket.gethostname()}", config.get().app.producer.use_producers
+)
 
 
 async def startup():

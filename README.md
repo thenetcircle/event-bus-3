@@ -46,11 +46,11 @@ Traceback (most recent call last):
 asyncio.exceptions.InvalidStateError: invalid state
 [2022-04-03 22:54:21 +0800] [74503] [INFO] Handling signal: winch
 ```
-
+- 
 - check filemtime on kubenetes [y]
 - refactor to use filemtime [y]
+- test changing the delay rebalance parameter on broker config
 - improve config structure
-- test delay rebalance on local
 - refactor commit offset to use store
 
 FOLLOWING PLAN:

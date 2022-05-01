@@ -35,6 +35,10 @@ class EventConsumer:
         return self._id
 
     @property
+    def fullname(self) -> str:
+        return f"EventConsumer#{self._id}"
+
+    @property
     def config(self) -> ConsumerConfig:
         return self._config
 
@@ -48,7 +52,7 @@ class EventConsumer:
         self,
     ) -> None:
         try:
-            logger.info("Running KafkaConsumer#{}", self.id)
+            logger.info("Running {}", self.fullname)
 
             start_time = time.time()
 
@@ -61,8 +65,8 @@ class EventConsumer:
             )
         except Exception as ex:
             logger.error(
-                "EventConsumer#{}'s run failed by error: <{}> {}",
-                self.id,
+                "{}'s run failed by error: <{}> {}",
+                self.fullname,
                 type(ex).__name__,
                 ex,
             )
@@ -71,15 +75,15 @@ class EventConsumer:
         finally:
             await self.cancel()
             logger.warning(
-                "EventConsumer#{} runs over after {} seconds",
-                self.id,
+                "{} runs over after {} seconds",
+                self.fullname,
                 time.time() - start_time,
             )
 
     async def cancel(self) -> None:
         if not self._cancelling:
             self._cancelling = True
-            logger.info("Cancelling EventConsumer#{}", self.id)
+            logger.info("Cancelling {}", self.fullname)
 
             cancelling_tasks = [self._consumer.close(), self._sink.close()]
 
@@ -94,8 +98,8 @@ class EventConsumer:
             )
 
             logger.info(
-                "Cancelled EventConsumer#{}. send_queue: {}; commit_queue: {}. cancel_results: {}",
-                self.id,
+                "Cancelled {}. send_queue: {}; commit_queue: {}. cancel_results: {}",
+                self.fullname,
                 self._send_queue.async_q.qsize(),
                 self._commit_queue.async_q.qsize(),
                 cancel_results,
@@ -130,15 +134,15 @@ class EventConsumer:
 
         except asyncio.CancelledError:
             logger.info(
-                "_wait_events of EventConsumer#{} is cancelled. send_queue: {}",
-                self.id,
+                'method "_wait_events" of {} is cancelled. send_queue: {}',
+                self.fullname,
                 self._send_queue.async_q.qsize(),
             )
 
         except Exception as ex:
             logger.error(
-                "_wait_events of EventConsumer#{} is aborted by <{}> {}. send_queue: {}",
-                self.id,
+                'method "_wait_events" of {} is aborted by <{}> {}. send_queue: {}',
+                self.fullname,
                 type(ex).__name__,
                 ex,
                 self._send_queue.async_q.qsize(),
@@ -150,7 +154,11 @@ class EventConsumer:
         tp_name: str,
         tp_queue: AsyncioQueue,
     ) -> None:
-        logger.info(f"Start _send_tp_events of tp#{tp_name} of EventConsumer#{self.id}")
+        logger.info(
+            'method "_send_tp_events" of tp#{} of {} is starting',
+            tp_name,
+            self.fullname,
+        )
 
         try:
             while True:
@@ -180,17 +188,17 @@ class EventConsumer:
 
         except asyncio.CancelledError:
             logger.info(
-                "_send_tp_events of tp#{} of EventConsumer#{} is cancelled. tp_queue: {}",
+                'method "_send_tp_events" of tp#{} of {} is cancelled. tp_queue: {}',
                 tp_name,
-                self.id,
+                self.fullname,
                 tp_queue.qsize(),
             )
 
         except Exception as ex:
             logger.error(
-                "_send_tp_events of tp#{} of EventConsumer#{} is aborted by <{}> {}. tp_queue: {}",
+                'method "_send_tp_events" of tp#{} of {} is aborted by <{}> {}. tp_queue: {}',
                 tp_name,
-                self.id,
+                self.fullname,
                 type(ex).__name__,
                 ex,
                 tp_queue.qsize(),
@@ -220,12 +228,20 @@ class KafkaConsumer:
     def id(self):
         return self._id
 
+    @property
+    def fullname(self) -> str:
+        return f"KafkaConsumer#{self._id}"
+
     async def init(self) -> None:
         self._loop = asyncio.get_running_loop()
+
+        consumer_kafka_config = self._config.kafka_config
+        consumer_kafka_config["group.instance.id"] = self.id
         self._internal_consumer = Consumer(
-            self._config.kafka_config,
-            logger=logging.getLogger(f"KafkaConsumer#{self.id}"),
+            consumer_kafka_config,
+            logger=logging.getLogger(self.fullname),
         )
+
         self._internal_consumer.subscribe(
             self._config.kafka_topics,
             on_assign=self._on_assign,
@@ -238,7 +254,7 @@ class KafkaConsumer:
         if not self._is_closed:
             try:
                 self._is_closed = True
-                logger.info("Closing KafkaConsumer#{}", self.id)
+                logger.info("Closing {}", self.fullname)
 
                 while self._is_committing_events:
                     await asyncio.sleep(0.1)
@@ -249,16 +265,16 @@ class KafkaConsumer:
                 while self._is_fetching_events:
                     await asyncio.sleep(0.1)
 
-                logger.info("going to close producer")
+                logger.info("Going to close Producer {}", self._event_producer.fullname)
 
                 await self._event_producer.close()
 
-                logger.info("Closed KafkaConsumer#{}", self.id)
+                logger.info("Closed {}", self.fullname)
 
             except Exception as ex:
                 logger.error(
-                    "Closing KafakConsumer#{} failed with error: <{}> {}",
-                    self.id,
+                    "Closing {} failed with error: <{}> {}",
+                    self.fullname,
                     type(ex).__name__,
                     ex,
                 )
@@ -267,7 +283,7 @@ class KafkaConsumer:
         self,
         send_queue: JanusQueue[KafkaEvent],
     ):
-        logger.info("fetch_events of KafkaConsumer#{} is starting")
+        logger.info('method "fetch_events" of {} is starting', self.fullname)
 
         try:
             self._is_fetching_events = True
@@ -275,11 +291,11 @@ class KafkaConsumer:
                 None, self._internal_fetch_events, send_queue
             )
         except ClosedError:
-            logger.info("fetch_events of KafkaConsumer#{} is closed", self.id)
+            logger.info('method "fetch_events" of {} is closed', self.fullname)
         except Exception as ex:
             logger.error(
-                "fetch_events of KafkaConsumer#{} is aborted by: <{}> {}",
-                self.id,
+                'method "fetch_events" of {} is aborted by: <{}> {}',
+                self.fullname,
                 type(ex).__name__,
                 ex,
             )
@@ -290,7 +306,7 @@ class KafkaConsumer:
     async def commit_events(
         self, commit_queue: JanusQueue[Tuple[KafkaEvent, EventProcessStatus]]
     ):
-        logger.info("commit_events of KafkaConsumer#{} is starting")
+        logger.info('method "commit_events" of {} is starting', self.fullname)
 
         try:
             self._is_committing_events = True
@@ -298,12 +314,12 @@ class KafkaConsumer:
                 None, self._internal_commit_events, commit_queue
             )
         except ClosedError:
-            logger.info("commit_events of KafkaConsumer#{} is closed", self.id)
+            logger.info('method of "commit_events" of {} is closed', self.fullname)
 
         except Exception as ex:
             logger.error(
-                "commit_events of KafkaConsumer#{} is aborted by: <{}> {}",
-                self.id,
+                'method "commit_events" of {} is aborted by: <{}> {}',
+                self.fullname,
                 type(ex).__name__,
                 ex,
             )
@@ -444,22 +460,22 @@ class KafkaConsumer:
 
     def _on_assign(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
-            'KafkaConsumer#{} get assigned new TopicPartitions: "{}"',
-            self.id,
+            '{} get assigned new TopicPartitions: "{}"',
+            self.fullname,
             partitions,
         )
 
     def _on_revoke(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
-            'KafkaConsumer#{} get revoked TopicPartitions: "{}"',
-            self.id,
+            '{} get revoked TopicPartitions: "{}"',
+            self.fullname,
             partitions,
         )
 
     def _on_lost(self, consumer: Consumer, partitions: List[TopicPartition]) -> None:
         logger.info(
-            'KafkaConsumer#{} lost TopicPartitions: "{}"',
-            self.id,
+            '{} lost TopicPartitions: "{}"',
+            self.fullname,
             partitions,
         )
 
