@@ -25,7 +25,9 @@ def consumer_main(consumer_id: str, config_file_path: str):
         raise EventConsumerNotFoundError
 
     consumer_conf = config.get().consumers[consumer_id]
-    consumer = EventConsumer(f"{consumer_id}_{socket.gethostname()}", consumer_conf)
+    consumer = EventConsumer(
+        consumer_id, consumer_conf, name=f"{consumer_id}_{socket.gethostname()}"
+    )
 
     # run consumer
     asyncio.run(run_consumer(consumer))
@@ -35,15 +37,13 @@ async def run_consumer(consumer: EventConsumer):
     loop = asyncio.get_event_loop()
 
     def term_callback():
-        logger.info(
-            "Get TERM signals, going to terminate the consumer {}.", consumer.id
-        )
+        logger.info("Get TERM signals, going to terminate {}.", consumer.fullname)
         asyncio.run_coroutine_threadsafe(consumer.cancel(), loop)
 
     def update_config_callback():
         logger.info(
-            "Get Config Updated signals, going to reload the config for consumer {}.",
-            consumer.id,
+            "Get Config Updated signals, going to reload the config for {}.",
+            consumer.fullname,
         )
         config.reload()
         config.send_signals()

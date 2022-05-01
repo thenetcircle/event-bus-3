@@ -11,6 +11,7 @@ from confluent_kafka import Consumer, KafkaException, Message, TopicPartition
 from janus import Queue as JanusQueue
 from loguru import logger
 
+from eventbus import config
 from eventbus.config import ConsumerConfig
 from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
@@ -19,8 +20,11 @@ from eventbus.sink import HttpSink, Sink
 
 
 class EventConsumer:
-    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
-        self._id = consumer_id
+    def __init__(
+        self, id: str, consumer_conf: ConsumerConfig, name: Optional[str] = None
+    ):
+        self._id = id
+        self._name = name or id
 
         if consumer_conf.disabled:
             raise RuntimeError(
@@ -28,8 +32,8 @@ class EventConsumer:
             )
         self._config = consumer_conf
 
-        self._consumer = KafkaConsumer(consumer_id, consumer_conf)
-        self._sink: Sink = HttpSink(consumer_id, consumer_conf)
+        self._consumer = KafkaConsumer(self.id, consumer_conf, name=self.name)
+        self._sink: Sink = HttpSink(self.name, consumer_conf)
         self._cancelling = False
         self._wait_task = None
         self._tp_tasks = []
@@ -41,12 +45,12 @@ class EventConsumer:
         return self._id
 
     @property
-    def fullname(self) -> str:
-        return f"EventConsumer#{self._id}"
+    def name(self) -> str:
+        return self._name
 
     @property
-    def config(self) -> ConsumerConfig:
-        return self._config
+    def fullname(self) -> str:
+        return f"EventConsumer#{self.name}"
 
     async def init(self) -> None:
         await self._consumer.init()
@@ -217,8 +221,14 @@ class EventConsumer:
 
 
 class KafkaConsumer:
-    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
-        self._id = consumer_id
+    def __init__(
+        self,
+        id: str,
+        consumer_conf: ConsumerConfig,
+        name: Optional[str] = None,
+    ):
+        self._id = id
+        self._name = name or id
         self._check_config(consumer_conf)
         self._config = consumer_conf
         self._is_closed = False
@@ -226,7 +236,7 @@ class KafkaConsumer:
         self._is_fetching_events = False
         self._is_committing_events = False
         self._event_producer = EventProducer(
-            f"consumer_{consumer_id}", consumer_conf.use_producers
+            f"consumer_{id}", consumer_conf.use_producers
         )
         self._loop: AbstractEventLoop = None
 
@@ -235,14 +245,23 @@ class KafkaConsumer:
         return self._id
 
     @property
+    def name(self):
+        return self._name
+
+    @property
     def fullname(self) -> str:
-        return f"KafkaConsumer#{self._id}"
+        return f"KafkaConsumer#{self.name}"
 
     async def init(self) -> None:
         self._loop = asyncio.get_running_loop()
 
-        consumer_kafka_config = self._config.kafka_config
-        consumer_kafka_config["group.instance.id"] = self.id
+        consumer_kafka_config = self._config.kafka_config.copy()
+        if "group.id" not in consumer_kafka_config:
+            consumer_kafka_config[
+                "group.id"
+            ] = f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
+        if self.name != self.id:
+            consumer_kafka_config["group.instance.id"] = self.name
         self._internal_consumer = Consumer(
             consumer_kafka_config,
             logger=logging.getLogger(self.fullname),
@@ -526,9 +545,5 @@ class KafkaConsumer:
         kafka_config = consumer_conf.kafka_config
         if "bootstrap.servers" not in kafka_config:
             raise InvalidArgumentError('"bootstrap.servers" is needed')
-        if "group.id" not in kafka_config:
-            raise InvalidArgumentError('"group.id" is needed')
-
-        # enable.auto.commit
-        # auto.offset.reset
-        # Note that ‘enable.auto.offset.store’ must be set to False when using this API. <- https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.store_offsets
+        # if "group.id" not in kafka_config:
+        #     raise InvalidArgumentError('"group.id" is needed')

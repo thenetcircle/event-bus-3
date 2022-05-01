@@ -28,8 +28,8 @@ class Sink(ABC):
 
 
 class HttpSink(Sink):
-    def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
-        self._consumer_id = consumer_id
+    def __init__(self, consumer_name: str, consumer_conf: ConsumerConfig):
+        self._consumer_name = consumer_name
         self._config = consumer_conf
         self._client: Optional[ClientSession] = None
 
@@ -37,11 +37,15 @@ class HttpSink(Sink):
         self._timeout = aiohttp.ClientTimeout(total=self._config.sink.timeout)
 
     @property
-    def consumer_id(self):
-        return self._consumer_id
+    def consumer_name(self):
+        return self._consumer_name
+
+    @property
+    def fullname(self):
+        return f"HttpSink#{self.consumer_name}"
 
     async def init(self):
-        logger.info("Initing HttpSink#{}", self.consumer_id)
+        logger.info("Initing {}", self.fullname)
         self._client = ClientSession()
 
     async def send_event(
@@ -65,7 +69,7 @@ class HttpSink(Sink):
                         resp_body = await resp.text()
                         if resp_body == "ok":
                             logger.info(
-                                'That sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
+                                'Sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
                                 event,
                                 req_url,
                                 self._get_cost_time(start_time),
@@ -77,7 +81,7 @@ class HttpSink(Sink):
                             # retry logic
                             if retry_times >= self._max_retry_times:
                                 logger.info(
-                                    'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
                                     event,
                                     req_url,
                                     retry_times,
@@ -91,7 +95,7 @@ class HttpSink(Sink):
                         else:
                             # unexpected resp
                             logger.warning(
-                                'That sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
+                                'Sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
                                 event,
                                 req_url,
                                 self._get_cost_time(start_time),
@@ -101,7 +105,7 @@ class HttpSink(Sink):
 
                     else:
                         logger.warning(
-                            'That sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
+                            'Sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
                             event,
                             req_url,
                             self._get_cost_time(start_time),
@@ -111,7 +115,7 @@ class HttpSink(Sink):
                         # non-200 status code, use retry logic
                         if retry_times >= self._max_retry_times:
                             logger.info(
-                                'That sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
                                 event,
                                 req_url,
                                 retry_times,
@@ -131,7 +135,7 @@ class HttpSink(Sink):
             ) as ex:
                 sleep_time = self._get_backoff_sleep_time(retry_times)
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'Sending an event "{}" to "{}" failed in {} seconds after {} retries '
                     'because of "{}", details: {}, '
                     "will retry after {} seconds",
                     event,
@@ -154,7 +158,7 @@ class HttpSink(Sink):
                 # at least we shouldn't block other subsequence events
                 # so just return retry_later
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'Sending an event "{}" to "{}" failed in {} seconds after {} retries '
                     'because of "{}", details: {}',
                     event,
                     req_url,
@@ -169,7 +173,7 @@ class HttpSink(Sink):
             except Exception as ex:
                 sleep_time = self._get_backoff_sleep_time(retry_times)
                 logger.error(
-                    'That sending an event "{}" to "{}" failed in {} seconds after {} retries '
+                    'Sending an event "{}" to "{}" failed in {} seconds after {} retries '
                     'because of a unknown exception "{}", details : {}, '
                     "will retry after {} seconds",
                     event,
@@ -188,12 +192,12 @@ class HttpSink(Sink):
 
     async def close(self):
         if self._client:
-            logger.info("Closing HttpSink#{}", self.consumer_id)
+            logger.info("Closing {}", self.fullname)
 
             await self._client.close()
             self._client = None
 
-            logger.info("HttpSink#{} is closed", self.consumer_id)
+            logger.info("{} is closed", self.fullname)
 
     def _get_backoff_sleep_time(self, retry_times: int) -> float:
         return min(
