@@ -21,7 +21,13 @@ from eventbus.sink import HttpSink, Sink
 class EventConsumer:
     def __init__(self, consumer_id: str, consumer_conf: ConsumerConfig):
         self._id = consumer_id
+
+        if consumer_conf.disabled:
+            raise RuntimeError(
+                f"{self.fullname} is disabled, not allowed to be constructed."
+            )
         self._config = consumer_conf
+
         self._consumer = KafkaConsumer(consumer_id, consumer_conf)
         self._sink: Sink = HttpSink(consumer_id, consumer_conf)
         self._cancelling = False

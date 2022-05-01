@@ -71,9 +71,6 @@ class ConsumerConfig(ConfigModel):
     kafka_topics: List[StrictStr]
     use_producers: UseProducersConfig
     sink: HttpSinkConfig
-    kafka_config: Optional[Dict[str, str]] = None
-    include_events: Optional[List[StrictStr]] = None
-    exclude_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
     send_queue_size: int = 100
     commit_queue_size: int = 50
@@ -81,6 +78,11 @@ class ConsumerConfig(ConfigModel):
     max_produce_retries = 3
     max_commit_retries = 3
     max_skipped_events = 100
+    disabled = False
+    kafka_config: Optional[Dict[str, str]] = None
+    include_events: Optional[List[StrictStr]] = None
+    exclude_events: Optional[List[StrictStr]] = None
+    version: Optional[str] = None
 
 
 class AppProducerConfig(ConfigModel):

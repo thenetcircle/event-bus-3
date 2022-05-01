@@ -84,7 +84,7 @@ def main():
 
     consumer_procs: Dict[str, Process] = {}
 
-    def start_new_consumer(consumer_id):
+    def start_new_consumer(consumer_id: str):
         if consumer_id in consumer_procs and consumer_procs[consumer_id].is_alive():
             # TODO trigger alert on all errors
             logger.error(
@@ -102,6 +102,19 @@ def main():
         )
         p.start()
         consumer_procs[consumer_id] = p
+
+    def stop_consumer(consumer_id: str, waiting_seconds: int):
+        p = consumer_procs[consumer_id]
+        if p.is_alive():
+            logger.warning("Sending SIGTERM to {}", p)
+            os.kill(p.pid, signal.SIGTERM)
+
+            t = time()
+            while p.is_alive():
+                if time() > t + waiting_seconds:
+                    logger.warning("Sending SIGKILL to {}", p)
+                    p.kill()
+                sleep(0.1)
 
     for consumer_id, _ in config.get().consumers.items():
         start_new_consumer(consumer_id)
@@ -121,10 +134,10 @@ def main():
         sender, added: Set[str], removed: Set[str], changed: Set[str]
     ):
         if changed:
-            for _, proc in consumer_procs.items():
-                if proc.is_alive():
-                    logger.warning("Sending SIGUSR1 to {}", proc)
-                    os.kill(proc.pid, signal.SIGUSR1)
+            for _, p in consumer_procs.items():
+                if p.is_alive():
+                    logger.warning("Sending SIGUSR1 to {}", p)
+                    os.kill(p.pid, signal.SIGUSR1)
 
     def handle_consumer_config_change_signal(
         sender, added: Set[str], removed: Set[str], changed: Set[str]
@@ -134,25 +147,13 @@ def main():
 
         removed_cids = removed.intersection(list(consumer_procs.keys()))
         for cid in removed_cids:
-            p = consumer_procs[cid]
-            if p.is_alive():
-                logger.warning("Sending SIGTERM to {}", p)
-                os.kill(p.pid, signal.SIGTERM)
+            stop_consumer(cid, waiting_seconds=grace_term_period)
 
         changed_cids = changed.intersection(list(consumer_procs.keys()))
         for cid in changed_cids:
-            p = consumer_procs[cid]
-            if p.is_alive():
-                logger.warning("Sending SIGTERM to {}", p)
-                os.kill(p.pid, signal.SIGTERM)
-
-                t = time()
-                while p.is_alive():
-                    if time() > t + grace_term_period:
-                        logger.warning("Sending SIGKILL to {}", p)
-                        p.kill()
-                    sleep(0.01)
-            start_new_consumer(cid)
+            stop_consumer(cid, waiting_seconds=grace_term_period)
+            if not config.get().consumers[cid].disabled:
+                start_new_consumer(cid)
 
     config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
     config.ConfigSignals.CONSUMER_CHANGE.connect(handle_consumer_config_change_signal)
@@ -160,7 +161,7 @@ def main():
     # --- monitor config change and sub-processes ---
 
     def get_alive_procs() -> List[Process]:
-        return [proc for proc in list(consumer_procs.values()) if proc.is_alive()]
+        return [p for p in list(consumer_procs.values()) if p.is_alive()]
 
     local_config_last_update_time = config.get().last_update_time
     watch_config_file(config.get().config_file_path, checking_interval=3)

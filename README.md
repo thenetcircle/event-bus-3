@@ -9,7 +9,7 @@ x test producer
 x test topic_resolver
 x test signals on producer and topic_resolver 
 x remove old configs
-- try k8s, confirm the deployment and config change strategies
+x try k8s, confirm the deployment and config change strategies
 x try app_consumer update config
 x add producer into consumer 
 x complete app_consumer
@@ -20,13 +20,13 @@ x consumer config changes, and config producer config changes
 x if consumer downstream blocks, will the upstream be waiting? 
 x producer log with caller id
 - Sentry
-- test consumer abnormal cases
+x test consumer abnormal cases
 x test consumer for new created topics
 x try config map updates
 x fix the config change function
   d split config files
   x make sure if that the config is invalid does not affect running status    
-- k8s scripts
+x k8s scripts
 x after update producer config -- can not reproduce
 ```shell
 Exception in callback <built-in method set_exception of _asyncio.Future object at 0x1067917c0>
@@ -46,17 +46,17 @@ Traceback (most recent call last):
 asyncio.exceptions.InvalidStateError: invalid state
 [2022-04-03 22:54:21 +0800] [74503] [INFO] Handling signal: winch
 ```
-- check filemtime on kubenetes [y]
-- refactor to use filemtime [y]
-- test changing the delay rebalance parameter on broker config [y]
-- improve config structure
+x check filemtime on kubenetes 
+x refactor to use filemtime
+x test changing the delay rebalance parameter on broker config
+x improve config structure
+x add consumer status (enable or disable)
 - refactor commit offset to use store
-- add consumer status (enable or disable)
 
 FOLLOWING PLAN:
-- lab env
-- staging and prod env
-- new kafka cluster
+x lab env
+x staging and prod env
+x new kafka cluster
 - consume from backup cluster
 - CI/CD
 - monitoring
