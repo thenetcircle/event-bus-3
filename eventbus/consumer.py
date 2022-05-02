@@ -231,6 +231,7 @@ class KafkaConsumer:
         self._name = name or id
         self._check_config(consumer_conf)
         self._config = consumer_conf
+        self._kafka_group_id = self._get_group_id()
         self._is_closed = False
         self._internal_consumer: Optional[Consumer] = None
         self._is_fetching_events = False
@@ -256,10 +257,7 @@ class KafkaConsumer:
         self._loop = asyncio.get_running_loop()
 
         consumer_kafka_config = self._config.kafka_config.copy()
-        if "group.id" not in consumer_kafka_config:
-            consumer_kafka_config[
-                "group.id"
-            ] = f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
+        consumer_kafka_config["group.id"] = self._kafka_group_id
         if self.name != self.id:
             consumer_kafka_config["group.instance.id"] = self.name
         self._internal_consumer = Consumer(
@@ -460,7 +458,7 @@ class KafkaConsumer:
                         '[EventsCommitting] Consumer group "{}" '
                         'has stored offsets "{}" (from events: "{}") to the offset-store '
                         "after {} times retries.",
-                        self._config.kafka_config["group.id"],
+                        self._kafka_group_id,
                         offsets,
                         event,
                         current_commit_retries,
@@ -522,6 +520,13 @@ class KafkaConsumer:
             raise ClosedError
 
         return True
+
+    def _get_group_id(self):
+        return (
+            self._config.kafka_config["group.id"]
+            if "group.id" in self._config.kafka_config
+            else f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
+        )
 
     @staticmethod
     def _get_retry_topic(event: KafkaEvent) -> str:
