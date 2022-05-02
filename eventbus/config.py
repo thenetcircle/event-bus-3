@@ -73,10 +73,10 @@ class ConsumerConfig(ConfigModel):
     sink: HttpSinkConfig
     concurrent_per_partition: int = 1
     send_queue_size: int = 100
-    commit_queue_size: int = 50
+    commit_queue_size: int = 10
     tp_queue_size: int = 3
     max_produce_retries = 3
-    max_commit_retries = 3
+    max_commit_retries = 2
     max_skipped_events = 100
     disabled = False
     kafka_config: Optional[Dict[str, str]] = None

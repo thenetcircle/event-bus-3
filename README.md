@@ -51,7 +51,8 @@ x refactor to use filemtime
 x test changing the delay rebalance parameter on broker config
 x improve config structure
 x add consumer status (enable or disable)
-- refactor commit offset to use store
+x refactor commit offset to use store
+x decrease the queues size
 
 FOLLOWING PLAN:
 x lab env

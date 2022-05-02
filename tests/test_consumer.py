@@ -66,6 +66,9 @@ class MockInternalConsumer:
         else:
             self.committed_data.append(offsets)
 
+    def store_offsets(self, message=None, offsets=None):
+        self.commit(message, offsets)
+
     def close(self):
         self.closed = True
 
@@ -134,7 +137,7 @@ async def test_commit_events(mocker, consumer_conf):
 
     consumer = KafkaConsumer("t1", consumer_conf)
     consumer._internal_consumer = MockInternalConsumer()
-    commit_spy = mocker.spy(consumer._internal_consumer, "commit")
+    store_spy = mocker.spy(consumer._internal_consumer, "store_offsets")
 
     asyncio.create_task(
         consumer.commit_events(commit_queue)
@@ -147,7 +150,7 @@ async def test_commit_events(mocker, consumer_conf):
 
     await asyncio.sleep(0.1)
     await consumer.close()
-    assert commit_spy.call_count == 2
+    assert store_spy.call_count == 2
 
     # assert _send_one_event.call_count == 3
 

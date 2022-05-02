@@ -455,16 +455,13 @@ class KafkaConsumer:
             while True:
                 try:
                     offsets = self._get_offsets_from_events(event)
-                    result = self._internal_consumer.commit(
-                        offsets=offsets,
-                        asynchronous=False,
-                    )
+                    self._internal_consumer.store_offsets(offsets=offsets)
                     logger.info(
                         '[EventsCommitting] Consumer group "{}" '
-                        'has committed offsets "{}" (from events: "{}") to Kafka brokers '
+                        'has stored offsets "{}" (from events: "{}") to the offset-store '
                         "after {} times retries.",
                         self._config.kafka_config["group.id"],
-                        result,
+                        offsets,
                         event,
                         current_commit_retries,
                     )
@@ -472,7 +469,7 @@ class KafkaConsumer:
 
                 except KafkaException as ex:
                     logger.warning(
-                        "Commit an event to Kafka failed after {} times retires with exception: <{}> {}",
+                        "Storing an event offset failed after {} times retires with exception: <{}> {}",
                         current_commit_retries,
                         type(ex).__name__,
                         ex,
