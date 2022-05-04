@@ -60,11 +60,12 @@ class MockInternalConsumer:
 
     def commit(self, message=None, offsets=None, asynchronous=True):
         if self.benchmark:
-            self.committed_data.append(
-                [time.time() - (t.offset / 1000000) for t in offsets][0]
-            )
+            # self.committed_data.append(
+            #     [time.time() - (t.offset / 1000000) for t in offsets][0]
+            # )
+            self.committed_data.append(time.time() - (message.offset() / 1000000))
         else:
-            self.committed_data.append(offsets)
+            self.committed_data.append(message)
 
     def store_offsets(self, message=None, offsets=None):
         self.commit(message, offsets)
@@ -181,8 +182,8 @@ async def test_event_consumer(event_consumer):
     assert len(mock_consumer.committed_data) == test_events_amount
 
     # check the order of received commits
-    assert [m[0].offset for m in mock_consumer.committed_data] == [
-        i for i in range(2, 12)
+    assert [m.offset() for m in mock_consumer.committed_data] == [
+        i for i in range(1, 11)
     ]
 
 
@@ -274,4 +275,4 @@ async def test_event_consumer_skip_events(event_consumer):
     assert len(mock_consumer.committed_data) == 5
 
     # check the order of received commits
-    assert [m[0].offset for m in mock_consumer.committed_data] == [2, 3, 105, 206, 307]
+    assert [m.offset() for m in mock_consumer.committed_data] == [1, 2, 104, 205, 306]

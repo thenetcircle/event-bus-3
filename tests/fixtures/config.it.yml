@@ -9,21 +9,17 @@ app:
 
 default_producer_config:
   kafka_config:
-    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.idempotence": "true"
     "acks": "all"
-    # "max.in.flight.requests.per.connection": "5"
-    # "retries": "3"
-    # "delivery.timeout.ms": "2000" # 1 seconds
+    "delivery.timeout.ms": "3000"
 
 producers:
   p1:
     kafka_config:
-      "enable.idempotence": "false"
-      "compression.type": "none"
+      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
   p2:
     kafka_config:
-      "compression.type": "gzip"
+      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
 
 default_consumer_config:
   kafka_config:
@@ -32,14 +28,10 @@ default_consumer_config:
     "auto.commit.interval.ms": "10"
     "enable.auto.offset.store": "false"
     "auto.offset.reset": "earliest"
-    "max.poll.interval.ms": "50"
 
 consumers:
   c1:
     kafka_topics: [ "topic1" ]
-    kafka_config:
-      "group.id": "group1"
-      "max.poll.interval.ms": "300100"
     use_producers:
       producer_ids: [ p1 ]
     concurrent_per_partition: 1

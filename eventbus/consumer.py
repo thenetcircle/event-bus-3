@@ -452,14 +452,11 @@ class KafkaConsumer:
             current_commit_retries = 0
             while True:
                 try:
-                    offsets = self._get_offsets_from_events(event)
-                    self._internal_consumer.store_offsets(offsets=offsets)
+                    self._internal_consumer.store_offsets(message=event.msg)
                     logger.info(
-                        '[EventsCommitting] Consumer group "{}" '
-                        'has stored offsets "{}" (from events: "{}") to the offset-store '
+                        'Consumer group "{}" has stored offsets of event "{}" '
                         "after {} times retries.",
                         self._kafka_group_id,
-                        offsets,
                         event,
                         current_commit_retries,
                     )

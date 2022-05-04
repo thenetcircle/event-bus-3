@@ -20,17 +20,29 @@ class Event(BaseModel):
     published: datetime
     payload: str
 
+    class Config:
+        arbitrary_types_allowed = True
+        underscore_attrs_are_private = True
+
     def __str__(self):
         return f"Event({self.title}#{self.id})"
 
 
 class KafkaEvent(Event):
-
-    topic: str
-    partition: int
-    offset: int
-    timestamp: Optional[int]
     is_subscribed: bool = True
+    msg: Message
+
+    @property
+    def topic(self) -> Optional[str]:
+        return self.msg.topic()
+
+    @property
+    def partition(self) -> Optional[int]:
+        return self.msg.partition()
+
+    @property
+    def offset(self) -> Optional[int]:
+        return self.msg.offset()
 
     def __str__(self):
         return f"KafkaEvent({self.title}#{self.id}@{self.topic}:{self.partition}:{self.offset})"
@@ -43,32 +55,28 @@ class EventProcessStatus(str, Enum):
 
 
 def create_kafka_message(event: Event) -> Tuple[str, str]:
-    # TODO check whether same events goes to same topic
     return event.id, event.payload
 
 
 def parse_kafka_message(msg: Message) -> KafkaEvent:
+    payload = msg.value()
+    if not payload:
+        raise EventValidationError(f"Message value must not be empty.")
+
     try:
-        json_body = json.loads(msg.value())
+        json_body = json.loads(payload)
     except Exception:
         raise EventValidationError(f"Request body must not an non-empty Json.")
 
     if not isinstance(json_body, dict):
         raise EventValidationError("Invalid format of the event")
 
-    msg_timestamp = msg.timestamp()
-
     event_attrs = {
         "id": json_body.get("id"),
         "title": json_body.get("title"),
         "published": json_body.get("published"),
-        "payload": msg.value(),
-        "topic": msg.topic(),
-        "partition": msg.partition(),
-        "offset": msg.offset(),
-        "timestamp": (
-            msg_timestamp[1] if msg_timestamp[0] != TIMESTAMP_NOT_AVAILABLE else None
-        ),
+        "payload": payload,
+        "msg": msg,
     }
     return KafkaEvent(**event_attrs)
 

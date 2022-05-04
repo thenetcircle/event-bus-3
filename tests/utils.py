@@ -23,11 +23,30 @@ def create_kafka_event_from_dict(_dict: [str, Any]) -> KafkaEvent:
         id=_dict.get("id") or "test_event_1",
         published=_dict.get("published") or datetime.now(),
         payload=_dict.get("payload") or "{}",
-        topic=_dict.get("topic") or "topic",
-        partition=_dict.get("partition") or 1,
-        offset=_dict.get("offset") or -1,
-        timestamp=_dict.get("timestamp") or None,
+        msg=create_kafka_message_from_dict_2(_dict),
     )
+
+
+def create_kafka_message_from_dict_2(_dict: [str, Any]) -> "confluent_kafka.Message":
+    with mock.patch("confluent_kafka.Message", autospec=True) as MessageClass:
+        msg = MessageClass()
+        msg.topic.return_value = _dict.get("topic") or "topic1"
+        msg.partition.return_value = _dict.get("partition") or 1
+        msg.offset.return_value = _dict.get("offset") or 1
+        msg.key.return_value = _dict.get("key") or ""
+        msg.value.return_value = _dict.get("payload") or "{}"
+
+        msg_timestamp = _dict.get("timestamp")
+        # datetime.utcnow().microsecond * 1000
+        msg.timestamp.return_value = (
+            (TIMESTAMP_CREATE_TIME, msg_timestamp)
+            if msg_timestamp
+            else (TIMESTAMP_NOT_AVAILABLE, None)
+        )
+
+        msg.error.return_value = _dict.get("error") or None
+
+        return msg
 
 
 def create_kafka_message_from_dict(
@@ -92,13 +111,13 @@ def create_kafka_message_from_dict(
             )
             msg.value.return_value = json.dumps(value)
 
-            msg_timestamp = _dict.get("timestamp")
-            # datetime.utcnow().microsecond * 1000
-            msg.timestamp.return_value = (
-                (TIMESTAMP_CREATE_TIME, msg_timestamp)
-                if msg_timestamp
-                else (TIMESTAMP_NOT_AVAILABLE, None)
-            )
+            # msg_timestamp = _dict.get("timestamp")
+            # # datetime.utcnow().microsecond * 1000
+            # msg.timestamp.return_value = (
+            #     (TIMESTAMP_CREATE_TIME, msg_timestamp)
+            #     if msg_timestamp
+            #     else (TIMESTAMP_NOT_AVAILABLE, None)
+            # )
 
             msg.error.return_value = _dict.get("error") or None
 

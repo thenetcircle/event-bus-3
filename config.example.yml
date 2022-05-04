@@ -50,8 +50,7 @@ consumers:
     use_producers:
       producer_ids: [ p1 ]
     sink:
-      url: http://localhost:8081/events
-      method: POST
+      url: http://localhost:8081/receive_events
       timeout: 5
   c2:
     kafka_topics: [ "event-v3-stress-test-5" ]
@@ -60,10 +59,8 @@ consumers:
     use_producers:
       producer_ids: [ p2 ]
     sink:
-      url: http://localhost:8081/events
-      method: POST
+      url: http://localhost:8081/receive_events
       timeout: 10
-      backoff_retry_max_time: 3
 
 topic_mapping:
   - topic: event-v3-stress-test-4
