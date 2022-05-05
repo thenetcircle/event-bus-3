@@ -61,7 +61,7 @@ def setup_kafka_cluster():
 
 def assert_produced_msgs(temp_topic: str, events_num: int):
     consumer_conf = config.get().consumers["c1"].kafka_config
-    #  consumer_conf["auto.offset.reset"] = "earliest"
+    consumer_conf["group.id"] = f"event-bus-3-it-{time.time()}"
     consumer = Consumer(consumer_conf)
     consumer.assign([TopicPartition(temp_topic, i) for i in range(3)])
     msgs: List[Message] = consumer.consume(events_num, timeout=5.0)
@@ -96,6 +96,7 @@ async def test_producer(setup_kafka_cluster, producer_ids=None):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.skip  # skip it cause too slow
 async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
     config_dict = config.get().dict()
     config_dict["producers"]["p1"]["kafka_config"][
@@ -222,7 +223,7 @@ async def test_consumer(
     assert sorted([int(r["id"]) for r in received_reqs]) == [
         i + 100 * round for i in range(events_num)
     ]
-    # assert sum([p.offset for p in curr_positions]) == events_num * round
+    assert sum([p.offset for p in curr_positions]) == events_num * round
 
 
 @pytest.mark.integration
