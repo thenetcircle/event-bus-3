@@ -25,7 +25,7 @@ default_consumer_config:
   kafka_config:
     "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.auto.commit": "true"
-    "auto.commit.interval.ms": "10"
+    "auto.commit.interval.ms": "1"
     "enable.auto.offset.store": "false"
     "auto.offset.reset": "earliest"
 
