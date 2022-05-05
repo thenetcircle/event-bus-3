@@ -367,6 +367,14 @@ class KafkaConsumer:
                         msg.partition(),
                         msg.offset(),
                     )
+
+                    if msg.offset() > 4000000000:
+                        logger.error(
+                            "Got a message from Kafka with very high offset {}. From topic: {} and partition: {}",
+                            msg.offset(),
+                            msg.topic(),
+                            msg.partition(),
+                        )
             except RuntimeError as ex:
                 raise ClosedError(str(ex))
             except Exception as ex:

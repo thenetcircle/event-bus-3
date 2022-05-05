@@ -51,7 +51,7 @@ def setup_kafka_cluster():
         result: Dict[str, Future] = admin_client.create_topics(test_topics)
         logger.info("New topics creating result: {}", result)
         for _, fut in result.items():
-            fut.result(timeout=3.0)
+            fut.result(timeout=10.0)
 
         yield test_topic_name, admin_client
 

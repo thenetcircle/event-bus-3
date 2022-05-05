@@ -53,8 +53,9 @@ x improve config structure
 x add consumer status (enable or disable)
 x refactor commit offset to use store
 x decrease the queues size
-- test commit message instead of offsets
+x test commit message instead of offsets
 - continue to do the stress test
+- change subscribed topics won't make a rebalance
 
 FOLLOWING PLAN:
 x lab env
