@@ -56,6 +56,9 @@ x decrease the queues size
 x test commit message instead of offsets
 - continue to do the stress test
 - change subscribed topics won't make a rebalance
+x update producer borker the main_producer didn't restart
+- log consumer start config
+- test the consumer change topic but assigned old topic issue
 
 FOLLOWING PLAN:
 x lab env

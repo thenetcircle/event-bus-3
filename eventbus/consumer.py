@@ -32,6 +32,13 @@ class EventConsumer:
             )
         self._config = consumer_conf
 
+        logger.info(
+            'Constructing a new EventConsumer with id: "{}", name: "{}", consumer_conf: {}',
+            id,
+            name,
+            consumer_conf,
+        )
+
         self._consumer = KafkaConsumer(self.id, consumer_conf, name=self.name)
         self._sink: Sink = HttpSink(self.name, consumer_conf)
         self._cancelling = False

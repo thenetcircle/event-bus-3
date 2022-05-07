@@ -15,6 +15,12 @@ from eventbus.event import Event, create_kafka_message
 
 class EventProducer:
     def __init__(self, caller_id: str, use_producers_conf: UseProducersConfig):
+        logger.info(
+            'Constructing a new EventProducer with caller_id: "{}", use_producers_conf: {}',
+            caller_id,
+            use_producers_conf,
+        )
+
         self._caller_id = caller_id
         self._config = use_producers_conf
         self._producers: List[KafkaProducer] = []

@@ -130,14 +130,17 @@ def main():
 
     # --- handler config change signals ---
 
-    def handle_producer_config_change_signal(
-        sender, added: Set[str], removed: Set[str], changed: Set[str]
-    ):
-        if changed:
-            for _, p in consumer_procs.items():
-                if p.is_alive():
-                    logger.warning("Sending SIGUSR1 to {}", p)
-                    os.kill(p.pid, signal.SIGUSR1)
+    # def handle_producer_config_change_signal(
+    #     sender, added: Set[str], removed: Set[str], changed: Set[str]
+    # ):
+    #     if changed:
+    #         for _, p in consumer_procs.items():
+    #             if p.is_alive():
+    #                 logger.warning("Sending SIGUSR1 to {}", p)
+    #                 os.kill(p.pid, signal.SIGUSR1)
+
+    # stopped handling producer config change signal
+    # config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
 
     def handle_consumer_config_change_signal(
         sender, added: Set[str], removed: Set[str], changed: Set[str]
@@ -155,7 +158,6 @@ def main():
             if not config.get().consumers[cid].disabled:
                 start_new_consumer(cid)
 
-    config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
     config.ConfigSignals.CONSUMER_CHANGE.connect(handle_consumer_config_change_signal)
 
     # --- monitor config change and sub-processes ---
