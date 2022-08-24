@@ -95,6 +95,7 @@ class AppConfig(ConfigModel):
     env: Env
     debug: bool
     producer: AppProducerConfig
+    sentry_dsn: Optional[str] = None
 
 
 class Config(ConfigModel):
@@ -106,7 +107,6 @@ class Config(ConfigModel):
     default_producer_config: Optional[Dict[str, Any]] = None
     default_consumer_config: Optional[Dict[str, Any]] = None
     config_file_path: Optional[str] = None
-    sentry_dsn: Optional[str] = None
 
 
 class ConfigSignals:

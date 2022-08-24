@@ -2,7 +2,7 @@ app:
   project_id: example
   env: test
   debug: false
-  # sentry_dsn: ...
+  sentry_dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
   producer:
     use_producers:
       producer_ids: [p1]

@@ -59,6 +59,9 @@ x test commit message instead of offsets
 x update producer borker the main_producer didn't restart
 - log consumer start config
 - test the consumer change topic but assigned old topic issue
+- add a high offset protection code
+- move new kafka from ch14,15,16 to gpu04,05,06
+- test same consumer group subscribe to different topics
 
 FOLLOWING PLAN:
 x lab env

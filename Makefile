@@ -9,5 +9,5 @@ lint:
 	flake8 eventbus/ tests/
 	black --check eventbus tests
 
-start-http-app:
-	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus http_app:app
+start-producer:
+	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus main_producer:app

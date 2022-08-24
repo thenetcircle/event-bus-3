@@ -19,7 +19,6 @@ def get_long_description():
     """
     Return the README.
     """
-
     with open("README.md", encoding="utf8") as f:
         return f.read()
 

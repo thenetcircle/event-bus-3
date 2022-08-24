@@ -116,8 +116,9 @@ def main():
                     p.kill()
                 sleep(0.1)
 
-    for consumer_id, _ in config.get().consumers.items():
-        start_new_consumer(consumer_id)
+    for consumer_id, consumer_conf in config.get().consumers.items():
+        if not consumer_conf.disabled:
+            start_new_consumer(consumer_id)
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -138,8 +139,7 @@ def main():
     #             if p.is_alive():
     #                 logger.warning("Sending SIGUSR1 to {}", p)
     #                 os.kill(p.pid, signal.SIGUSR1)
-
-    # stopped handling producer config change signal
+    #
     # config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
 
     def handle_consumer_config_change_signal(
