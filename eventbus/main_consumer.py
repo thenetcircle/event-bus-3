@@ -12,12 +12,14 @@ from eventbus import config
 from eventbus.config_watcher import watch_config_file
 from eventbus.consumer import EventConsumer
 from eventbus.errors import EventConsumerNotFoundError
+from eventbus.statsd import stats_client
 from eventbus.utils import setup_logger
 
 
 def consumer_main(consumer_id: str, config_file_path: str):
     config.update_from_yaml(config_file_path)
     setup_logger()
+    stats_client.init(config.get())
 
     if consumer_id not in config.get().consumers:
         logger.error('Consumer id "{}" can not be found from the configs', consumer_id)

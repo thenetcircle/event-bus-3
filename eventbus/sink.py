@@ -9,6 +9,7 @@ from loguru import logger
 
 from eventbus.config import ConsumerConfig
 from eventbus.event import EventProcessStatus, KafkaEvent
+from eventbus.statsd import stats_client
 
 
 class Sink(ABC):
@@ -61,10 +62,17 @@ class HttpSink(Sink):
         if self._config.sink.headers:
             req_kwargs["headers"] = self._config.sink.headers
 
+        stats_client.incr("consumer.event.send.new")
+
         while True:
             start_time = datetime.now()
             try:
                 async with req_func(req_url, **req_kwargs) as resp:
+                    _cost_time = self._get_cost_time(start_time)
+                    stats_client.timing(
+                        "consumer.event.send.time", int(_cost_time * 1000)
+                    )
+
                     if resp.status == 200:
                         resp_body = await resp.text()
                         if resp_body == "ok":
@@ -72,9 +80,10 @@ class HttpSink(Sink):
                                 'Sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
                                 event,
                                 req_url,
-                                self._get_cost_time(start_time),
+                                _cost_time,
                                 retry_times,
                             )
+                            stats_client.incr("consumer.event.send.done")
                             return event, EventProcessStatus.DONE
 
                         elif resp_body == "retry":
@@ -85,8 +94,9 @@ class HttpSink(Sink):
                                     event,
                                     req_url,
                                     retry_times,
-                                    self._get_cost_time(start_time),
+                                    _cost_time,
                                 )
+                                stats_client.incr("consumer.event.send.retry")
                                 return event, EventProcessStatus.RETRY_LATER
                             else:
                                 retry_times += 1
@@ -98,9 +108,10 @@ class HttpSink(Sink):
                                 'Sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
                                 event,
                                 req_url,
-                                self._get_cost_time(start_time),
+                                _cost_time,
                                 resp_body,
                             )
+                            stats_client.incr("consumer.event.send.retry")
                             return event, EventProcessStatus.RETRY_LATER
 
                     else:
@@ -108,7 +119,7 @@ class HttpSink(Sink):
                             'Sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
                             event,
                             req_url,
-                            self._get_cost_time(start_time),
+                            _cost_time,
                             resp.status,
                         )
 
@@ -119,8 +130,9 @@ class HttpSink(Sink):
                                 event,
                                 req_url,
                                 retry_times,
-                                self._get_cost_time(start_time),
+                                _cost_time,
                             )
+                            stats_client.incr("consumer.event.send.retry")
                             return event, EventProcessStatus.RETRY_LATER
                         else:
                             retry_times += 1
@@ -168,6 +180,7 @@ class HttpSink(Sink):
                     ex,
                 )
                 # TODO trigger alert
+                stats_client.incr("consumer.event.send.retry")
                 return event, EventProcessStatus.RETRY_LATER
 
             except Exception as ex:

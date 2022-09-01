@@ -17,6 +17,7 @@ from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentEr
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
 from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink, Sink
+from eventbus.statsd import stats_client
 
 
 class EventConsumer:
@@ -393,6 +394,8 @@ class KafkaConsumer:
                 # TODO trigger an alert
                 continue
 
+            stats_client.incr("consumer.msg.new")
+
             try:
                 event: KafkaEvent = parse_kafka_message(msg)
             except Exception as ex:
@@ -421,6 +424,7 @@ class KafkaConsumer:
             while self._check_closed():
                 try:
                     send_queue.sync_q.put(event, block=True, timeout=0.2)
+                    stats_client.incr("consumer.event.new")
                     logger.debug(
                         "A kafka event has been put into send_queue, current queue size is {}",
                         send_queue.sync_q.qsize(),
@@ -436,6 +440,8 @@ class KafkaConsumer:
                 event, status = _commit_queue.sync_q.get(block=True, timeout=0.2)
             except janus.SyncQueueEmpty:
                 continue
+
+            stats_client.incr("consumer.event.commit.new")
 
             # ---
 
@@ -468,6 +474,7 @@ class KafkaConsumer:
             while True:
                 try:
                     self._internal_consumer.store_offsets(message=event.msg)
+                    stats_client.incr("consumer.event.commit.succ")
                     logger.info(
                         'Consumer group "{}" has stored offsets of event "{}" '
                         "after {} times retries.",

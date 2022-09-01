@@ -33,6 +33,7 @@ INSTALL_REQUIRES = [
     "janus>=1.0.0",
     "blinker>=1.4",
     "sentry-sdk>=1.5.0",
+    "statsd",
 ]
 
 setup(

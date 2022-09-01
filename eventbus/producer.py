@@ -11,6 +11,7 @@ from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
+from eventbus.statsd import stats_client
 
 
 class EventProducer:
@@ -72,6 +73,7 @@ class EventProducer:
                     cost_time,
                     retry_times,
                 )
+                stats_client.incr("producer.event.succ")
                 return msg
 
             except Exception as ex:

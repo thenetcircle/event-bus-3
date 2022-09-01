@@ -90,12 +90,19 @@ class AppProducerConfig(ConfigModel):
     max_response_time: int = 3
 
 
+class StatsdConfig(ConfigModel):
+    host: StrictStr
+    port: int
+    prefix: Optional[StrictStr]
+
+
 class AppConfig(ConfigModel):
     project_id: StrictStr
     env: Env
     debug: bool
     producer: AppProducerConfig
     sentry_dsn: Optional[str] = None
+    statsd: Optional[StatsdConfig] = None
 
 
 class Config(ConfigModel):

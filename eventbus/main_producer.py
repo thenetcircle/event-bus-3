@@ -12,11 +12,13 @@ from eventbus import config, config_watcher
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
 from eventbus.producer import EventProducer
+from eventbus.statsd import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
 
 config.load_from_environ()
 setup_logger()
+stats_client.init(config.get())
 topic_resolver = TopicResolver()
 producer = EventProducer(
     f"app_http_{socket.gethostname()}", config.get().app.producer.use_producers
@@ -47,6 +49,7 @@ def show_config(request):
 
 
 async def receive_events(request):
+    stats_client.incr("producer.request.new")
     request_body = await request.body()
 
     resp_format = 3
@@ -67,13 +70,17 @@ async def receive_events(request):
             raise EventValidationError("Invalid format of request body.")
 
         results = await asyncio.wait_for(handler_event(*events), max_resp_time)
+
+        stats_client.incr("producer.request.succ")
         return _create_response([e.id for e in events], results, resp_format)
 
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]
+        stats_client.incr("producer.request.fail")
         return _create_response(event_ids, [ex for _ in event_ids], resp_format)
 
     except asyncio.TimeoutError as ex:
+        stats_client.incr("producer.request.fail")
         return _create_response(
             [e.id for e in events], [ex for _ in events], resp_format
         )
@@ -82,6 +89,8 @@ async def receive_events(request):
 async def handler_event(*events: Event) -> List[Union[Message, Exception]]:
     tasks = []
     for event in events:
+        stats_client.incr("producer.event.new")
+
         if event_topic := topic_resolver.resolve(event):
             task = asyncio.create_task(producer.produce(event_topic, event))
             tasks.append(task)
