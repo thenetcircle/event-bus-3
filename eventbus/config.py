@@ -96,12 +96,18 @@ class StatsdConfig(ConfigModel):
     prefix: Optional[StrictStr]
 
 
+class SentryConfig(ConfigModel):
+    dsn: StrictStr
+    sample_rate: float = 1.0
+    traces_sample_rate: float = 0.2
+
+
 class AppConfig(ConfigModel):
     project_id: StrictStr
     env: Env
     debug: bool
     producer: AppProducerConfig
-    sentry_dsn: Optional[str] = None
+    sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
 
 
