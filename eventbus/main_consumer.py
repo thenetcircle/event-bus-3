@@ -12,7 +12,7 @@ from eventbus import config
 from eventbus.config_watcher import watch_config_file
 from eventbus.consumer import EventConsumer
 from eventbus.errors import EventConsumerNotFoundError
-from eventbus.statsd import stats_client
+from eventbus.metrics import stats_client
 from eventbus.utils import setup_logger
 
 

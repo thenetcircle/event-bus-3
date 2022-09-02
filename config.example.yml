@@ -3,6 +3,10 @@ app:
   env: test
   debug: false
   sentry_dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
+  statsd:
+    host: 10.20.2.118
+    port: 8125
+    prefix: eventbus3
   producer:
     use_producers:
       producer_ids: [p1]

@@ -11,7 +11,7 @@ from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.errors import InitProducerError
 from eventbus.event import Event, create_kafka_message
-from eventbus.statsd import stats_client
+from eventbus.metrics import stats_client
 
 
 class EventProducer:

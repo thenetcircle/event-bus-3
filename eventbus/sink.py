@@ -9,7 +9,7 @@ from loguru import logger
 
 from eventbus.config import ConsumerConfig
 from eventbus.event import EventProcessStatus, KafkaEvent
-from eventbus.statsd import stats_client
+from eventbus.metrics import stats_client
 
 
 class Sink(ABC):

@@ -11,8 +11,8 @@ from starlette.routing import Route
 from eventbus import config, config_watcher
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
+from eventbus.metrics import stats_client
 from eventbus.producer import EventProducer
-from eventbus.statsd import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
 

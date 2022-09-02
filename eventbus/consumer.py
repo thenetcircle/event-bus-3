@@ -15,9 +15,9 @@ from eventbus import config
 from eventbus.config import ConsumerConfig
 from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
+from eventbus.metrics import stats_client
 from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink, Sink
-from eventbus.statsd import stats_client
 
 
 class EventConsumer:
