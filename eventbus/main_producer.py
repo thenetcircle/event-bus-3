@@ -152,5 +152,3 @@ app = Starlette(
     on_startup=[startup],
     on_shutdown=[shutdown],
 )
-
-logger.error("test")

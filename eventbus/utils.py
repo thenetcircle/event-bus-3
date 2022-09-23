@@ -74,11 +74,11 @@ def setup_logger():
             ],
         )
 
-        logger.add(
-            BreadcrumbHandler(level=logging.DEBUG),
-            diagnose=False,
-            level=logging.DEBUG,
-        )
+        # logger.add(
+        #     BreadcrumbHandler(level=logging.DEBUG),
+        #     diagnose=False,
+        #     level=logging.DEBUG,
+        # )
 
         logger.add(
             EventHandler(level=logging.ERROR),

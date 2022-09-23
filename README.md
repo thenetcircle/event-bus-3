@@ -63,6 +63,10 @@ x update producer borker the main_producer didn't restart
 - move new kafka from ch14,15,16 to gpu04,05,06
 - test same consumer group subscribe to different topics
 
+New:
+- remove that too much info sending to Sentry
+- when retry failed msg, don't send everything to Sentry
+
 FOLLOWING PLAN:
 x lab env
 x staging and prod env
