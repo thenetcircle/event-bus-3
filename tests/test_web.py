@@ -30,7 +30,7 @@ def client(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
 
-    from eventbus.main_producer import app
+    from eventbus.web import app
 
     with TestClient(app) as client:
         yield client

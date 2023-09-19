@@ -35,7 +35,7 @@ class EventProducingError(EventBusError):
     pass
 
 
-class InitProducerError(EventBusError):
+class InitKafkaProducerError(EventBusError):
     pass
 
 

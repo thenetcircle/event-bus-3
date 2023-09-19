@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
+from eventbus.utils import deep_merge_two_dict
 
 
 class Env(str, Enum):
@@ -24,70 +25,6 @@ class Env(str, Enum):
 class ConfigModel(BaseModel):
     class Config:
         allow_mutation = False
-
-
-class TopicMapping(ConfigModel):
-    topic: StrictStr
-    patterns: List[StrictStr]
-
-
-class HttpSinkMethod(str, Enum):
-    POST = "POST"
-    PUT = "PUT"
-    PATCH = "PATCH"
-
-
-class HttpSinkConfig(ConfigModel):
-    url: StrictStr
-    method: HttpSinkMethod = HttpSinkMethod.POST
-    headers: Optional[Dict[str, str]] = None
-    timeout: float = 300  # seconds
-    max_retry_times: int = 3
-    backoff_retry_step: float = 0.1
-    backoff_retry_max_time: float = 60.0
-
-
-class DefaultConsumerConfig(ConfigModel):
-    concurrent_per_partition: int = 1
-    kafka_config: Optional[Dict[str, str]] = None
-    sink: Optional[HttpSinkConfig] = None
-
-
-class DefaultKafkaConfig(ConfigModel):
-    producer: Optional[Dict[str, str]] = None
-    consumer: Optional[Dict[str, str]] = None
-
-
-class ProducerConfig(ConfigModel):
-    kafka_config: Optional[Dict[str, str]] = None
-
-
-class UseProducersConfig(ConfigModel):
-    producer_ids: List[str]
-    max_retries: int = 3
-
-
-class ConsumerConfig(ConfigModel):
-    kafka_topics: List[StrictStr]
-    use_producers: UseProducersConfig
-    sink: HttpSinkConfig
-    concurrent_per_partition: int = 1
-    send_queue_size: int = 100
-    commit_queue_size: int = 10
-    tp_queue_size: int = 3
-    max_produce_retries = 3
-    max_commit_retries = 2
-    max_skipped_events = 100
-    disabled = False
-    kafka_config: Optional[Dict[str, str]] = None
-    include_events: Optional[List[StrictStr]] = None
-    exclude_events: Optional[List[StrictStr]] = None
-    version: Optional[str] = None
-
-
-class AppProducerConfig(ConfigModel):
-    use_producers: UseProducersConfig
-    max_response_time: int = 3
 
 
 class StatsdConfig(ConfigModel):
@@ -106,19 +43,64 @@ class AppConfig(ConfigModel):
     project_id: StrictStr
     env: Env
     debug: bool
-    producer: AppProducerConfig
+    max_response_time: int = 3
     sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
 
 
+class ProducerConfig(ConfigModel):
+    kafka_config: Dict[str, str]
+    max_retries: int = 3
+
+
+class ConsumerConfig(ConfigModel):
+    kafka_config: Dict[str, str]
+
+
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+
+
+class HttpSinkConfig(ConfigModel):
+    url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
+    headers: Optional[Dict[str, str]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
+
+
+class StoryConfig(ConfigModel):
+    kafka_topic: StrictStr
+    sink: StrictStr
+    include_events: Optional[List[StrictStr]] = None
+    exclude_events: Optional[List[StrictStr]] = None
+    concurrent_per_partition: int = 1
+    send_queue_size: int = 100
+    commit_queue_size: int = 10
+    tp_queue_size: int = 3
+    max_produce_retries = 3
+    max_commit_retries = 2
+    max_skipped_events = 100
+    disabled = False
+
+
+class TopicMappingConfig(ConfigModel):
+    topic: StrictStr
+    patterns: List[StrictStr]
+
+
 class Config(ConfigModel):
     app: AppConfig
-    producers: Dict[str, ProducerConfig]
-    consumers: Dict[str, ConsumerConfig]
-    topic_mapping: List[TopicMapping]
+    producer: ProducerConfig
+    consumer: ConsumerConfig
+    sinks: Dict[str, HttpSinkConfig]
+    stories: List[StoryConfig]
+    topic_mapping: List[TopicMappingConfig]
     last_update_time: Optional[float] = None
-    default_producer_config: Optional[Dict[str, Any]] = None
-    default_consumer_config: Optional[Dict[str, Any]] = None
     config_file_path: Optional[str] = None
 
 
@@ -144,8 +126,7 @@ def update_from_dict(data: Dict[str, Any], log=True) -> None:
         logger.info("Going to update config from dict: {}", data)
 
     try:
-        merged_data = _merge_default_config(data)
-        new_config = Config(**merged_data)
+        new_config = Config(**data)
     except Exception as ex:
         raise ConfigUpdateError(str(ex))
 
@@ -283,16 +264,6 @@ def _update_config(config: Config) -> None:
 
 
 def _merge_default_config(data: Dict[str, Any]) -> Dict[str, Any]:
-    def deep_merge_two_dict(dict1, dict2):
-        for key, val in dict1.items():
-            if isinstance(val, dict):
-                dict2_node = dict2.setdefault(key, {})
-                deep_merge_two_dict(val, dict2_node)
-            else:
-                if key not in dict2:
-                    dict2[key] = val
-        return dict2
-
     new_data = data.copy()
     if "default_producer_config" in data:
         for p_name, p_config in data["producers"].items():

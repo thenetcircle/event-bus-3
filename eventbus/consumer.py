@@ -15,8 +15,8 @@ from eventbus import config
 from eventbus.config import ConsumerConfig
 from eventbus.errors import ClosedError, ConsumerPollingError, InvalidArgumentError
 from eventbus.event import EventProcessStatus, KafkaEvent, parse_kafka_message
+from eventbus.kafka_producer import KafkaProducer
 from eventbus.metrics import stats_client
-from eventbus.producer import EventProducer
 from eventbus.sink import HttpSink, Sink
 
 
@@ -244,7 +244,7 @@ class KafkaConsumer:
         self._internal_consumer: Optional[Consumer] = None
         self._is_fetching_events = False
         self._is_committing_events = False
-        self._event_producer = EventProducer(
+        self._event_producer = KafkaProducer(
             f"consumer_{id}", consumer_conf.use_producers
         )
         self._loop: AbstractEventLoop = None

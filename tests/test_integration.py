@@ -18,7 +18,7 @@ from utils import create_event_from_dict
 from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.consumer import EventConsumer
-from eventbus.producer import EventProducer
+from eventbus.kafka_producer import KafkaProducer
 from eventbus.sink import HttpSink
 
 
@@ -78,7 +78,7 @@ def assert_produced_msgs(temp_topic: str, events_num: int):
 async def test_producer(setup_kafka_cluster, producer_ids=None):
     temp_topic, admin_client = setup_kafka_cluster
 
-    event_producer = EventProducer(
+    event_producer = KafkaProducer(
         "it", UseProducersConfig(producer_ids=(producer_ids or ["p1"]))
     )
     await event_producer.init()
@@ -111,7 +111,7 @@ async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
 async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFixture):
     temp_topic, admin_client = setup_kafka_cluster
 
-    event_producer = EventProducer("it", UseProducersConfig(producer_ids=["p1"]))
+    event_producer = KafkaProducer("it", UseProducersConfig(producer_ids=["p1"]))
     await event_producer.init()
     update_config_spy = mocker.spy(event_producer._producers[0], "update_config")
 

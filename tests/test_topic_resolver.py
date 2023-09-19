@@ -5,7 +5,7 @@ from pytest_mock import MockFixture
 from utils import create_event_from_dict
 
 from eventbus import config
-from eventbus.config import TopicMapping
+from eventbus.config import TopicMappingConfig
 from eventbus.topic_resolver import TopicResolver
 
 SIMPLIFIED_MAPPING_TYPE = Tuple[str, List[str]]
@@ -127,7 +127,7 @@ async def test_config_change_signal(
 def _update_topic_mapping(mapping: List[SIMPLIFIED_MAPPING_TYPE]):
     config_dict = config.get().dict()
     config_dict["topic_mapping"] = [
-        TopicMapping(topic=m[0], patterns=m[1]) for m in mapping
+        TopicMappingConfig(topic=m[0], patterns=m[1]) for m in mapping
     ]
     config.update_from_dict(config_dict)
     config.send_signals()

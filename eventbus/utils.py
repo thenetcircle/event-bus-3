@@ -85,3 +85,14 @@ def setup_logger():
             diagnose=True,
             level="ERROR",
         )
+
+
+def deep_merge_two_dict(dict1, dict2):
+    for key, val in dict1.items():
+        if isinstance(val, dict):
+            dict2_node = dict2.setdefault(key, {})
+            deep_merge_two_dict(val, dict2_node)
+        else:
+            if key not in dict2:
+                dict2[key] = val
+    return dict2

@@ -11,8 +11,8 @@ from starlette.routing import Route
 from eventbus import config, config_watcher
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
+from eventbus.kafka_producer import KafkaProducer
 from eventbus.metrics import stats_client
-from eventbus.producer import EventProducer
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
 
@@ -20,9 +20,7 @@ config.load_from_environ()
 setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
-producer = EventProducer(
-    f"app_http_{socket.gethostname()}", config.get().app.producer.use_producers
-)
+producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().producers)
 
 
 async def startup():
@@ -56,7 +54,7 @@ async def receive_events(request):
     if "resp_format" in request.query_params:
         resp_format = int(request.query_params["resp_format"])
 
-    max_resp_time = config.get().app.producer.max_response_time  # seconds
+    max_resp_time = config.get().app.max_response_time  # seconds
     if "max_resp_time" in request.query_params:
         max_resp_time = int(request.query_params["max_resp_time"])
 

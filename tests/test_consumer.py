@@ -26,7 +26,6 @@ def consumer_conf():
             "bootstrap.servers": "127.0.0.1:9093",
             "group.id": "test-group-1",
         },
-        use_producers=UseProducersConfig(producer_ids=["p1", "p2"]),
         include_events=[r"test\..*"],
         exclude_events=[r"test\.exclude"],
         sink=HttpSinkConfig(

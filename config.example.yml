@@ -8,15 +8,14 @@ app:
     host: 10.20.2.118
     port: 8125
     prefix: eventbus3
-  producer:
-    use_producers:
-      producer_ids: [p1]
-    max_response_time: 5
+  max_response_time: 5
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-default_producer_config:
+producer:
+  max_retries: 3
   kafka_config:
+    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.idempotence": "true"
     "delivery.timeout.ms": "1500" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
     "acks": "all"
@@ -25,15 +24,7 @@ default_producer_config:
     "partitioner": "consistent_random"
     "compression.codec": "none"
 
-producers:
-  p1:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
-  p2:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-
-default_consumer_config:
+consumer:
   kafka_config:
     "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
     "enable.auto.commit": "true"
@@ -49,23 +40,18 @@ default_consumer_config:
     "allow.auto.create.topics": "true" # doesn't work
     "partition.assignment.strategy": "cooperative-sticky"
 
-consumers:
-  c1:
-    kafka_topics: [ "^event-v3-test-.*" ]
-    use_producers:
-      producer_ids: [ p1 ]
-    sink:
-      url: http://localhost:8081/receive_events
-      timeout: 5
-  c2:
-    kafka_topics: [ "event-v3-stress-test-5" ]
-    include_events: []
+sinks:
+  test_sink:
+    url: http://localhost:8081/receive_events
+    timeout: 5
+
+stories:
+  - kafka_topic: "event-v2-test-topic1"
+    include_events: [ "test.event1", "test.event2" ]
+    exclude_events: [ "test.event3" ]
     concurrent_per_partition: 1
-    use_producers:
-      producer_ids: [ p2 ]
-    sink:
-      url: http://localhost:8081/receive_events
-      timeout: 10
+    dead_letter_topic: "event-v2-test-topic1-dlq"
+    sink: test_sink
 
 topic_mapping:
   - topic: event-v3-stress-test-4
