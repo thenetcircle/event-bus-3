@@ -3,8 +3,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from confluent_kafka import TIMESTAMP_NOT_AVAILABLE, Message
-from pydantic import BaseModel, Field
+from confluent_kafka import Message
+from pydantic import BaseModel
 
 from eventbus.errors import EventValidationError
 
@@ -15,7 +15,7 @@ class Event(BaseModel):
                int or float as a string (assumed as Unix time)
     """
 
-    id: str = Field(min_length=2, max_length=500, regex=r"[\w-]+")
+    id: str
     title: str
     published: datetime
     payload: str
@@ -48,9 +48,9 @@ class KafkaEvent(Event):
         return f"KafkaEvent({self.title}#{self.id}@{self.topic}:{self.partition}:{self.offset})"
 
 
-class EventProcessStatus(str, Enum):
+class EventStatus(str, Enum):
     DONE = "done"
-    RETRY_LATER = "retry_later"
+    DEAD_LETTER = "dead_letter"
     DISCARD = "discard"
 
 

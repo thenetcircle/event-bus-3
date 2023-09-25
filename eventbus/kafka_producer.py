@@ -169,7 +169,9 @@ class KafkaProducer:
         old_real_producer = self._real_producer
 
         # start new producer
-        new_real_producer = Producer(producer_config.kafka_config)
+        new_real_producer = Producer(
+            producer_config.kafka_config, logger=logging.getLogger(self.fullname)
+        )
         self._config = producer_config
 
         # switch to new producer

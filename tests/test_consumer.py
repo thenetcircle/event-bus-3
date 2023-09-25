@@ -14,8 +14,9 @@ from eventbus.config import (
     HttpSinkMethod,
     UseProducersConfig,
 )
-from eventbus.consumer import EventConsumer, KafkaConsumer
-from eventbus.event import EventProcessStatus, KafkaEvent
+from eventbus.consumer import EventConsumer
+from eventbus.event import EventStatus, KafkaEvent
+from eventbus.kafka_consumer import KafkaConsumer
 
 
 @pytest.fixture
@@ -77,13 +78,13 @@ class MockInternalConsumer:
 async def event_consumer(mocker, consumer_conf):
     async def mock_send_event(self, event: KafkaEvent):
         # await asyncio.sleep(0.01)
-        return event, EventProcessStatus.DONE
+        return event, EventStatus.DONE
 
     mocker.patch("eventbus.sink.HttpSink.send_event", mock_send_event)
 
     consumer = KafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
-    consumer._internal_consumer = mock_consumer
+    consumer._real_consumer = mock_consumer
     # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
 
     event_consumer = EventConsumer("t1", consumer_conf)
@@ -100,7 +101,7 @@ async def test_send_events(consumer_conf):
 
     consumer = KafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
-    consumer._internal_consumer = mock_consumer
+    consumer._real_consumer = mock_consumer
 
     asyncio.create_task(
         consumer.fetch_events(send_queue)
@@ -136,8 +137,8 @@ async def test_commit_events(mocker, consumer_conf):
     commit_queue = JanusQueue(maxsize=100)
 
     consumer = KafkaConsumer("t1", consumer_conf)
-    consumer._internal_consumer = MockInternalConsumer()
-    store_spy = mocker.spy(consumer._internal_consumer, "store_offsets")
+    consumer._real_consumer = MockInternalConsumer()
+    store_spy = mocker.spy(consumer._real_consumer, "store_offsets")
 
     asyncio.create_task(
         consumer.commit_events(commit_queue)
@@ -145,8 +146,8 @@ async def test_commit_events(mocker, consumer_conf):
 
     test_event_1 = create_kafka_event_from_dict({"title": "test.e1"})
     test_event_2 = create_kafka_event_from_dict({"title": "test.e2"})
-    commit_queue.sync_q.put((test_event_1, EventProcessStatus.DONE))
-    commit_queue.sync_q.put((test_event_2, EventProcessStatus.DONE))
+    commit_queue.sync_q.put((test_event_1, EventStatus.DONE))
+    commit_queue.sync_q.put((test_event_2, EventStatus.DONE))
 
     await asyncio.sleep(0.1)
     await consumer.close()
@@ -157,7 +158,7 @@ async def test_commit_events(mocker, consumer_conf):
 
 @pytest.mark.asyncio
 async def test_event_consumer(event_consumer):
-    mock_consumer = event_consumer._consumer._internal_consumer
+    mock_consumer = event_consumer._consumer._real_consumer
 
     # let's do this two times to check if the coordinator are able to rerun
     asyncio.create_task(event_consumer.run())
@@ -199,7 +200,7 @@ async def test_event_consumer_benchmark(event_consumer):
     import pstats
     from pstats import SortKey
 
-    mock_consumer = event_consumer._consumer._internal_consumer
+    mock_consumer = event_consumer._consumer._real_consumer
     mock_consumer.benchmark = True
 
     start_time = time.time()
@@ -251,7 +252,7 @@ async def test_event_consumer_benchmark(event_consumer):
 
 @pytest.mark.asyncio
 async def test_event_consumer_skip_events(event_consumer):
-    mock_consumer = event_consumer._consumer._internal_consumer
+    mock_consumer = event_consumer._consumer._real_consumer
     asyncio.create_task(event_consumer.run())
 
     mock_consumer.put(

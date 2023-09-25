@@ -47,13 +47,13 @@ class EventConsumerNotFoundError(EventBusError):
     pass
 
 
-class ConsumerPollingError(EventBusError):
+class KafkaConsumerPollingError(EventBusError):
+    pass
+
+
+class KafkaConsumerClosedError(EventBusError):
     pass
 
 
 class InvalidArgumentError(EventBusError):
-    pass
-
-
-class ClosedError(EventBusError):
     pass

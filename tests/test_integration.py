@@ -205,7 +205,7 @@ async def test_consumer(
         while True:
             if len(received_reqs) >= events_num:
                 nonlocal curr_positions
-                curr_positions = consumer._consumer._internal_consumer.position(
+                curr_positions = consumer._consumer._real_consumer.position(
                     [TopicPartition(temp_topic, i) for i in range(3)]
                 )
                 await consumer.cancel()

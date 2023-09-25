@@ -76,6 +76,7 @@ class HttpSinkConfig(ConfigModel):
 class StoryConfig(ConfigModel):
     kafka_topic: StrictStr
     sink: StrictStr
+    event_poll_interval: float = 1.0
     include_events: Optional[List[StrictStr]] = None
     exclude_events: Optional[List[StrictStr]] = None
     concurrent_per_partition: int = 1
