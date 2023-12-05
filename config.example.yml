@@ -9,13 +9,16 @@ app:
     port: 8125
     prefix: eventbus3
   max_response_time: 5
+  zookeeper:
+    hosts: maggie-zoo-1:2181,maggie-zoo-2:2181
+    topic_mapping_path: /event-bus/happ/dev/topics
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 producer:
   max_retries: 3
   kafka_config:
-    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
+    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
     "enable.idempotence": "true"
     "delivery.timeout.ms": "1500" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
     "acks": "all"
@@ -26,7 +29,7 @@ producer:
 
 consumer:
   kafka_config:
-    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
+    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
     "enable.auto.commit": "true"
     "auto.commit.interval.ms": "2000"
     "enable.auto.offset.store": "false"
@@ -50,7 +53,7 @@ stories:
     include_events: [ "test.event1", "test.event2" ]
     exclude_events: [ "test.event3" ]
     concurrent_per_partition: 1
-    dead_letter_topic: "event-v2-test-topic1-dlq"
+    dead_letter_topic: "event-v2-test-topic1-dl"
     sink: test_sink
 
 topic_mapping:

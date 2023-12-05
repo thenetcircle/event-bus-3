@@ -12,7 +12,7 @@ def create_event_from_dict(_dict: [str, Any]) -> Event:
     return Event(
         title=_dict.get("title") or "user.login",
         id=_dict.get("id") or "test_event_1",
-        published=_dict.get("published") or datetime.now(),
+        published=_dict.get("published") or str(datetime.now()),
         payload=json.dumps(_dict.get("payload") or {}),
     )
 
@@ -21,7 +21,7 @@ def create_kafka_event_from_dict(_dict: [str, Any]) -> KafkaEvent:
     return KafkaEvent(
         title=_dict.get("title") or "user.login",
         id=_dict.get("id") or "test_event_1",
-        published=_dict.get("published") or datetime.now(),
+        published=_dict.get("published") or str(datetime.now()),
         payload=_dict.get("payload") or "{}",
         msg=create_kafka_message_from_dict_2(_dict),
     )

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from asyncio import Future
+from threading import Thread
 from typing import Callable, Optional, Tuple
 
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
@@ -30,13 +31,12 @@ class KafkaProducer:
 
         self._id = id
         self._config = producer_config
+        self._check_config()
 
         self._is_closed = False
         self._loop = None
         self._real_producer: Optional[Producer] = None
-        self._poll_task: Optional[asyncio.Task] = None
-
-        self._check_config()
+        self._poll_thread: Optional[Thread] = None
 
     @property
     def id(self) -> str:
@@ -56,22 +56,29 @@ class KafkaProducer:
         self._real_producer = Producer(
             self.config.kafka_config, logger=logging.getLogger(self.fullname)
         )
-        self._poll_task = asyncio.create_task(self.poll())
+        self._poll_thread = Thread(target=self._poll, name=f"{self.fullname}-poll")
+        self._poll_thread.start()
         logger.info("{} is inited", self.fullname)
 
     async def close(self) -> None:
         logger.info("{} is closing", self.fullname)
         # to stop the poll thread
         self._is_closed = True
-        if self._poll_task:
-            await self._poll_task
+        if self._poll_thread:
+            self._poll_thread.join()
         logger.warning("{} is closed", self.fullname)
 
     async def produce(self, topic: str, event: Event) -> Message:
         """
         An awaitable produce method.
         """
-        if not self._real_producer or not self._loop:
+        if self._real_producer is None or self._loop is None:
+            logger.error(
+                "{} is not inited, _real_producer: {}, _loop: {}",
+                self.fullname,
+                self._real_producer,
+                self._loop,
+            )
             raise InitKafkaProducerError(
                 f"Need init {self.fullname} before call the produce method."
             )
@@ -147,42 +154,6 @@ class KafkaProducer:
             )
             raise
 
-    async def poll(self):
-        logger.info("`poll` of {} is starting", self.fullname)
-
-        try:
-            await self._loop.run_in_executor(None, self._poll)
-            logger.info("`poll` of {} is over", self.fullname)
-
-        except Exception as ex:
-            logger.error(
-                "`poll` of {} is aborted by: <{}> {}",
-                self.fullname,
-                type(ex).__name__,
-                ex,
-            )
-            raise
-
-    def update_config(self, producer_config: ProducerConfig):
-        logger.info("Updating config of {}", self.fullname)
-
-        old_real_producer = self._real_producer
-
-        # start new producer
-        new_real_producer = Producer(
-            producer_config.kafka_config, logger=logging.getLogger(self.fullname)
-        )
-        self._config = producer_config
-
-        # switch to new producer
-        self._real_producer = new_real_producer
-
-        # close old producer
-        if old_real_producer:
-            old_real_producer.flush()
-
-        logger.info("Config of {} updated", self.fullname)
-
     # TODO add key
     def _do_produce(self, topic, value, **kwargs) -> None:
         """Produce message to topic. This is an asynchronous operation, an application may use
@@ -208,16 +179,29 @@ class KafkaProducer:
         return self._real_producer.produce(topic, value, **kwargs)
 
     def _poll(self) -> None:
-        while not self._is_closed:
-            processed_callbacks = self._real_producer.poll(0.1)
-            logger.debug(
-                "`_poll` of real_producer of {} processed {} `on_delivery` callbacks",
-                self.fullname,
-                processed_callbacks,
-            )
+        logger.info("`_poll` of {} is starting", self.fullname)
 
-        # make sure all messages to be sent after cancelled
-        self._real_producer.flush()
+        try:
+            while not self._is_closed:
+                processed_callbacks = self._real_producer.poll(0.1)
+                logger.debug(
+                    "`_poll` of {} processed {} `on_delivery` callbacks",
+                    self.fullname,
+                    processed_callbacks,
+                )
+
+            logger.info("`_poll` of {} is over", self.fullname)
+            # make sure all messages to be sent after cancelled
+            self._real_producer.flush()
+
+        except Exception as ex:
+            logger.error(
+                "`_poll` of {} is aborted by: <{}> {}",
+                self.fullname,
+                type(ex).__name__,
+                ex,
+            )
+            raise
 
     def _generate_fut_ack(self) -> Tuple[Future, Callable[[Exception, Message], None]]:
         fut = self._loop.create_future()

@@ -6,11 +6,11 @@ from confluent_kafka import KafkaException
 from loguru import logger
 
 from eventbus import config
-from eventbus.config import StoryConfig
 from eventbus.errors import KafkaConsumerClosedError, KafkaConsumerPollingError
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.kafka_consumer import KafkaConsumer
 from eventbus.kafka_producer import KafkaProducer
+from eventbus.model import StoryInfo
 from eventbus.sink import HttpSink, Sink
 
 # class StoryConfig(ConfigModel):
@@ -29,7 +29,7 @@ from eventbus.sink import HttpSink, Sink
 
 
 class Story:
-    def __init__(self, id: str, story_config: StoryConfig):
+    def __init__(self, id: str, story_config: StoryInfo):
         assert (
             not story_config.disabled
         ), f"{self.fullname} is disabled, not allowed to be constructed."

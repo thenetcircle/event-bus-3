@@ -8,19 +8,21 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
 
-from eventbus import config, config_watcher
+from eventbus import config, config_watcher, model
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
 from eventbus.kafka_producer import KafkaProducer
 from eventbus.metrics import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
+from eventbus.zoo_client import AioZooClient
 
 config.load_from_environ()
 setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
-producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().producers)
+zoo_client = AioZooClient()
+producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().producer)
 
 
 async def startup():
@@ -28,13 +30,33 @@ async def startup():
     await config_watcher.async_watch_config_file(
         config.get().config_file_path, checking_interval=3
     )
-    await topic_resolver.init()
+
+    async def _set_topic_mapping(data, stats):
+        try:
+            data = data.decode("utf-8")
+            if data == "":
+                logger.warning("topic mapping is empty")
+                return
+            logger.info("get topic mapping: {}", data)
+            topic_mappings = model.convert_str_to_topic_mappings(data)
+            await topic_resolver.set_topic_mapping(topic_mappings)
+        except Exception as ex:
+            logger.error("update topic mapping error: {}", ex)
+
+    topic_mapping_path = config.get().app.zookeeper.topic_mapping_path
+    await zoo_client.init(
+        config.get().app.zookeeper.hosts, config.get().app.zookeeper.timeout
+    )
+    await _set_topic_mapping(*await zoo_client.get(topic_mapping_path))
+    await zoo_client.watch_data(topic_mapping_path, _set_topic_mapping)
+
     await producer.init()
 
 
 async def shutdown():
     logger.info("The app is shutting down")
     await producer.close()
+    await zoo_client.close()
 
 
 def home(request):

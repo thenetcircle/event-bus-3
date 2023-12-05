@@ -17,7 +17,7 @@ class Event(BaseModel):
 
     id: str
     title: str
-    published: datetime
+    published: str
     payload: str
 
     class Config:

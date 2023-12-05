@@ -8,9 +8,10 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 from blinker import signal
 from loguru import logger
-from pydantic import BaseModel, StrictStr
+from pydantic import StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
+from eventbus.model import EventBusModel, HttpSinkInfo, StoryInfo, TopicMapping
 from eventbus.utils import deep_merge_two_dict
 
 
@@ -22,85 +23,50 @@ class Env(str, Enum):
     TEST = "test"
 
 
-class ConfigModel(BaseModel):
-    class Config:
-        allow_mutation = False
-
-
-class StatsdConfig(ConfigModel):
+class StatsdConfig(EventBusModel):
     host: StrictStr
     port: int
     prefix: Optional[StrictStr]
 
 
-class SentryConfig(ConfigModel):
+class SentryConfig(EventBusModel):
     dsn: StrictStr
     sample_rate: float = 1.0
     traces_sample_rate: float = 0.2
 
 
-class AppConfig(ConfigModel):
+class ZookeeperConfig(EventBusModel):
+    hosts: StrictStr
+    topic_mapping_path: StrictStr
+    timeout: float = 10.0
+
+
+class AppConfig(EventBusModel):
     project_id: StrictStr
     env: Env
     debug: bool
     max_response_time: int = 3
+    zookeeper: ZookeeperConfig
     sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
 
 
-class ProducerConfig(ConfigModel):
+class ProducerConfig(EventBusModel):
     kafka_config: Dict[str, str]
     max_retries: int = 3
 
 
-class ConsumerConfig(ConfigModel):
+class ConsumerConfig(EventBusModel):
     kafka_config: Dict[str, str]
 
 
-class HttpSinkMethod(str, Enum):
-    POST = "POST"
-    PUT = "PUT"
-    PATCH = "PATCH"
-
-
-class HttpSinkConfig(ConfigModel):
-    url: StrictStr
-    method: HttpSinkMethod = HttpSinkMethod.POST
-    headers: Optional[Dict[str, str]] = None
-    timeout: float = 300  # seconds
-    max_retry_times: int = 3
-    backoff_retry_step: float = 0.1
-    backoff_retry_max_time: float = 60.0
-
-
-class StoryConfig(ConfigModel):
-    kafka_topic: StrictStr
-    sink: StrictStr
-    event_poll_interval: float = 1.0
-    include_events: Optional[List[StrictStr]] = None
-    exclude_events: Optional[List[StrictStr]] = None
-    concurrent_per_partition: int = 1
-    send_queue_size: int = 100
-    commit_queue_size: int = 10
-    tp_queue_size: int = 3
-    max_produce_retries = 3
-    max_commit_retries = 2
-    max_skipped_events = 100
-    disabled = False
-
-
-class TopicMappingConfig(ConfigModel):
-    topic: StrictStr
-    patterns: List[StrictStr]
-
-
-class Config(ConfigModel):
+class Config(EventBusModel):
     app: AppConfig
     producer: ProducerConfig
     consumer: ConsumerConfig
-    sinks: Dict[str, HttpSinkConfig]
-    stories: List[StoryConfig]
-    topic_mapping: List[TopicMappingConfig]
+    sinks: Dict[str, HttpSinkInfo]
+    stories: List[StoryInfo]
+    topic_mapping: List[TopicMapping]
     last_update_time: Optional[float] = None
     config_file_path: Optional[str] = None
 

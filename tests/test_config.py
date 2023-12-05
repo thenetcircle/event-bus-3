@@ -8,6 +8,7 @@ from unittest import mock
 import pytest
 import yaml
 
+import eventbus.model
 from eventbus import config, config_watcher
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
@@ -16,15 +17,15 @@ def test_update_from_yaml():
     config_data = config.get()
     assert config_data.app.env == config.Env.TEST
     assert config_data.topic_mapping == [
-        config.TopicMappingConfig(
+        eventbus.model.TopicMapping(
             topic="primary-success",
             patterns=[r"test\.primary-success"],
         ),
-        config.TopicMappingConfig(
+        eventbus.model.TopicMapping(
             topic="secondary-success",
             patterns=[r"test\.secondary-success"],
         ),
-        config.TopicMappingConfig(
+        eventbus.model.TopicMapping(
             topic="event-v3-${env}-default",
             patterns=[r".*"],
         ),
