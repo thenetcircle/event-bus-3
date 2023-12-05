@@ -27,9 +27,6 @@ producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().produc
 
 async def startup():
     logger.info("The app is starting up")
-    await config_watcher.async_watch_config_file(
-        config.get().config_file_path, checking_interval=3
-    )
 
     async def _set_topic_mapping(data, stats):
         try:
@@ -39,7 +36,7 @@ async def startup():
                 return
             logger.info("get topic mapping: {}", data)
             topic_mappings = model.convert_str_to_topic_mappings(data)
-            await topic_resolver.set_topic_mapping(topic_mappings)
+            await topic_resolver.set_topic_mappings(topic_mappings)
         except Exception as ex:
             logger.error("update topic mapping error: {}", ex)
 
@@ -72,9 +69,9 @@ async def receive_events(request):
     stats_client.incr("producer.request.new")
     request_body = await request.body()
 
-    resp_format = 3
+    resp_format = "plain"
     if "resp_format" in request.query_params:
-        resp_format = int(request.query_params["resp_format"])
+        resp_format = request.query_params["resp_format"]
 
     max_resp_time = config.get().app.max_response_time  # seconds
     if "max_resp_time" in request.query_params:
@@ -121,23 +118,24 @@ async def handler_event(*events: Event) -> List[Union[Message, Exception]]:
 
 
 def _create_response(
-    event_ids: List[str], results: List[Union[Message, Exception]], resp_format: int
+    event_ids: List[str], results: List[Union[Message, Exception]], resp_format: str
 ) -> Response:
     succ_events_len = len(list(filter(lambda r: isinstance(r, Message), results)))
 
-    if resp_format == 2:
-        if succ_events_len == len(event_ids):
-            resp = "ok"
-        elif succ_events_len > 0:
-            resp = "part_ok"
-        else:
-            resp = "fail"
+    def _get_details():
+        details = {}
+        for i, event_id in enumerate(event_ids):
+            result = results[i]
+            if not isinstance(result, Message):
+                details[event_id] = f"<{type(result).__name__}> {result}"
+        return (
+            details
+            if resp_format == "json"
+            else "\n".join(f"{k}: {v}" for k, v in details.items())
+        )
 
-        return PlainTextResponse(resp)
-
-    else:
+    if resp_format == "json":
         resp = {}
-
         if succ_events_len == len(event_ids):
             resp["status"] = "all_succ"
         elif succ_events_len > 0:
@@ -145,15 +143,20 @@ def _create_response(
         else:
             resp["status"] = "all_fail"
 
-        details = {}
-        for i, event_id in enumerate(event_ids):
-            result = results[i]
-            if not isinstance(result, Message):
-                details[event_id] = f"<{type(result).__name__}> {result}"
-        if details:
-            resp["details"] = details
+        if d := _get_details():
+            resp["details"] = d
 
         return JSONResponse(resp)
+
+    else:
+        if succ_events_len == len(event_ids):
+            resp = "ok"
+        elif succ_events_len > 0:
+            resp = "part_ok" + "\n" + _get_details()
+        else:
+            resp = "fail" + "\n" + _get_details()
+
+        return PlainTextResponse(resp)
 
 
 def _ungzip_request_body(request_body: str) -> str:

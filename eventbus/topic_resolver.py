@@ -20,11 +20,11 @@ class TopicResolver:
                 return topic
         return None
 
-    async def set_topic_mapping(self, topic_mappings: List[TopicMapping]) -> None:
-        logger.info("Updating topic mapping")
+    async def set_topic_mappings(self, topic_mappings: List[TopicMapping]) -> None:
+        logger.info("Updating topic mappings")
         self._topic_mappings = topic_mappings
         self.reindex()
-        logger.info("Updated topic mapping")
+        logger.info("Updated topic mappings")
 
     def reindex(self) -> None:
         """Index the topic mapping with structure:

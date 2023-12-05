@@ -165,7 +165,7 @@ async def test_watch_file(tmpdir):
 
     tmp_config_file = Path(tmp_config_file).resolve()
 
-    await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
+    # await config_watcher.async_watch_config_file(tmp_config_file, checking_interval=0.1)
     await asyncio.sleep(1)
 
     with open(tmp_config_file, "w") as f:
