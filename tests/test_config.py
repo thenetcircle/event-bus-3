@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 import eventbus.model
-from eventbus import config, config_watcher
+from eventbus import config
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
 
 

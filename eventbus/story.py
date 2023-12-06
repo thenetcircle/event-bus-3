@@ -6,11 +6,11 @@ from confluent_kafka import KafkaException
 from loguru import logger
 
 from eventbus import config
+from eventbus.consumer import AioKafkaConsumer
 from eventbus.errors import KafkaConsumerClosedError, KafkaConsumerPollingError
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.kafka_consumer import KafkaConsumer
-from eventbus.kafka_producer import KafkaProducer
 from eventbus.model import StoryInfo
+from eventbus.producer import AioKafkaProducer
 from eventbus.sink import HttpSink, Sink
 
 # class StoryConfig(ConfigModel):
@@ -43,8 +43,8 @@ class Story:
             story_config,
         )
 
-        self._consumer = KafkaConsumer(self.id, config.get().consumer)
-        self._producer = KafkaProducer(self.id, config.get().producer)
+        self._consumer = AioKafkaConsumer(self.id, config.get().consumer)
+        self._producer = AioKafkaProducer(self.id, config.get().producer)
 
         assert (
             story_config.sink in config.get().sinks

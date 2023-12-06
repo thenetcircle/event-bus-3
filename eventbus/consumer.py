@@ -17,7 +17,7 @@ from eventbus.event import KafkaEvent, parse_kafka_message
 from eventbus.metrics import stats_client
 
 
-class KafkaConsumer:
+class AioKafkaConsumer:
     def __init__(
         self,
         id: str,

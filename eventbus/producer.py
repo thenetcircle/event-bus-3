@@ -14,7 +14,7 @@ from eventbus.event import Event, create_kafka_message
 from eventbus.metrics import stats_client
 
 
-class KafkaProducer:
+class AioKafkaProducer:
     """
     KafkaProducer based on Asyncio, use another thread to poll and send result to the event loop in current thread.
 

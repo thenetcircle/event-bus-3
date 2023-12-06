@@ -9,9 +9,8 @@ from janus import Queue as JanusQueue
 from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 from eventbus.config import ConsumerConfig, UseProducersConfig
-from eventbus.consumer import EventConsumer
+from eventbus.consumer import AioKafkaConsumer, EventConsumer
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.kafka_consumer import KafkaConsumer
 from eventbus.model import HttpSinkInfo, HttpSinkMethod
 
 
@@ -78,7 +77,7 @@ async def event_consumer(mocker, consumer_conf):
 
     mocker.patch("eventbus.sink.HttpSink.send_event", mock_send_event)
 
-    consumer = KafkaConsumer("t1", consumer_conf)
+    consumer = AioKafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
     consumer._real_consumer = mock_consumer
     # commit_spy = mocker.spy(consumer._internal_consumer, "commit")
@@ -95,7 +94,7 @@ async def event_consumer(mocker, consumer_conf):
 async def test_send_events(consumer_conf):
     send_queue = JanusQueue(maxsize=100)
 
-    consumer = KafkaConsumer("t1", consumer_conf)
+    consumer = AioKafkaConsumer("t1", consumer_conf)
     mock_consumer = MockInternalConsumer()
     consumer._real_consumer = mock_consumer
 
@@ -132,7 +131,7 @@ async def test_send_events(consumer_conf):
 async def test_commit_events(mocker, consumer_conf):
     commit_queue = JanusQueue(maxsize=100)
 
-    consumer = KafkaConsumer("t1", consumer_conf)
+    consumer = AioKafkaConsumer("t1", consumer_conf)
     consumer._real_consumer = MockInternalConsumer()
     store_spy = mocker.spy(consumer._real_consumer, "store_offsets")
 

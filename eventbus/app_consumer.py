@@ -10,7 +10,7 @@ from loguru import logger
 
 from eventbus import config
 from eventbus.config_watcher import watch_config_file
-from eventbus.consumer import EventConsumer
+from eventbus.consumer import AioKafkaConsumer
 from eventbus.errors import EventConsumerNotFoundError
 from eventbus.metrics import stats_client
 from eventbus.utils import setup_logger
@@ -27,7 +27,7 @@ def consumer_main(consumer_id: str, config_file_path: str):
         raise EventConsumerNotFoundError
 
     consumer_conf = config.get().consumers[consumer_id]
-    consumer = EventConsumer(
+    consumer = AioKafkaConsumer(
         consumer_id, consumer_conf, name=f"{consumer_id}_{socket.gethostname()}"
     )
 
@@ -35,7 +35,7 @@ def consumer_main(consumer_id: str, config_file_path: str):
     asyncio.run(run_consumer(consumer))
 
 
-async def run_consumer(consumer: EventConsumer):
+async def run_consumer(consumer: AioKafkaConsumer):
     loop = asyncio.get_event_loop()
 
     def term_callback():
