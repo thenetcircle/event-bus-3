@@ -4,7 +4,7 @@ from typing import List, Optional
 from loguru import logger
 
 from eventbus.event import Event
-from eventbus.model import TopicMapping
+from eventbus.model import TopicMappingEntry
 
 
 class TopicResolver:
@@ -20,7 +20,7 @@ class TopicResolver:
                 return topic
         return None
 
-    async def set_topic_mappings(self, topic_mappings: List[TopicMapping]) -> None:
+    async def set_topic_mappings(self, topic_mappings: List[TopicMappingEntry]) -> None:
         logger.info("Updating topic mappings")
         self._topic_mappings = topic_mappings
         self.reindex()

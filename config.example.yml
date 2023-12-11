@@ -12,6 +12,7 @@ app:
   zookeeper:
     hosts: maggie-zoo-1:2181,maggie-zoo-2:2181
     topic_mapping_path: /event-bus/happ/dev/topics
+    story_path: /event-bus/happ/dev/stories
 
 # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
 # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md

@@ -2,13 +2,13 @@ import pytest
 from loguru import logger
 
 from eventbus import config
-from eventbus.zoo_client import AioZooClient
+from eventbus.zoo_client import ZooClient
 
 
 @pytest.mark.asyncio
 async def test_zoo_get():
-    zoo_client = AioZooClient()
-    await zoo_client.init(**config.get().app.zookeeper.dict())
+    zoo_client = ZooClient()
+    await zoo_client.init()
 
     test_path = "/event-bus-3/test_path"
 

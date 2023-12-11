@@ -1,35 +1,37 @@
 import asyncio
-from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Tuple
+from enum import Enum
+from typing import Dict, Optional, Tuple
 
 import aiohttp
 from aiohttp import ClientSession
 from loguru import logger
+from pydantic import StrictStr
 
-from eventbus.config import ConsumerConfig
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.metrics import stats_client
-from eventbus.model import HttpSinkInfo
+from eventbus.model import AbsSink, AbsSinkConfig
 
 
-class Sink(ABC):
-    @abstractmethod
-    async def init(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, EventStatus]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def close(self):
-        raise NotImplementedError
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
 
 
-class HttpSink(Sink):
-    def __init__(self, id: str, sink_config: HttpSinkInfo):
-        self._id = id
+class HttpSinkConfig(AbsSinkConfig):
+    url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
+    headers: Optional[Dict[str, str]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
+
+
+class HttpSink(AbsSink):
+    def __init__(self, sink_config: HttpSinkConfig):
+        self._id = sink_config.id
         self._config = sink_config
         self._client: Optional[ClientSession] = None
 

@@ -2,7 +2,7 @@ import pytest
 from pytest_mock import MockFixture
 from utils import create_event_from_dict
 
-from eventbus.model import TopicMapping
+from eventbus.model import TopicMappingEntry
 from eventbus.topic_resolver import TopicResolver
 
 
@@ -31,7 +31,7 @@ from eventbus.topic_resolver import TopicResolver
 async def test_resolve(mapping, test_cases):
     resolver = TopicResolver()
     await resolver.set_topic_mappings(
-        [TopicMapping(topic=m[0], patterns=m[1]) for m in mapping]
+        [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in mapping]
     )
     for case in test_cases:
         event = create_event_from_dict({"title": case[0]})
@@ -95,7 +95,7 @@ async def test_config_change_signal(
 ):
     resolver = TopicResolver()
     await resolver.set_topic_mappings(
-        [TopicMapping(topic=m[0], patterns=m[1]) for m in init_mapping]
+        [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in init_mapping]
     )
 
     for event_title, topic1, _ in event_cases:
@@ -104,7 +104,7 @@ async def test_config_change_signal(
         )
 
     await resolver.set_topic_mappings(
-        [TopicMapping(topic=m[0], patterns=m[1]) for m in new_mapping]
+        [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in new_mapping]
     )
 
     for event_title, _, topic2 in event_cases:

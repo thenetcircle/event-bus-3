@@ -17,15 +17,15 @@ def test_update_from_yaml():
     config_data = config.get()
     assert config_data.app.env == config.Env.TEST
     assert config_data.topic_mapping == [
-        eventbus.model.TopicMapping(
+        eventbus.model.TopicMappingEntry(
             topic="primary-success",
             patterns=[r"test\.primary-success"],
         ),
-        eventbus.model.TopicMapping(
+        eventbus.model.TopicMappingEntry(
             topic="secondary-success",
             patterns=[r"test\.secondary-success"],
         ),
-        eventbus.model.TopicMapping(
+        eventbus.model.TopicMappingEntry(
             topic="event-v3-${env}-default",
             patterns=[r".*"],
         ),

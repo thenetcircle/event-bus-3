@@ -11,7 +11,8 @@ from loguru import logger
 from pydantic import StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
-from eventbus.model import EventBusModel, HttpSinkInfo, StoryInfo, TopicMapping
+from eventbus.http_sink import HttpSinkConfig
+from eventbus.model import EventBusBaseModel, StoryConfig, TopicMappingEntry
 from eventbus.utils import deep_merge_two_dict
 
 
@@ -23,25 +24,26 @@ class Env(str, Enum):
     TEST = "test"
 
 
-class StatsdConfig(EventBusModel):
+class StatsdConfig(EventBusBaseModel):
     host: StrictStr
     port: int
     prefix: Optional[StrictStr]
 
 
-class SentryConfig(EventBusModel):
+class SentryConfig(EventBusBaseModel):
     dsn: StrictStr
     sample_rate: float = 1.0
     traces_sample_rate: float = 0.2
 
 
-class ZookeeperConfig(EventBusModel):
+class ZookeeperConfig(EventBusBaseModel):
     hosts: StrictStr
     topic_mapping_path: StrictStr
+    story_path: StrictStr
     timeout: float = 10.0
 
 
-class AppConfig(EventBusModel):
+class AppConfig(EventBusBaseModel):
     project_id: StrictStr
     env: Env
     debug: bool
@@ -51,22 +53,22 @@ class AppConfig(EventBusModel):
     statsd: Optional[StatsdConfig] = None
 
 
-class ProducerConfig(EventBusModel):
+class ProducerConfig(EventBusBaseModel):
     kafka_config: Dict[str, str]
     max_retries: int = 3
 
 
-class ConsumerConfig(EventBusModel):
+class ConsumerConfig(EventBusBaseModel):
     kafka_config: Dict[str, str]
 
 
-class Config(EventBusModel):
+class Config(EventBusBaseModel):
     app: AppConfig
     producer: ProducerConfig
     consumer: ConsumerConfig
-    sinks: Dict[str, HttpSinkInfo]
-    stories: List[StoryInfo]
-    topic_mapping: List[TopicMapping]
+    sinks: Dict[str, HttpSinkConfig]
+    stories: List[StoryConfig]
+    topic_mapping: List[TopicMappingEntry]
     last_update_time: Optional[float] = None
     config_file_path: Optional[str] = None
 

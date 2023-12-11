@@ -10,24 +10,29 @@ from loguru import logger
 
 from eventbus import config
 from eventbus.config_watcher import watch_config_file
-from eventbus.consumer import AioKafkaConsumer
-from eventbus.errors import EventConsumerNotFoundError
+from eventbus.errors import ConsumerDisabledError
+from eventbus.kafka_consumer import KafkaConsumer
 from eventbus.metrics import stats_client
+from eventbus.model import StoryConfig, StoryStatus
 from eventbus.utils import setup_logger
+from eventbus.zoo_client import ZooClient
 
 
-def consumer_main(consumer_id: str, config_file_path: str):
+def consumer_main(config_file_path: str, consumer_info: StoryConfig):
     config.update_from_yaml(config_file_path)
     setup_logger()
     stats_client.init(config.get())
 
-    if consumer_id not in config.get().consumers:
-        logger.error('Consumer id "{}" can not be found from the configs', consumer_id)
+    if consumer_info.status == StoryStatus.DISABLED:
+        logger.error(
+            'Consumer "{}" can not be run, because it is already disabled, ',
+            consumer_info.id,
+        )
         # TODO trigger alert
-        raise EventConsumerNotFoundError
+        raise ConsumerDisabledError
 
     consumer_conf = config.get().consumers[consumer_id]
-    consumer = AioKafkaConsumer(
+    consumer = KafkaConsumer(
         consumer_id, consumer_conf, name=f"{consumer_id}_{socket.gethostname()}"
     )
 
@@ -35,7 +40,7 @@ def consumer_main(consumer_id: str, config_file_path: str):
     asyncio.run(run_consumer(consumer))
 
 
-async def run_consumer(consumer: AioKafkaConsumer):
+async def run_consumer(consumer: KafkaConsumer):
     loop = asyncio.get_event_loop()
 
     def term_callback():
@@ -77,6 +82,10 @@ def main():
         config.load_from_environ()
 
     setup_logger()
+
+    # setup_zookeeper
+    zoo_client = ZooClient()
+    asyncio.run(zoo_client.init())
 
     # --- handler system signals ---
 

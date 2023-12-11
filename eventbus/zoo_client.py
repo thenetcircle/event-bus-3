@@ -6,19 +6,21 @@ from typing import Any, Optional
 from kazoo.client import KazooClient
 from loguru import logger
 
+from eventbus import config
 
-class AioZooClient:
+
+class ZooClient:
     def __init__(self):
         self._loop = None
         self._zk: Optional[KazooClient] = None
         self._executor: Optional[ThreadPoolExecutor] = None
 
-    async def init(self, hosts: str, timeout: float = 10.0):
+    async def init(self):
         logger.info("init zoo client")
         self._loop = asyncio.get_running_loop()
         self._zk = KazooClient(
-            hosts=hosts,
-            timeout=timeout,
+            hosts=config.get().app.zookeeper.hosts,
+            timeout=config.get().app.zookeeper.timeout,
             logger=logging.getLogger("KazooClient"),
         )
         self._zk.start()

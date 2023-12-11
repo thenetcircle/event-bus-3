@@ -43,7 +43,7 @@ class InitConsumerError(EventBusError):
     pass
 
 
-class EventConsumerNotFoundError(EventBusError):
+class ConsumerDisabledError(EventBusError):
     pass
 
 

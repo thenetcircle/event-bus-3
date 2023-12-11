@@ -7,8 +7,7 @@ from utils import create_kafka_event_from_dict
 
 from eventbus.config import ConsumerConfig, UseProducersConfig
 from eventbus.event import EventStatus
-from eventbus.model import HttpSinkInfo, HttpSinkMethod
-from eventbus.sink import HttpSink
+from eventbus.http_sink import HttpSink, HttpSinkConfig, HttpSinkMethod
 
 
 @pytest.mark.asyncio
@@ -62,7 +61,7 @@ async def test_httpsink_send_event(aiohttp_client):
             kafka_topics=["topic1"],
             kafka_config={},
             use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkInfo(
+            sink=HttpSinkConfig(
                 url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
             ),
         ),
@@ -97,7 +96,7 @@ async def test_httpsink_send_event(aiohttp_client):
             kafka_topics=["topic1"],
             kafka_config={},
             use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkInfo(
+            sink=HttpSinkConfig(
                 url="/unknown",
                 method=HttpSinkMethod.POST,
                 timeout=0.2,

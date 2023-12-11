@@ -11,18 +11,18 @@ from starlette.routing import Route
 from eventbus import config, model
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
+from eventbus.kafka_producer import KafkaProducer
 from eventbus.metrics import stats_client
-from eventbus.producer import AioKafkaProducer
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
-from eventbus.zoo_client import AioZooClient
+from eventbus.zoo_client import ZooClient
 
 config.load_from_environ()
 setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
-zoo_client = AioZooClient()
-producer = AioKafkaProducer(f"app_http_{socket.gethostname()}", config.get().producer)
+zoo_client = ZooClient()
+producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().producer)
 
 
 async def startup():
@@ -41,9 +41,7 @@ async def startup():
             logger.error("update topic mapping error: {}", ex)
 
     topic_mapping_path = config.get().app.zookeeper.topic_mapping_path
-    await zoo_client.init(
-        config.get().app.zookeeper.hosts, config.get().app.zookeeper.timeout
-    )
+    await zoo_client.init()
     await _set_topic_mapping(*await zoo_client.get(topic_mapping_path))
     await zoo_client.watch_data(topic_mapping_path, _set_topic_mapping)
 

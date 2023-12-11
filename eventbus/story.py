@@ -6,50 +6,41 @@ from confluent_kafka import KafkaException
 from loguru import logger
 
 from eventbus import config
-from eventbus.consumer import AioKafkaConsumer
 from eventbus.errors import KafkaConsumerClosedError, KafkaConsumerPollingError
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.model import StoryInfo
-from eventbus.producer import AioKafkaProducer
-from eventbus.sink import HttpSink, Sink
-
-# class StoryConfig(ConfigModel):
-#     kafka_topic: StrictStr
-#     sink: StrictStr
-#     include_events: Optional[List[StrictStr]] = None
-#     exclude_events: Optional[List[StrictStr]] = None
-#     concurrent_per_partition: int = 1
-#     send_queue_size: int = 100
-#     commit_queue_size: int = 10
-#     tp_queue_size: int = 3
-#     max_produce_retries = 3
-#     max_commit_retries = 2
-#     max_skipped_events = 100
-#     disabled = False
+from eventbus.http_sink import HttpSink
+from eventbus.kafka_consumer import KafkaConsumer
+from eventbus.kafka_producer import KafkaProducer
+from eventbus.model import AbsSink, StoryConfig, StoryStatus
 
 
 class Story:
-    def __init__(self, id: str, story_config: StoryInfo):
+    def __init__(self, story_config: StoryConfig):
         assert (
-            not story_config.disabled
+            story_config.status != StoryStatus.DISABLED
         ), f"{self.fullname} is disabled, not allowed to be constructed."
 
-        self._id = id
+        self._id = story_config.id
         self._config = story_config
 
         logger.info(
-            'Constructing a new Story with id: "{}", config: {}',
-            id,
+            'Constructing a new Story with id: "{}", info: {}',
+            self.id,
             story_config,
         )
 
-        self._consumer = AioKafkaConsumer(self.id, config.get().consumer)
-        self._producer = AioKafkaProducer(self.id, config.get().producer)
+        self._consumer = KafkaConsumer(
+            self.id,
+            config.get().consumer,
+            story_config.kafka_topics,
+            self._create_group_id(),
+        )
+        self._producer = KafkaProducer(self.id, config.get().producer)
 
         assert (
             story_config.sink in config.get().sinks
         ), f"The sink {story_config.sink} is not defined"
-        self._sink: Sink = HttpSink(self.id, config.get().sinks[story_config.sink])
+        self._sink: AbsSink = HttpSink(self.id, config.get().sinks[story_config.sink])
 
         # TODO init dead letter producer
 
@@ -186,6 +177,9 @@ class Story:
             return not self._match_event_title(self._config.exclude_events, event)
 
         return True
+
+    def _create_group_id(self):
+        return f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
 
     @staticmethod
     def _get_dead_letter_topic(event: KafkaEvent) -> str:
