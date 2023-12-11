@@ -10,58 +10,45 @@ from loguru import logger
 
 from eventbus import config
 from eventbus.config_watcher import watch_config_file
-from eventbus.errors import ConsumerDisabledError
-from eventbus.kafka_consumer import KafkaConsumer
+from eventbus.errors import StoryDisabledError
 from eventbus.metrics import stats_client
-from eventbus.model import StoryConfig, StoryStatus
+from eventbus.model import StoryParams, StoryStatus
+from eventbus.story import Story
 from eventbus.utils import setup_logger
 from eventbus.zoo_client import ZooClient
 
 
-def consumer_main(config_file_path: str, consumer_info: StoryConfig):
+def story_main(config_file_path: str, story_params: StoryParams):
     config.update_from_yaml(config_file_path)
     setup_logger()
     stats_client.init(config.get())
 
-    if consumer_info.status == StoryStatus.DISABLED:
+    if story_params.status == StoryStatus.DISABLED:
         logger.error(
             'Consumer "{}" can not be run, because it is already disabled, ',
-            consumer_info.id,
+            story_params.id,
         )
         # TODO trigger alert
-        raise ConsumerDisabledError
-
-    consumer_conf = config.get().consumers[consumer_id]
-    consumer = KafkaConsumer(
-        consumer_id, consumer_conf, name=f"{consumer_id}_{socket.gethostname()}"
-    )
+        raise StoryDisabledError
 
     # run consumer
-    asyncio.run(run_consumer(consumer))
+    asyncio.run(run_story(story_params))
 
 
-async def run_consumer(consumer: KafkaConsumer):
+async def run_story(story_params: StoryParams):
     loop = asyncio.get_event_loop()
+    story = Story(story_params)
 
     def term_callback():
-        logger.info("Get TERM signals, going to terminate {}.", consumer.fullname)
-        asyncio.run_coroutine_threadsafe(consumer.cancel(), loop)
-
-    def update_config_callback():
-        logger.info(
-            "Get Config Updated signals, going to reload the config for {}.",
-            consumer.fullname,
-        )
-        config.reload()
-        config.send_signals()
+        logger.info("Get TERM signals, going to terminate {}.", story.fullname)
+        asyncio.run_coroutine_threadsafe(story.close(), loop)
 
     # add signals handlers
     loop.add_signal_handler(signal.SIGTERM, term_callback)
     loop.add_signal_handler(signal.SIGINT, term_callback)
-    loop.add_signal_handler(signal.SIGUSR1, update_config_callback)
 
-    await consumer.init()
-    await consumer.run()
+    await story.init()
+    await story.run()
 
 
 def main():
@@ -106,7 +93,7 @@ def main():
 
         logger.info("Starting new consumer {}", consumer_id)
         p = Process(
-            target=consumer_main,
+            target=story_main,
             name=f"Consumer#{consumer_id}_{socket.gethostname()}",
             args=(consumer_id, config.get().config_file_path),
             daemon=True,

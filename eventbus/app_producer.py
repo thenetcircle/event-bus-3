@@ -22,7 +22,11 @@ setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
 zoo_client = ZooClient()
-producer = KafkaProducer(f"app_http_{socket.gethostname()}", config.get().producer)
+producer = KafkaProducer(
+    f"app_producer_{socket.gethostname()}",
+    config.get().producer.kafka_config,
+    config.get().producer.max_retries,
+)
 
 
 async def startup():

@@ -10,7 +10,7 @@ from pydantic import StrictStr
 
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.metrics import stats_client
-from eventbus.model import AbsSink, AbsSinkConfig
+from eventbus.model import AbsSink, AbsSinkParams
 
 
 class HttpSinkMethod(str, Enum):
@@ -19,7 +19,7 @@ class HttpSinkMethod(str, Enum):
     PATCH = "PATCH"
 
 
-class HttpSinkConfig(AbsSinkConfig):
+class HttpSinkParams(AbsSinkParams):
     url: StrictStr
     method: HttpSinkMethod = HttpSinkMethod.POST
     headers: Optional[Dict[str, str]] = None
@@ -30,13 +30,13 @@ class HttpSinkConfig(AbsSinkConfig):
 
 
 class HttpSink(AbsSink):
-    def __init__(self, sink_config: HttpSinkConfig):
-        self._id = sink_config.id
-        self._config = sink_config
+    def __init__(self, sink_params: HttpSinkParams):
+        self._id = sink_params.id
+        self._params = sink_params
         self._client: Optional[ClientSession] = None
 
-        self._max_retry_times = self._config.max_retry_times
-        self._timeout = aiohttp.ClientTimeout(total=self._config.timeout)
+        self._max_retry_times = self._params.max_retry_times
+        self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
     @property
     def id(self):
@@ -52,14 +52,14 @@ class HttpSink(AbsSink):
 
     async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, EventStatus]:
         retry_times = 0
-        req_func = getattr(self._client, self._config.method.lower())
-        req_url = self._config.url
+        req_func = getattr(self._client, self._params.method.lower())
+        req_url = self._params.url
         req_kwargs = {
             "data": event.payload,
             "timeout": self._timeout,
         }
-        if self._config.headers:
-            req_kwargs["headers"] = self._config.headers
+        if self._params.headers:
+            req_kwargs["headers"] = self._params.headers
 
         stats_client.incr("consumer.event.send.new")
 
@@ -214,8 +214,8 @@ class HttpSink(AbsSink):
     def _get_backoff_sleep_time(self, retry_times: int) -> float:
         return min(
             [
-                (retry_times + 1) * self._config.backoff_retry_step,
-                self._config.backoff_retry_max_time,
+                (retry_times + 1) * self._params.backoff_retry_step,
+                self._params.backoff_retry_max_time,
             ]
         )
 

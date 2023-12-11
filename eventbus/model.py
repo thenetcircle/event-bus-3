@@ -24,7 +24,7 @@ class SinkType(str, Enum):
     HTTP = "HTTP"
 
 
-class AbsSinkConfig(EventBusBaseModel):
+class AbsSinkParams(EventBusBaseModel):
     id: StrictStr
 
 
@@ -47,7 +47,7 @@ class TransformType(str, Enum):
     EVENT_FILTER = "EVENT_FILTER"
 
 
-class AbsTransformConfig(EventBusBaseModel):
+class AbsTransformParams(EventBusBaseModel):
     pass
 
 
@@ -57,12 +57,12 @@ class StoryStatus(str, Enum):
     DISABLED = "DISABLED"
 
 
-class StoryConfig(EventBusBaseModel):
+class StoryParams(EventBusBaseModel):
     id: StrictStr
     kafka_topics: List[StrictStr]
-    sink: Dict[SinkType, AbsSinkConfig]
+    sink: Dict[SinkType, AbsSinkParams]
     status: StoryStatus
-    transforms: Optional[Dict[TransformType, AbsTransformConfig]] = None
+    transforms: Optional[Dict[TransformType, AbsTransformParams]] = None
 
 
 # class StoryInfo(EventBusModel):

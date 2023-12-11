@@ -10,7 +10,7 @@ from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 from eventbus.config import ConsumerConfig, UseProducersConfig
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.http_sink import HttpSinkConfig, HttpSinkMethod
+from eventbus.http_sink import HttpSinkMethod, HttpSinkParams
 from eventbus.kafka_consumer import EventConsumer, KafkaConsumer
 
 
@@ -24,7 +24,7 @@ def consumer_conf():
         },
         include_events=[r"test\..*"],
         exclude_events=[r"test\.exclude"],
-        sink=HttpSinkConfig(
+        sink=HttpSinkParams(
             url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
         ),
         concurrent_per_partition=1,

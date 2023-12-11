@@ -1,5 +1,6 @@
 import asyncio
 import re
+import socket
 from typing import List, Tuple
 
 from confluent_kafka import KafkaException
@@ -11,36 +12,43 @@ from eventbus.event import EventStatus, KafkaEvent
 from eventbus.http_sink import HttpSink
 from eventbus.kafka_consumer import KafkaConsumer
 from eventbus.kafka_producer import KafkaProducer
-from eventbus.model import AbsSink, StoryConfig, StoryStatus
+from eventbus.model import AbsSink, StoryParams, StoryStatus
+from eventbus.sink_factory import SinkFactory
 
 
 class Story:
-    def __init__(self, story_config: StoryConfig):
+    def __init__(self, story_params: StoryParams):
         assert (
-            story_config.status != StoryStatus.DISABLED
+            story_params.status != StoryStatus.DISABLED
         ), f"{self.fullname} is disabled, not allowed to be constructed."
 
-        self._id = story_config.id
-        self._config = story_config
+        self._id = f"{story_params.id}_{socket.gethostname()}"
+        self._params = story_params
 
         logger.info(
             'Constructing a new Story with id: "{}", info: {}',
             self.id,
-            story_config,
+            story_params,
         )
 
         self._consumer = KafkaConsumer(
             self.id,
-            config.get().consumer,
-            story_config.kafka_topics,
+            config.get().consumer.kafka_config,
+            story_params.kafka_topics,
             self._create_group_id(),
         )
-        self._producer = KafkaProducer(self.id, config.get().producer)
+        self._producer = KafkaProducer(
+            self.id,
+            config.get().producer.kafka_config,
+            config.get().producer.max_retries,
+        )
 
         assert (
-            story_config.sink in config.get().sinks
-        ), f"The sink {story_config.sink} is not defined"
-        self._sink: AbsSink = HttpSink(self.id, config.get().sinks[story_config.sink])
+            story_params.sink in config.get().sinks
+        ), f"The sink {story_params.sink} is not defined"
+        self._sink: AbsSink = SinkFactory.get_sink(
+            story_params.sink[0], story_params.sink[1]
+        )
 
         # TODO init dead letter producer
 
@@ -56,7 +64,7 @@ class Story:
 
     @property
     def config(self):
-        return self._config
+        return self._params
 
     async def init(self) -> None:
         await asyncio.gather(
@@ -116,7 +124,7 @@ class Story:
                         await self._consumer.commit(*[r[0] for r in sending_results])
                         break
                     except KafkaException as ex:
-                        if commit_retry_times < self._config.max_commit_retries:
+                        if commit_retry_times < self._params.max_commit_retries:
                             commit_retry_times = commit_retry_times + 1
                             continue
                         else:
@@ -169,12 +177,12 @@ class Story:
                 await asyncio.sleep(0.1)
 
     def _check_event(self, event: KafkaEvent) -> bool:
-        if self._config.include_events:
-            if not self._match_event_title(self._config.include_events, event):
+        if self._params.include_events:
+            if not self._match_event_title(self._params.include_events, event):
                 return False
 
-        if self._config.exclude_events:
-            return not self._match_event_title(self._config.exclude_events, event)
+        if self._params.exclude_events:
+            return not self._match_event_title(self._params.exclude_events, event)
 
         return True
 

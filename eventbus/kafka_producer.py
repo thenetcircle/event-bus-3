@@ -3,7 +3,7 @@ import logging
 import time
 from asyncio import Future
 from threading import Thread
-from typing import Callable, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 from confluent_kafka import KafkaError, KafkaException, Message, Producer
 from loguru import logger
@@ -22,16 +22,17 @@ class KafkaProducer:
     the description of the implementation: https://www.confluent.io/blog/kafka-python-asyncio-integration/
     """
 
-    def __init__(self, id: str, producer_config: ProducerConfig):
+    def __init__(self, id: str, kafka_config: Dict[str, str], max_retries: int = 3):
         logger.info(
-            'Constructing a new KafkaProducer with id: "{}", conf: {}',
+            'Constructing a new KafkaProducer with id: "{}", kafka_config: {}',
             id,
-            producer_config,
+            kafka_config,
         )
+        self._check_config(kafka_config)
 
         self._id = id
-        self._config = producer_config
-        self._check_config()
+        self._kafka_config = kafka_config
+        self._max_retries = max_retries
 
         self._is_closed = False
         self._loop = None
@@ -43,10 +44,6 @@ class KafkaProducer:
         return self._id
 
     @property
-    def config(self) -> ProducerConfig:
-        return self._config
-
-    @property
     def fullname(self) -> str:
         return f"KafkaProducer#{self.id}"
 
@@ -54,7 +51,7 @@ class KafkaProducer:
         logger.info("{} is initing", self.fullname)
         self._loop = asyncio.get_running_loop()
         self._real_producer = Producer(
-            self.config.kafka_config, logger=logging.getLogger(self.fullname)
+            self._kafka_config, logger=logging.getLogger(self.fullname)
         )
         self._poll_thread = Thread(target=self._poll, name=f"{self.fullname}-poll")
         self._poll_thread.start()
@@ -100,7 +97,7 @@ class KafkaProducer:
                     if (
                         isinstance(ex.args[0], KafkaError)
                         and kafka_error.retriable
-                        and retry_times < (self.config.max_retries - 1)
+                        and retry_times < (self._max_retries - 1)
                     ):
                         logger.warning(
                             'Producing an event "{}" to a Kafka topic "{}" by "{}", '
@@ -214,8 +211,8 @@ class KafkaProducer:
 
         return fut, fut_ack
 
-    def _check_config(self) -> None:
-        if "bootstrap.servers" not in self.config.kafka_config:
+    def _check_config(self, kafka_config: Dict[str, str]) -> None:
+        if "bootstrap.servers" not in kafka_config:
             raise InitKafkaProducerError(
                 f'"bootstrap.servers" is required in {self.fullname} config'
             )

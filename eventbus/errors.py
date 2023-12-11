@@ -43,7 +43,7 @@ class InitConsumerError(EventBusError):
     pass
 
 
-class ConsumerDisabledError(EventBusError):
+class StoryDisabledError(EventBusError):
     pass
 
 

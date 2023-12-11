@@ -1,13 +1,11 @@
 import asyncio
 import logging
 from asyncio import AbstractEventLoop
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from confluent_kafka import Consumer, KafkaException, Message, TopicPartition
 from loguru import logger
 
-from eventbus import config
-from eventbus.config import ConsumerConfig
 from eventbus.errors import (
     InvalidArgumentError,
     KafkaConsumerClosedError,
@@ -21,24 +19,21 @@ class KafkaConsumer:
     def __init__(
         self,
         id: str,
-        consumer_conf: ConsumerConfig,
-        subscribe_topics: List[str],
-        group_id: Optional[str] = None,
+        kafka_config: Dict[str, str],
+        topics: List[str],
+        group_id: str,
         group_instance_id: Optional[str] = None,
     ):
-        self._check_config(consumer_conf)
+        self._check_kafka_config(kafka_config)
 
         self._id = id
-        self._config = consumer_conf
-        self._subscribe_topics = subscribe_topics
-        self._group_id = group_id or self._get_default_group_id()
+        self._kafka_config = kafka_config
+        self._topics = topics
+        self._group_id = group_id
         self._group_instance_id = group_instance_id
         self._real_consumer: Optional[Consumer] = None
-        self._loop: AbstractEventLoop = None
-
+        self._loop: Optional[AbstractEventLoop] = None
         self._is_closed = False
-        self._is_fetching_events = False
-        self._is_committing_events = False
 
     @property
     def id(self):
@@ -48,28 +43,20 @@ class KafkaConsumer:
     def fullname(self) -> str:
         return f"KafkaConsumer#{self.id}"
 
-    @property
-    def config(self):
-        return self._config
-
-    @property
-    def subscribe_topics(self):
-        return self._subscribe_topics
-
     async def init(self) -> None:
         self._loop = asyncio.get_running_loop()
 
-        consumer_kafka_config = self._config.kafka_config.copy()
+        kafka_config = self._kafka_config.copy()
         if self._group_id:
-            consumer_kafka_config["group.id"] = self._group_id
+            kafka_config["group.id"] = self._group_id
         if self._group_instance_id:
-            consumer_kafka_config["group.instance.id"] = self._group_instance_id
+            kafka_config["group.instance.id"] = self._group_instance_id
         self._real_consumer = Consumer(
-            consumer_kafka_config,
+            kafka_config,
             logger=logging.getLogger(self.fullname),
         )
         self._real_consumer.subscribe(
-            self.subscribe_topics,
+            self._topics,
             on_assign=self._on_assign,
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
@@ -176,7 +163,7 @@ class KafkaConsumer:
         try:
             # https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.store_offsets
             self._real_consumer.store_offsets(
-                offsets=self._get_offsets_from_events(events)
+                offsets=self._get_offsets_from_events(*events)
             )
 
             stats_client.incr("consumer.event.commit.succ")
@@ -215,12 +202,8 @@ class KafkaConsumer:
             partitions,
         )
 
-    def _get_default_group_id(self):
-        return f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
-
     @staticmethod
-    def _check_config(consumer_conf: ConsumerConfig) -> None:
-        kafka_config = consumer_conf.kafka_config
+    def _check_kafka_config(kafka_config: Dict[str, str]) -> None:
         if "bootstrap.servers" not in kafka_config:
             raise InvalidArgumentError('"bootstrap.servers" is needed')
         # if "group.id" not in kafka_config:
