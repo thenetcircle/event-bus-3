@@ -43,19 +43,15 @@ def setup_logger():
 
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
-    if config.get().app.sentry:
+    if config.get().sentry:
         logger.info(
             "Detected sentry_dsh: {}, going to set up Sentry.",
-            config.get().app.sentry.dsn,
+            config.get().sentry.dsn,
         )
 
         # https://docs.sentry.io/platforms/python/guides/logging/
         import sentry_sdk
-        from sentry_sdk.integrations.logging import (
-            BreadcrumbHandler,
-            EventHandler,
-            LoggingIntegration,
-        )
+        from sentry_sdk.integrations.logging import EventHandler, LoggingIntegration
 
         # from sentry_sdk.integrations.logging import LoggingIntegration
         # sentry_logging = LoggingIntegration(
@@ -64,11 +60,11 @@ def setup_logger():
         # )
         # https://docs.sentry.io/platforms/python/configuration/options/
         sentry_sdk.init(
-            dsn=config.get().app.sentry.dsn,
+            dsn=config.get().sentry.dsn,
             debug=config.get().app.debug,
             environment=str(config.get().app.env),
-            sample_rate=config.get().app.sentry.sample_rate,
-            traces_sample_rate=config.get().app.sentry.traces_sample_rate,
+            sample_rate=config.get().sentry.sample_rate,
+            traces_sample_rate=config.get().sentry.traces_sample_rate,
             integrations=[
                 LoggingIntegration(level=None, event_level=None),
             ],

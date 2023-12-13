@@ -1,18 +1,15 @@
 import os
-import threading
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import yaml
-from blinker import signal
 from loguru import logger
 from pydantic import StrictStr
 
-from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
-from eventbus.model import EventBusBaseModel, HttpSinkParams, TopicMappingEntry
-from eventbus.utils import deep_merge_two_dict
+from eventbus.errors import ConfigNoneError, ConfigUpdateError
+from eventbus.model import EventBusBaseModel
 
 
 class Env(str, Enum):
@@ -38,7 +35,7 @@ class SentryConfig(EventBusBaseModel):
 class ZookeeperConfig(EventBusBaseModel):
     hosts: StrictStr
     topic_mapping_path: StrictStr
-    story_path: StrictStr
+    stories_path: StrictStr
     timeout: float = 10.0
 
 
@@ -47,40 +44,26 @@ class AppConfig(EventBusBaseModel):
     env: Env
     debug: bool
     max_response_time: int = 3
-    zookeeper: ZookeeperConfig
-    sentry: Optional[SentryConfig] = None
-    statsd: Optional[StatsdConfig] = None
+    max_produce_retry_times: int = 3
 
 
-class ProducerConfig(EventBusBaseModel):
-    kafka_config: Dict[str, str]
-    max_retries: int = 3
-
-
-class ConsumerConfig(EventBusBaseModel):
-    kafka_config: Dict[str, str]
+class KafkaConfig(EventBusBaseModel):
+    producer: Dict[str, str]
+    consumer: Dict[str, str]
 
 
 class Config(EventBusBaseModel):
     app: AppConfig
-    producer: ProducerConfig
-    consumer: ConsumerConfig
-    sinks: Dict[str, HttpSinkParams]
-    topic_mapping: List[TopicMappingEntry]
+    zookeeper: ZookeeperConfig
+    kafka: KafkaConfig
+    sentry: Optional[SentryConfig] = None
+    statsd: Optional[StatsdConfig] = None
     last_update_time: Optional[float] = None
     config_file_path: Optional[str] = None
 
 
-class ConfigSignals:
-    ANY_CHANGE = signal("any_config_change")
-    PRODUCER_CHANGE = signal("producer_config_change")
-    TOPIC_MAPPING_CHANGE = signal("topic_mapping_config_change")
-    CONSUMER_CHANGE = signal("consumer_config_change")
-
-
 _old_config: Optional[Config] = None
 _config: Optional[Config] = None
-_config_update_lock = threading.Lock()
 
 
 def update_from_config(new_config: Config) -> None:
@@ -152,94 +135,7 @@ def get_old() -> Optional[Config]:
     return _old_config
 
 
-def send_signals() -> None:
-    try:
-        old_config = _old_config
-        new_config = _config
-
-        if not old_config or not new_config:
-            # won't send any signal if either old_config and new_config is empty
-            return
-
-        signal_sender = "config"
-
-        if old_config != new_config:
-            receivers = ConfigSignals.ANY_CHANGE.send(signal_sender)
-            logger.info(
-                "Config changed, sent CONFIG_CHANGED signal to receivers: {}",
-                receivers,
-            )
-
-        def compare_two_config(
-            old: Dict[str, Any], new: Dict[str, Any]
-        ) -> Dict[str, set]:
-            old_keys = set(old.keys())
-            new_keys = set(new.keys())
-
-            removed = old_keys.difference(new_keys)
-            added = new_keys.difference(old_keys)
-            changed = set()
-            for k in old_keys.intersection(new_keys):
-                if old[k] != new[k]:
-                    changed.add(k)
-
-            return {"added": added, "removed": removed, "changed": changed}
-
-        if old_config.producers != new_config.producers:
-            kwargs = compare_two_config(
-                old_config.producers,
-                new_config.producers,
-            )
-            receivers = ConfigSignals.PRODUCER_CHANGE.send(signal_sender, **kwargs)
-            logger.info(
-                "Config changed, sent CONFIG_PRODUCER_CHANGED signal to receivers: {}, with kwargs: {}",
-                receivers,
-                kwargs,
-            )
-
-        if old_config.consumers != new_config.consumers:
-            kwargs = compare_two_config(
-                old_config.consumers,
-                new_config.consumers,
-            )
-            receivers = ConfigSignals.CONSUMER_CHANGE.send(signal_sender, **kwargs)
-            logger.info(
-                "Config changed, sent CONFIG_CONSUMER_CHANGED signal to receivers: {}, with kwargs: {}",
-                receivers,
-                kwargs,
-            )
-
-        if old_config.topic_mapping != new_config.topic_mapping:
-            receivers = ConfigSignals.TOPIC_MAPPING_CHANGE.send(signal_sender)
-            logger.info(
-                "Config changed, sent CONFIG_TOPIC_MAPPING_CHANGED signal to receivers: {}",
-                receivers,
-            )
-
-    except Exception as ex:
-        logger.error(
-            "Sent ConfigSignals failed with error: {} {}", type(ex).__name__, ex
-        )
-        # TODO trigger alert
-        raise SendSignalError
-
-
 def _update_config(config: Config) -> None:
     global _old_config, _config
     _old_config = _config
     _config = config.copy(update={"last_update_time": datetime.now().timestamp()})
-
-
-def _merge_default_config(data: Dict[str, Any]) -> Dict[str, Any]:
-    new_data = data.copy()
-    if "default_producer_config" in data:
-        for p_name, p_config in data["producers"].items():
-            new_data["producers"][p_name] = deep_merge_two_dict(
-                data["default_producer_config"], p_config
-            )
-    if "default_consumer_config" in data:
-        for c_name, c_config in data["consumers"].items():
-            new_data["consumers"][c_name] = deep_merge_two_dict(
-                data["default_consumer_config"], c_config
-            )
-    return new_data

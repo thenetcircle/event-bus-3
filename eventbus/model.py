@@ -71,6 +71,7 @@ class StoryParams(EventBusBaseModel):
     transforms: Optional[Dict[TransformType, Dict[str, Any]]] = None
     concurrent_events: int = 1
     event_poll_interval: float = 1.0
+    max_produce_retry_times: int = 2
     max_commit_retry_times: int = 2
 
 

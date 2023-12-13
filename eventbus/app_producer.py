@@ -24,8 +24,8 @@ topic_resolver = TopicResolver()
 zoo_client = AioZooClient()
 producer = KafkaProducer(
     f"app_producer_{socket.gethostname()}",
-    config.get().producer.kafka_config,
-    config.get().producer.max_retries,
+    config.get().kafka.producer,
+    config.get().app.max_produce_retry_times,
 )
 
 
@@ -44,7 +44,7 @@ async def startup():
         except Exception as ex:
             logger.error("update topic mapping error: {}", ex)
 
-    topic_mapping_path = config.get().app.zookeeper.topic_mapping_path
+    topic_mapping_path = config.get().zookeeper.topic_mapping_path
     await zoo_client.init()
     await _set_topic_mapping(*await zoo_client.get(topic_mapping_path))
     await zoo_client.watch_data(topic_mapping_path, _set_topic_mapping)

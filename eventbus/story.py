@@ -32,14 +32,12 @@ class Story:
 
         self._consumer = KafkaConsumer(
             self.id,
-            config.get().consumer.kafka_config,
+            config.get().kafka.consumer,
             story_params.kafka_topics,
             self._create_group_id(),
         )
         self._producer = KafkaProducer(
-            self.id,
-            config.get().producer.kafka_config,
-            config.get().producer.max_retries,
+            self.id, config.get().kafka.producer, story_params.max_produce_retry_times
         )
         self._transforms = []
         if story_params.transforms:
