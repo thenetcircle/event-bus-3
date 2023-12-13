@@ -8,10 +8,10 @@ import pytest_asyncio
 from janus import Queue as JanusQueue
 from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
-from eventbus.config import ConsumerConfig, UseProducersConfig
+from eventbus.config import ConsumerConfig
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.http_sink import HttpSinkMethod, HttpSinkParams
 from eventbus.kafka_consumer import EventConsumer, KafkaConsumer
+from eventbus.model import HttpSinkMethod, HttpSinkParams
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, StrictStr
 
@@ -24,10 +24,6 @@ class SinkType(str, Enum):
     HTTP = "HTTP"
 
 
-class AbsSinkParams(EventBusBaseModel):
-    id: StrictStr
-
-
 class AbsSink(ABC):
     @abstractmethod
     async def init(self):
@@ -44,11 +40,21 @@ class AbsSink(ABC):
 
 # Transform related
 class TransformType(str, Enum):
-    EVENT_FILTER = "EVENT_FILTER"
+    FILTER = "FILTER"
 
 
-class AbsTransformParams(EventBusBaseModel):
-    pass
+class AbsTransform(ABC):
+    @abstractmethod
+    async def init(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def run(self, event: KafkaEvent) -> Optional[KafkaEvent]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def close(self):
+        raise NotImplementedError
 
 
 # Consumer related
@@ -60,9 +66,12 @@ class StoryStatus(str, Enum):
 class StoryParams(EventBusBaseModel):
     id: StrictStr
     kafka_topics: List[StrictStr]
-    sink: Dict[SinkType, AbsSinkParams]
+    sink: Tuple[SinkType, Dict[str, Any]]
     status: StoryStatus
-    transforms: Optional[Dict[TransformType, AbsTransformParams]] = None
+    transforms: Optional[Dict[TransformType, Dict[str, Any]]] = None
+    concurrent_events: int = 1
+    event_poll_interval: float = 1.0
+    max_commit_retry_times: int = 2
 
 
 # class StoryInfo(EventBusModel):
@@ -79,6 +88,22 @@ class StoryParams(EventBusBaseModel):
 #     max_commit_retries = 2
 #     max_skipped_events = 100
 #     disabled = False
+
+
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+
+
+class HttpSinkParams(EventBusBaseModel):
+    url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
+    headers: Optional[Dict[str, str]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
 
 
 def convert_str_to_topic_mappings(json_data: str) -> List[TopicMappingEntry]:

@@ -1,95 +1,129 @@
-import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
 from kazoo.client import KazooClient
 from loguru import logger
 
-from eventbus import config
-
 
 class ZooClient:
-    def __init__(self):
-        self._loop = None
-        self._zk: Optional[KazooClient] = None
-        self._executor: Optional[ThreadPoolExecutor] = None
+    def __init__(self, **kwargs):
+        """
+        :param hosts: Comma-separated list of hosts to connect to
+                      (e.g. 127.0.0.1:2181,127.0.0.1:2182,[::1]:2183).
+        :param timeout: The longest to wait for a Zookeeper connection.
+        :param client_id: A Zookeeper client id, used when
+                          re-establishing a prior session connection.
+        :param handler: An instance of a class implementing the
+                        :class:`~kazoo.interfaces.IHandler` interface
+                        for callback handling.
+        :param default_acl: A default ACL used on node creation.
+        :param auth_data:
+            A list of authentication credentials to use for the
+            connection. Should be a list of (scheme, credential)
+            tuples as :meth:`add_auth` takes.
+        :param sasl_options:
+            SASL options for the connection, if SASL support is to be used.
+            Should be a dict of SASL options passed to the underlying
+            `pure-sasl <https://pypi.org/project/pure-sasl>`_ library.
 
-    async def init(self):
+            For example using the DIGEST-MD5 mechnism:
+
+            .. code-block:: python
+
+                sasl_options = {
+                    'mechanism': 'DIGEST-MD5',
+                    'username': 'myusername',
+                    'password': 'mypassword'
+                }
+
+            For GSSAPI, using the running process' ticket cache:
+
+            .. code-block:: python
+
+                sasl_options = {
+                    'mechanism': 'GSSAPI',
+                    'service': 'myzk',                  # optional
+                    'principal': 'client@EXAMPLE.COM'   # optional
+                }
+
+        :param read_only: Allow connections to read only servers.
+        :param randomize_hosts: By default randomize host selection.
+        :param connection_retry:
+            A :class:`kazoo.retry.KazooRetry` object to use for
+            retrying the connection to Zookeeper. Also can be a dict of
+            options which will be used for creating one.
+        :param command_retry:
+            A :class:`kazoo.retry.KazooRetry` object to use for
+            the :meth:`KazooClient.retry` method. Also can be a dict of
+            options which will be used for creating one.
+        :param logger: A custom logger to use instead of the module
+            global `log` instance.
+        :param keyfile: SSL keyfile to use for authentication
+        :param keyfile_password: SSL keyfile password
+        :param certfile: SSL certfile to use for authentication
+        :param ca: SSL CA file to use for authentication
+        :param use_ssl: argument to control whether SSL is used or not
+        :param verify_certs: when using SSL, argument to bypass
+            certs verification
+        """
+        self._kazoo_client: Optional[KazooClient] = None
+        self._client_params = kwargs
+
+    def init(self):
         logger.info("init zoo client")
-        self._loop = asyncio.get_running_loop()
-        self._zk = KazooClient(
-            hosts=config.get().app.zookeeper.hosts,
-            timeout=config.get().app.zookeeper.timeout,
-            logger=logging.getLogger("KazooClient"),
-        )
-        self._zk.start()
-        self._executor = ThreadPoolExecutor(
-            max_workers=3, thread_name_prefix="ZooClientExecutor"
-        )
+        if "logger" not in self._client_params:
+            self._client_params["logger"] = logging.getLogger("ZooClient")
+        self._kazoo_client = KazooClient(**self._client_params)
+        self._kazoo_client.start()
 
-    async def close(self):
+    def close(self):
         logger.info("stop zoo client")
-        self._zk.stop()
+        self._kazoo_client.stop()
 
-    async def create(
+    def create(
         self,
         path,
         value: bytes = b"",
-        acl: Any = None,
         ephemeral: bool = False,
         sequence: bool = False,
         makepath: bool = False,
         include_data: bool = False,
     ):
-        return await self._run_in_executor(
-            self._zk.create,
+        return self._kazoo_client.create(
             path,
             value,
-            acl,
-            ephemeral,
-            sequence,
-            makepath,
-            include_data,
+            ephemeral=ephemeral,
+            sequence=sequence,
+            makepath=makepath,
+            include_data=include_data,
         )
 
-    async def ensure_path(self, path):
-        return await self._run_in_executor(self._zk.ensure_path, path)
+    def ensure_path(self, path):
+        return self._kazoo_client.ensure_path(path)
 
-    async def exists(self, path):
-        return await self._run_in_executor(self._zk.exists, path)
+    def exists(self, path, watch: Any = None):
+        return self._kazoo_client.exists(path, watch)
 
-    async def get(self, path):
-        return await self._run_in_executor(self._zk.get, path)
+    def get(self, path, watch: Any = None):
+        return self._kazoo_client.get(path, watch)
 
-    async def get_children(self, path, include_data=False):
-        return await self._run_in_executor(
-            self._zk.get_children, path, None, include_data
-        )
+    def get_children(self, path, watch: Any = None, include_data: bool = False):
+        return self._kazoo_client.get_children(path, watch, include_data)
 
-    async def set(self, path, value):
-        return await self._run_in_executor(self._zk.set, path, value)
+    def set(self, path, value, version: int = -1):
+        return self._kazoo_client.set(path, value, version)
 
-    async def delete(self, path, version=-1, recursive=False):
-        return await self._run_in_executor(self._zk.delete, path, version, recursive)
+    def delete(self, path, version: int = -1, recursive: bool = False):
+        return self._kazoo_client.delete(path, version, recursive)
 
-    async def watch_data(self, path, callback):
+    def watch_data(self, path, callback, *args, **kwargs):
         logger.info("start watching zookeeper's data from path: {}", path)
+        return self._kazoo_client.DataWatch(path, callback, *args, **kwargs)
 
-        def sync_callback(*args, **kwargs):
-            logger.info("watched new data from zookeeper path: {}", path)
-            asyncio.run_coroutine_threadsafe(callback(*args, **kwargs), self._loop)
-
-        await self._run_in_executor(self._zk.DataWatch, path, sync_callback)
-
-    async def watch_children(self, path, callback):
+    def watch_children(
+        self, path, callback, allow_session_lost: bool = True, send_event: bool = False
+    ):
         logger.info("start watching zookeeper's children from path: {}", path)
-
-        def sync_callback(*args, **kwargs):
-            logger.info("watched new children from zookeeper path: {}", path)
-            asyncio.run_coroutine_threadsafe(callback(*args, **kwargs), self._loop)
-
-        await self._run_in_executor(self._zk.ChildrenWatch, path, sync_callback)
-
-    async def _run_in_executor(self, func, *args):
-        return await self._loop.run_in_executor(self._executor, func, *args)
+        return self._kazoo_client.ChildrenWatch(
+            path, callback, allow_session_lost=allow_session_lost, send_event=send_event
+        )

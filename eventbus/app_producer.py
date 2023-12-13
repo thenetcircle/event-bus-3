@@ -9,19 +9,19 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
 
 from eventbus import config, model
+from eventbus.aio_zoo_client import AioZooClient
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
 from eventbus.kafka_producer import KafkaProducer
 from eventbus.metrics import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
-from eventbus.zoo_client import ZooClient
 
 config.load_from_environ()
 setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
-zoo_client = ZooClient()
+zoo_client = AioZooClient()
 producer = KafkaProducer(
     f"app_producer_{socket.gethostname()}",
     config.get().producer.kafka_config,

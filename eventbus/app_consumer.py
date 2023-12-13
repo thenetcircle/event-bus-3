@@ -9,13 +9,13 @@ from typing import Dict, List, Set
 from loguru import logger
 
 from eventbus import config
+from eventbus.aio_zoo_client import AioZooClient
 from eventbus.config_watcher import watch_config_file
 from eventbus.errors import StoryDisabledError
 from eventbus.metrics import stats_client
 from eventbus.model import StoryParams, StoryStatus
 from eventbus.story import Story
 from eventbus.utils import setup_logger
-from eventbus.zoo_client import ZooClient
 
 
 def story_main(config_file_path: str, story_params: StoryParams):
@@ -31,13 +31,13 @@ def story_main(config_file_path: str, story_params: StoryParams):
         # TODO trigger alert
         raise StoryDisabledError
 
-    # run consumer
-    asyncio.run(run_story(story_params))
-
-
-async def run_story(story_params: StoryParams):
-    loop = asyncio.get_event_loop()
     story = Story(story_params)
+    # run story
+    asyncio.run(run_story(story))
+
+
+async def run_story(story: Story):
+    loop = asyncio.get_event_loop()
 
     def term_callback():
         logger.info("Get TERM signals, going to terminate {}.", story.fullname)
@@ -71,7 +71,7 @@ def main():
     setup_logger()
 
     # setup_zookeeper
-    zoo_client = ZooClient()
+    zoo_client = AioZooClient()
     asyncio.run(zoo_client.init())
 
     # --- handler system signals ---
@@ -80,29 +80,30 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    consumer_procs: Dict[str, Process] = {}
+    story_procs: Dict[str, Process] = {}
 
-    def start_new_consumer(consumer_id: str):
-        if consumer_id in consumer_procs and consumer_procs[consumer_id].is_alive():
+    def start_new_story_proc(story_params: StoryParams):
+        story_id = story_params.id
+        if story_id in story_procs and story_procs[story_id].is_alive():
             # TODO trigger alert on all errors
             logger.error(
                 "Consumer#{} already in consumer_procs and is alive, something wrong happened",
-                consumer_id,
+                story_id,
             )
             return
 
-        logger.info("Starting new consumer {}", consumer_id)
+        logger.info("Starting new story proc {}", story_params)
         p = Process(
             target=story_main,
-            name=f"Consumer#{consumer_id}_{socket.gethostname()}",
-            args=(consumer_id, config.get().config_file_path),
+            name=f"Story#{story_id}_{socket.gethostname()}",
+            args=(config.get().config_file_path, story_params),
             daemon=True,
         )
         p.start()
-        consumer_procs[consumer_id] = p
+        story_procs[story_id] = p
 
-    def stop_consumer(consumer_id: str, waiting_seconds: int):
-        p = consumer_procs[consumer_id]
+    def stop_story_proc(story_id: str, waiting_seconds: int):
+        p = story_procs[story_id]
         if p.is_alive():
             logger.warning("Sending SIGTERM to {}", p)
             os.kill(p.pid, signal.SIGTERM)
@@ -116,7 +117,7 @@ def main():
 
     for consumer_id, consumer_conf in config.get().consumers.items():
         if not consumer_conf.disabled:
-            start_new_consumer(consumer_id)
+            start_new_story_proc(consumer_id)
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -144,24 +145,24 @@ def main():
         sender, added: Set[str], removed: Set[str], changed: Set[str]
     ):
         for new_cid in added:
-            start_new_consumer(new_cid)
+            start_new_story_proc(new_cid)
 
-        removed_cids = removed.intersection(list(consumer_procs.keys()))
+        removed_cids = removed.intersection(list(story_procs.keys()))
         for cid in removed_cids:
-            stop_consumer(cid, waiting_seconds=grace_term_period)
+            stop_story_proc(cid, waiting_seconds=grace_term_period)
 
-        changed_cids = changed.intersection(list(consumer_procs.keys()))
+        changed_cids = changed.intersection(list(story_procs.keys()))
         for cid in changed_cids:
-            stop_consumer(cid, waiting_seconds=grace_term_period)
+            stop_story_proc(cid, waiting_seconds=grace_term_period)
             if not config.get().consumers[cid].disabled:
-                start_new_consumer(cid)
+                start_new_story_proc(cid)
 
     config.ConfigSignals.CONSUMER_CHANGE.connect(handle_consumer_config_change_signal)
 
     # --- monitor config change and sub-processes ---
 
     def get_alive_procs() -> List[Process]:
-        return [p for p in list(consumer_procs.values()) if p.is_alive()]
+        return [p for p in list(story_procs.values()) if p.is_alive()]
 
     local_config_last_update_time = config.get().last_update_time
     watch_config_file(config.get().config_file_path, checking_interval=3)

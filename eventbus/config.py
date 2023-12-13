@@ -11,8 +11,7 @@ from loguru import logger
 from pydantic import StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigUpdateError, SendSignalError
-from eventbus.http_sink import HttpSinkParams
-from eventbus.model import EventBusBaseModel, StoryInfo, TopicMappingEntry
+from eventbus.model import EventBusBaseModel, HttpSinkParams, TopicMappingEntry
 from eventbus.utils import deep_merge_two_dict
 
 
@@ -67,7 +66,6 @@ class Config(EventBusBaseModel):
     producer: ProducerConfig
     consumer: ConsumerConfig
     sinks: Dict[str, HttpSinkParams]
-    stories: List[StoryInfo]
     topic_mapping: List[TopicMappingEntry]
     last_update_time: Optional[float] = None
     config_file_path: Optional[str] = None

@@ -1,7 +1,7 @@
 import asyncio
 import re
 import socket
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from confluent_kafka import KafkaException
 from loguru import logger
@@ -9,11 +9,10 @@ from loguru import logger
 from eventbus import config
 from eventbus.errors import KafkaConsumerClosedError, KafkaConsumerPollingError
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.http_sink import HttpSink
+from eventbus.factories import SinkFactory, TransformFactory
 from eventbus.kafka_consumer import KafkaConsumer
 from eventbus.kafka_producer import KafkaProducer
 from eventbus.model import AbsSink, StoryParams, StoryStatus
-from eventbus.sink_factory import SinkFactory
 
 
 class Story:
@@ -27,7 +26,7 @@ class Story:
 
         logger.info(
             'Constructing a new Story with id: "{}", info: {}',
-            self.id,
+            self._id,
             story_params,
         )
 
@@ -42,15 +41,16 @@ class Story:
             config.get().producer.kafka_config,
             config.get().producer.max_retries,
         )
-
-        assert (
-            story_params.sink in config.get().sinks
-        ), f"The sink {story_params.sink} is not defined"
-        self._sink: AbsSink = SinkFactory.get_sink(
-            story_params.sink[0], story_params.sink[1]
+        self._transforms = []
+        if story_params.transforms:
+            for transform_type, transform_params in story_params.transforms.items():
+                transform = TransformFactory.create_transform(
+                    transform_type, self.id, transform_params
+                )
+                self._transforms.append(transform)
+        self._sink: AbsSink = SinkFactory.create_sink(
+            story_params.sink[0], self.id, story_params.sink[1]
         )
-
-        # TODO init dead letter producer
 
         self._closing = False
 
@@ -62,14 +62,39 @@ class Story:
     def fullname(self):
         return f"Story#{self.id}"
 
-    @property
-    def config(self):
-        return self._params
-
     async def init(self) -> None:
         await asyncio.gather(
-            self._producer.init(), self._consumer.init(), self._sink.init()
+            self._producer.init(),
+            self._consumer.init(),
+            self._sink.init(),
+            *[t.init() for t in self._transforms],
         )
+
+    async def close(self) -> None:
+        if not self._closing:
+            self._closing = True
+            logger.info("Closing {}", self.fullname)
+
+            closing_tasks = [
+                self._consumer.close(),
+                self._producer.close(),
+                self._sink.close(),
+                *[t.close() for t in self._transforms],
+            ]
+
+            closing_results = await asyncio.gather(
+                *closing_tasks, return_exceptions=True
+            )
+
+            logger.info(
+                "Closed {} with results: {}",
+                self.fullname,
+                closing_results,
+            )
+            self._closing = False
+        else:
+            while self._closing:
+                await asyncio.sleep(0.1)
 
     async def run(self) -> None:
         try:
@@ -77,32 +102,37 @@ class Story:
                 sending_events: List[KafkaEvent] = []
 
                 # polling the specific amount of events unless empty or error
-                for i in range(self.config.concurrent_per_partition):
+                for i in range(self._params.concurrent_events):
                     while True:
                         try:
                             event = await self._consumer.poll(
-                                self.config.event_poll_interval
+                                self._params.event_poll_interval
                             )
+                            logger.debug("Polling event: {}", event)
+
                             if event is None:
                                 if i > 0:
                                     break
                             else:
-                                sending_events.append(event)
-                                break
+                                # run Transforms
+                                event = await self._transform(event)
+                                if event:
+                                    logger.debug("Transformed event: {}", event)
+                                    sending_events.append(event)
+                                    break
                         except (KafkaConsumerClosedError, KafkaConsumerPollingError):
                             raise
-                        except Exception:
+                        except Exception as ex:
+                            logger.error("Polling event failed with error: {}", ex)
                             pass
 
                 # sending the events to the sink
                 sending_tasks = []
                 for event in sending_events:
-                    if self._check_event(event):
-                        task = asyncio.create_task(self._sink.send_event(event))
-                    else:
-                        # If the event is not subscribed, just use a future to represent the process result
-                        task = asyncio.get_running_loop().create_future()
-                        task.set_result((event, EventStatus.DISCARD))
+                    #     # If the event is not subscribed, just use a future to represent the process result
+                    #     task = asyncio.get_running_loop().create_future()
+                    #     task.set_result((event, EventStatus.DISCARD))
+                    task = asyncio.create_task(self._sink.send_event(event))
                     sending_tasks.append(task)
                 sending_results: List[
                     Tuple[KafkaEvent, EventStatus]
@@ -124,7 +154,7 @@ class Story:
                         await self._consumer.commit(*[r[0] for r in sending_results])
                         break
                     except KafkaException as ex:
-                        if commit_retry_times < self._params.max_commit_retries:
+                        if commit_retry_times < self._params.max_commit_retry_times:
                             commit_retry_times = commit_retry_times + 1
                             continue
                         else:
@@ -151,40 +181,12 @@ class Story:
             )
             raise
 
-    async def close(self) -> None:
-        if not self._closing:
-            self._closing = True
-            logger.info("Closing {}", self.fullname)
-
-            closing_tasks = [
-                self._consumer.close(),
-                self._sink.close(),
-                self._producer.close(),
-            ]
-
-            closing_results = await asyncio.gather(
-                *closing_tasks, return_exceptions=True
-            )
-
-            logger.info(
-                "Closed {} with results: {}",
-                self.fullname,
-                closing_results,
-            )
-            self._closing = False
-        else:
-            while self._closing:
-                await asyncio.sleep(0.1)
-
-    def _check_event(self, event: KafkaEvent) -> bool:
-        if self._params.include_events:
-            if not self._match_event_title(self._params.include_events, event):
-                return False
-
-        if self._params.exclude_events:
-            return not self._match_event_title(self._params.exclude_events, event)
-
-        return True
+    async def _transform(self, event: KafkaEvent) -> Optional[KafkaEvent]:
+        for transform in self._transforms:
+            event = await transform.run(event)
+            if not event:
+                return None
+        return event
 
     def _create_group_id(self):
         return f"event-bus-3-consumer-{config.get().app.project_id}-{config.get().app.env}-{self.id}"
@@ -192,10 +194,3 @@ class Story:
     @staticmethod
     def _get_dead_letter_topic(event: KafkaEvent) -> str:
         return re.sub(r"^(event-v[0-9]-)?", "\\1dead-letter-", event.topic)
-
-    @staticmethod
-    def _match_event_title(patterns: List[str], event: KafkaEvent) -> bool:
-        for p in patterns:
-            if re.match(re.compile(p, re.I), event.title):
-                return True
-        return False
