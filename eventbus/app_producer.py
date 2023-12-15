@@ -21,7 +21,9 @@ config.load_from_environ()
 setup_logger()
 stats_client.init(config.get())
 topic_resolver = TopicResolver()
-zoo_client = AioZooClient()
+zoo_client = AioZooClient(
+    hosts=config.get().zookeeper.hosts, timeout=config.get().zookeeper.timeout
+)
 producer = KafkaProducer(
     f"app_producer_{socket.gethostname()}",
     config.get().kafka.producer,
@@ -38,16 +40,16 @@ async def startup():
             if data == "":
                 logger.warning("topic mapping is empty")
                 return
-            logger.info("get topic mapping: {}", data)
+            logger.info("get new topic mapping data from zookeeper: {}", data)
             topic_mappings = model.convert_str_to_topic_mappings(data)
             await topic_resolver.set_topic_mappings(topic_mappings)
         except Exception as ex:
             logger.error("update topic mapping error: {}", ex)
 
-    topic_mapping_path = config.get().zookeeper.topic_mapping_path
     await zoo_client.init()
-    await _set_topic_mapping(*await zoo_client.get(topic_mapping_path))
-    await zoo_client.watch_data(topic_mapping_path, _set_topic_mapping)
+    await zoo_client.watch_data(
+        config.get().zookeeper.topic_mapping_path, _set_topic_mapping
+    )
 
     await producer.init()
 

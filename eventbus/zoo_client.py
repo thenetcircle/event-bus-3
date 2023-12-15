@@ -7,7 +7,8 @@ from loguru import logger
 
 class ZooClient:
     def __init__(self, **kwargs):
-        """
+        """Wrapper for KazooClient.
+
         :param hosts: Comma-separated list of hosts to connect to
                       (e.g. 127.0.0.1:2181,127.0.0.1:2182,[::1]:2183).
         :param timeout: The longest to wait for a Zookeeper connection.

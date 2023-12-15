@@ -59,16 +59,23 @@ class AbsTransform(ABC):
 
 # Consumer related
 class StoryStatus(str, Enum):
-    INIT = "INIT"
+    NORMAL = "NORMAL"
     DISABLED = "DISABLED"
+
+
+class KafkaParams(EventBusBaseModel):
+    topics: List[StrictStr]
+    topic_pattern: Optional[StrictStr] = None
+    group_id: Optional[StrictStr] = None
+    bootstrap_servers: Optional[StrictStr] = None
 
 
 class StoryParams(EventBusBaseModel):
     id: StrictStr
-    kafka_topics: List[StrictStr]
+    kafka: KafkaParams
     sink: Tuple[SinkType, Dict[str, Any]]
-    status: StoryStatus
-    transforms: Optional[Dict[TransformType, Dict[str, Any]]] = None
+    status: StoryStatus = StoryStatus.NORMAL
+    transforms: Optional[List[Tuple[TransformType, Dict[str, Any]]]] = None
     concurrent_events: int = 1
     event_poll_interval: float = 1.0
     max_produce_retry_times: int = 2
@@ -110,3 +117,8 @@ class HttpSinkParams(EventBusBaseModel):
 def convert_str_to_topic_mappings(json_data: str) -> List[TopicMappingEntry]:
     json_list = json.loads(json_data)
     return [TopicMappingEntry(**m) for m in json_list]
+
+
+class FilterTransformParams(EventBusBaseModel):
+    include_events: Optional[List[StrictStr]] = None
+    exclude_events: Optional[List[StrictStr]] = None

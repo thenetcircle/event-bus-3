@@ -7,7 +7,11 @@ from confluent_kafka import KafkaException
 from loguru import logger
 
 from eventbus import config
-from eventbus.errors import KafkaConsumerClosedError, KafkaConsumerPollingError
+from eventbus.errors import (
+    KafkaConsumerClosedError,
+    KafkaConsumerPollingError,
+    StoryDisabledError,
+)
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.factories import SinkFactory, TransformFactory
 from eventbus.kafka_consumer import KafkaConsumer
@@ -17,9 +21,11 @@ from eventbus.model import AbsSink, StoryParams, StoryStatus
 
 class Story:
     def __init__(self, story_params: StoryParams):
-        assert (
-            story_params.status != StoryStatus.DISABLED
-        ), f"{self.fullname} is disabled, not allowed to be constructed."
+        if story_params.status == StoryStatus.DISABLED:
+            logger.error(
+                '"{}" is disabled, not allowed to be constructed', self.fullname
+            )
+            raise StoryDisabledError
 
         self._id = f"{story_params.id}_{socket.gethostname()}"
         self._params = story_params
@@ -30,15 +36,23 @@ class Story:
             story_params,
         )
 
+        consumer_kafka_config = config.get().kafka.consumer.copy()
+        if story_params.kafka.bootstrap_servers:
+            consumer_kafka_config[
+                "bootstrap.servers"
+            ] = story_params.kafka.bootstrap_servers
         self._consumer = KafkaConsumer(
             self.id,
-            config.get().kafka.consumer,
-            story_params.kafka_topics,
-            self._create_group_id(),
+            consumer_kafka_config,
+            story_params.kafka.topics,
+            story_params.kafka.group_id or self._create_group_id(),
         )
+
+        producer_kafka_config = config.get().kafka.producer.copy()
         self._producer = KafkaProducer(
-            self.id, config.get().kafka.producer, story_params.max_produce_retry_times
+            self.id, producer_kafka_config, story_params.max_produce_retry_times
         )
+
         self._transforms = []
         if story_params.transforms:
             for transform_type, transform_params in story_params.transforms.items():
@@ -46,6 +60,7 @@ class Story:
                     transform_type, self.id, transform_params
                 )
                 self._transforms.append(transform)
+
         self._sink: AbsSink = SinkFactory.create_sink(
             story_params.sink[0], self.id, story_params.sink[1]
         )

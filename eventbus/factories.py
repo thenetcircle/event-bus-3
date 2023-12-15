@@ -1,10 +1,11 @@
 from typing import Any, Dict
 
-from eventbus.filter_transform import FilterTransform, FilterTransformParams
+from eventbus.filter_transform import FilterTransform
 from eventbus.http_sink import HttpSink
 from eventbus.model import (
     AbsSink,
     AbsTransform,
+    FilterTransformParams,
     HttpSinkParams,
     SinkType,
     TransformType,

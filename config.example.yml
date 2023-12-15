@@ -6,7 +6,7 @@ app:
   max_produce_retry_times: 3
 
 zookeeper:
-  hosts: maggie-zoo-1:2181,maggie-zoo-2:2181
+  hosts: localhost:12181
   timeout: 10.0
   topic_mapping_path: /event-bus/happ/dev/topics
   stories_path: /event-bus/happ/dev/stories
