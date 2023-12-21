@@ -8,13 +8,14 @@ from typing import Dict, List, Set
 
 from loguru import logger
 
-from eventbus import config
+from eventbus import config, zoo_data_parser
 from eventbus.config_watcher import watch_config_file
 from eventbus.metrics import stats_client
 from eventbus.model import StoryParams
 from eventbus.story import Story
 from eventbus.utils import setup_logger
 from eventbus.zoo_client import ZooClient
+from eventbus.zoo_data_parser import ZooDataParser
 
 
 def story_main(config_file_path: str, story_params: StoryParams):
@@ -63,6 +64,7 @@ def main():
     # setup_zookeeper
     zoo_client = ZooClient()
     zoo_client.init()
+    zoo_data_parser = ZooDataParser(zoo_client)
 
     # --- handler system signals ---
 
@@ -72,7 +74,7 @@ def main():
 
     story_procs: Dict[str, Process] = {}
 
-    def start_new_story_proc(story_params: StoryParams):
+    def start_new_story(story_params: StoryParams):
         story_id = story_params.id
         if story_id in story_procs and story_procs[story_id].is_alive():
             # TODO trigger alert on all errors
@@ -92,7 +94,7 @@ def main():
         p.start()
         story_procs[story_id] = p
 
-    def stop_story_proc(story_id: str, waiting_seconds: int):
+    def stop_story(story_id: str, waiting_seconds: int):
         p = story_procs[story_id]
         if p.is_alive():
             logger.warning("Sending SIGTERM to {}", p)
@@ -105,17 +107,19 @@ def main():
                     p.kill()
                 sleep(0.1)
 
-    def stories_change_callback(new_stories: List[str]):
-        for story_id in new_stories:
-            pass
+    def watch_story_list(story_ids: List[str]):
+        add_list = set(story_ids).difference(list(story_procs.keys()))
+        remove_list = set(story_procs.keys()).difference(story_ids)
+        logger.info("Story list changed: add={}, remove={}", add_list, remove_list)
 
-    zoo_client.watch_children(
-        config.get().zookeeper.stories_path, stories_change_callback
-    )
+        for story_id in add_list:
+            start_new_story(zoo_data_parser.get_story_params(story_id))
+
+    zoo_client.watch_children(config.get().zookeeper.story_path, watch_story_list)
 
     for consumer_id, consumer_conf in config.get().consumers.items():
         if not consumer_conf.disabled:
-            start_new_story_proc(consumer_id)
+            start_new_story(consumer_id)
 
     def signal_handler(signalname):
         def f(signal_received, frame):

@@ -9,7 +9,7 @@ zookeeper:
   hosts: localhost:12181
   timeout: 10.0
   topic_mapping_path: /event-bus/happ/dev/topics
-  stories_path: /event-bus/happ/dev/stories
+  story_path: /event-bus/happ/dev/stories
 
 kafka:
   # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations

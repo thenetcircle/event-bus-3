@@ -3,6 +3,7 @@ from typing import Optional
 
 from loguru import logger
 
+from eventbus import config
 from eventbus.model import KafkaParams, SinkType, StoryParams, TransformType
 from eventbus.zoo_client import ZooClient
 
@@ -11,10 +12,9 @@ class ZooDataParser:
     def __init__(self, zoo_client: ZooClient):
         self._zoo_client = zoo_client
 
-    def get_story_params(self, story_path: str) -> Optional[StoryParams]:
+    def get_story_params(self, story_id: str) -> Optional[StoryParams]:
         try:
-            story_path = story_path.rstrip("/")
-            story_id = story_path.split("/")[-1]
+            story_path = config.get().zookeeper.story_path + "/" + story_id
 
             # check if it has `params` node
 

@@ -145,12 +145,20 @@ class AioZooClient:
 
         await self._run_in_executor(self._client.watch_data, path, sync_callback)
 
-    async def watch_children(self, path, callback):
+    async def watch_children(
+        self, path, callback, allow_session_lost: bool = True, send_event: bool = False
+    ):
         def sync_callback(*args, **kwargs):
             logger.debug("watched new children from zookeeper path: {}", path)
             asyncio.run_coroutine_threadsafe(callback(*args, **kwargs), self._loop)
 
-        await self._run_in_executor(self._client.watch_children, path, sync_callback)
+        await self._run_in_executor(
+            self._client.watch_children,
+            path,
+            sync_callback,
+            allow_session_lost,
+            send_event,
+        )
 
     async def _run_in_executor(self, func, *args):
         return await self._loop.run_in_executor(self._executor, func, *args)

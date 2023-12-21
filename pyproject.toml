@@ -41,7 +41,15 @@ markers = [
     "integration: Integration tests",
     "benchmark: Benchmark tests",
 ]
+asyncio_mode = "auto"
 
 [tool.mypy]
 files="eventbus,tests"
 ignore_missing_imports=true
+
+[tool.pyright]
+# https://microsoft.github.io/pyright/#/configuration?id=main-configuration-options
+# venvPath = "."
+# venv = "venv"
+# verboseOutput = true
+pythonVersion = "3.9"

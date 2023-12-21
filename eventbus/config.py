@@ -35,7 +35,7 @@ class SentryConfig(EventBusBaseModel):
 class ZookeeperConfig(EventBusBaseModel):
     hosts: StrictStr
     topic_mapping_path: StrictStr
-    stories_path: StrictStr
+    story_path: StrictStr
     timeout: float = 10.0
 
 

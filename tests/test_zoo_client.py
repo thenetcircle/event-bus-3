@@ -1,51 +1,90 @@
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from eventbus import config
+from eventbus.zoo_client import ZooClient
 from eventbus.aio_zoo_client import AioZooClient
 
 
-@pytest.mark.asyncio
-async def test_aio_zoo_client():
-    zoo_client = AioZooClient(
+@pytest.fixture
+def zoo_client():
+    zoo_client = ZooClient(
         hosts=config.get().zookeeper.hosts,
         timeout=config.get().zookeeper.timeout,
     )
-    await zoo_client.init()
+    zoo_client.init()
+    yield zoo_client
+    zoo_client.close()
 
-    test_path = "/event-bus-3/test_path"
+
+@pytest.fixture
+async def aio_zoo_client(zoo_client: ZooClient):
+    aio_zoo_client = AioZooClient(
+        hosts=config.get().zookeeper.hosts,
+        timeout=config.get().zookeeper.timeout,
+    )
+    await aio_zoo_client.init()
+    yield aio_zoo_client
+    await aio_zoo_client.close()
+
+
+@pytest.mark.asyncio
+async def test_aio_zoo_client(aio_zoo_client: AioZooClient):
+    test_path = "/event-bus-3/test/aio_zoo_client"
     test_data = b"test_data"
 
-    if await zoo_client.exists(test_path):
-        await zoo_client.delete(test_path, recursive=True)
-    await zoo_client.create(test_path, test_data, makepath=True)
+    if await aio_zoo_client.exists(test_path):
+        await aio_zoo_client.delete(test_path, recursive=True)
+    await aio_zoo_client.create(test_path, test_data, makepath=True)
 
-    data, stats = await zoo_client.get(test_path)
+    data, stats = await aio_zoo_client.get(test_path)
     assert data == test_data
 
     data_change_callback = AsyncMock()
-    await zoo_client.watch_data(test_path, data_change_callback)
+    await aio_zoo_client.watch_data(test_path, data_change_callback)
     await _wait_and_check(data_change_callback, 1, test_data)
 
-    await zoo_client.set(test_path, b"test_data_new")
+    await aio_zoo_client.set(test_path, b"test_data_new")
     await _wait_and_check(data_change_callback, 2, b"test_data_new")
 
     children_change_callback = AsyncMock()
-    await zoo_client.watch_children(test_path, children_change_callback)
+    await aio_zoo_client.watch_children(
+        test_path, children_change_callback, send_event=True
+    )
     await _wait_and_check(children_change_callback, 1, [])
 
-    await zoo_client.create(f"{test_path}/child1", b"test_child_value")
+    await aio_zoo_client.create(f"{test_path}/child1", b"test_child_value")
     await _wait_and_check(children_change_callback, 2, ["child1"])
 
-    await zoo_client.create(f"{test_path}/child2", b"test_child_value")
+    await aio_zoo_client.create(f"{test_path}/child2", b"test_child_value")
     await _wait_and_check(children_change_callback, 3, ["child2", "child1"])
 
-    await zoo_client.close()
+    await aio_zoo_client.set(f"{test_path}/child2", b"test_child_value2")
+    await _wait_and_check(children_change_callback, 3, ["child2", "child1"])
+
+    await aio_zoo_client.create(f"{test_path}/child2/subchild", b"test_child_value")
+    await _wait_and_check(children_change_callback, 3, ["child2", "child1"])
+
+    await aio_zoo_client.set(f"{test_path}/child2/subchild", b"test_child_value2")
+    await _wait_and_check(children_change_callback, 3, ["child2", "child1"])
+
+
+def test_zoo_client(zoo_client: ZooClient):
+    test_path = "/event-bus-3/test/zoo_client"
+    test_data = b"test_data"
+
+    if zoo_client.exists(test_path):
+        zoo_client.delete(test_path, recursive=True)
+
+    zoo_client.create(test_path, test_data, makepath=True)
+
+    data, stats = zoo_client.get(test_path)
+    assert data == test_data
 
 
 async def _wait_and_check(mock_callback, call_count, call_args):
-    await asyncio.sleep(0.1)  # waiting for callback
+    await asyncio.sleep(0.2)  # waiting for callback
     assert mock_callback.call_count == call_count
     assert mock_callback.call_args[0][0] == call_args
