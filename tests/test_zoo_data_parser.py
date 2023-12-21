@@ -23,10 +23,11 @@ def zoo_data_parser(zoo_client) -> ZooDataParser:
     yield ZooDataParser(zoo_client)
 
 
-def test_parse_story_data(zoo_data_parser: ZooDataParser):
-    story_path = "/event-bus/popp/dev/stories/payment-callback"
-    story_params = zoo_data_parser.get_story_params(story_path)
-    assert story_params.id == "payment-callback"
+def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
+    story_id = "payment-callback"
+    data, stats = zoo_client.get(f"{config.get().zookeeper.story_path}/{story_id}")
+    story_params = zoo_data_parser.get_story_params(story_id, data, stats)
+    assert story_params.id == story_id
     assert story_params.kafka == KafkaParams(
         topics=["event-v2-popp-payment-callback"],
         topic_pattern=None,
@@ -46,11 +47,12 @@ def test_parse_story_data(zoo_data_parser: ZooDataParser):
 
 @pytest.mark.skip
 def test_print_all_stories(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
-    story_path = "/event-bus/popp/dev/stories"
+    story_path = config.get().zookeeper.story_path
     stories_ids = zoo_client.get_children(story_path)
     for story_id in stories_ids:
         story_path = f"{story_path}/{story_id}"
-        story_params = zoo_data_parser.get_story_params(story_path)
+        data, stats = zoo_client.get(story_path)
+        story_params = zoo_data_parser.get_story_params(story_path, data, stats)
         print("=======\n", story_id)
         if story_params is None:
             print(None)

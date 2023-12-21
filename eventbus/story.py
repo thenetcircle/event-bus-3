@@ -21,12 +21,6 @@ from eventbus.model import AbsSink, StoryParams, StoryStatus
 
 class Story:
     def __init__(self, story_params: StoryParams):
-        if story_params.status == StoryStatus.DISABLED:
-            logger.error(
-                '"{}" is disabled, not allowed to be constructed', self.fullname
-            )
-            raise StoryDisabledError
-
         self._id = f"{story_params.id}_{socket.gethostname()}"
         self._params = story_params
 

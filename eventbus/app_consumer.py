@@ -1,17 +1,19 @@
 import asyncio
+import json
 import os
 import signal
 import socket
 from multiprocessing import Process
 from time import sleep, time
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Tuple
+from kazoo.protocol.states import WatchedEvent, ZnodeStat
 
 from loguru import logger
 
 from eventbus import config, zoo_data_parser
 from eventbus.config_watcher import watch_config_file
 from eventbus.metrics import stats_client
-from eventbus.model import StoryParams
+from eventbus.model import StoryParams, StoryStatus
 from eventbus.story import Story
 from eventbus.utils import setup_logger
 from eventbus.zoo_client import ZooClient
@@ -72,14 +74,17 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    story_procs: Dict[str, Process] = {}
+    story_procs: Dict[str, Tuple[int, Process]] = {}
 
-    def start_new_story(story_params: StoryParams):
+    def start_new_story(znode_version: int, story_params: StoryParams):
         story_id = story_params.id
-        if story_id in story_procs and story_procs[story_id].is_alive():
+        if story_params.status == StoryStatus.DISABLED:
+            logger.info('Story "{}" is disabled, skip to start.', story_id)
+            return
+        if story_id in story_procs and story_procs[story_id][1].is_alive():
             # TODO trigger alert on all errors
             logger.error(
-                "Consumer#{} already in consumer_procs and is alive, something wrong happened",
+                "Consumer#{} already in consumer_procs and is alive, something went wrong!",
                 story_id,
             )
             return
@@ -92,13 +97,16 @@ def main():
             daemon=True,
         )
         p.start()
-        story_procs[story_id] = p
+        story_procs[story_id] = (znode_version, p)
 
     def stop_story(story_id: str, waiting_seconds: int):
-        p = story_procs[story_id]
-        if p.is_alive():
+        if story_id not in story_procs:
+            return
+        p = story_procs[story_id][1]
+        if p and p.is_alive():
             logger.warning("Sending SIGTERM to {}", p)
-            os.kill(p.pid, signal.SIGTERM)
+            if p.pid:
+                os.kill(p.pid, signal.SIGTERM)
 
             t = time()
             while p.is_alive():
@@ -107,19 +115,52 @@ def main():
                     p.kill()
                 sleep(0.1)
 
+    def watch_story_changes(
+        story_id: str, data: bytes, stats: ZnodeStat, event: Optional[WatchedEvent]
+    ):
+        try:
+            if pdata := story_procs.get(story_id):
+                if pdata[0] < stats.version:
+                    logger.info("Story {} data changed, restart it.", story_id)
+                    if story_params := zoo_data_parser.get_story_params(
+                        story_id, data, stats
+                    ):
+                        logger.info("New story params: {}", story_params)
+                        stop_story(story_id, grace_term_period)
+                        logger.info("Story {} stopped.", story_id)
+                        start_new_story(stats.version, story_params)
+                else:
+                    logger.info(
+                        "Story {} data changed, but version is not newer.", story_id
+                    )
+
+            else:
+                if story_params := zoo_data_parser.get_story_params(
+                    story_id, data, stats
+                ):
+                    start_new_story(stats.version, story_params)
+        except Exception as ex:
+            logger.error("Failed to process story data change: {}", ex)
+
     def watch_story_list(story_ids: List[str]):
         add_list = set(story_ids).difference(list(story_procs.keys()))
         remove_list = set(story_procs.keys()).difference(story_ids)
         logger.info("Story list changed: add={}, remove={}", add_list, remove_list)
 
         for story_id in add_list:
-            start_new_story(zoo_data_parser.get_story_params(story_id))
+
+            def wrapped_watch_story_changes(data, stats, event):
+                watch_story_changes(story_id, data, stats, event)
+
+            zoo_client.watch_data(
+                config.get().zookeeper.story_path + "/" + story_id,
+                wrapped_watch_story_changes,
+            )
+
+        for story_id in remove_list:
+            stop_story(story_id, grace_term_period)
 
     zoo_client.watch_children(config.get().zookeeper.story_path, watch_story_list)
-
-    for consumer_id, consumer_conf in config.get().consumers.items():
-        if not consumer_conf.disabled:
-            start_new_story(consumer_id)
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -130,53 +171,14 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler("SIGTERM"))
     signal.signal(signal.SIGINT, signal_handler("SIGINT"))
 
-    # --- handler config change signals ---
-
-    # def handle_producer_config_change_signal(
-    #     sender, added: Set[str], removed: Set[str], changed: Set[str]
-    # ):
-    #     if changed:
-    #         for _, p in consumer_procs.items():
-    #             if p.is_alive():
-    #                 logger.warning("Sending SIGUSR1 to {}", p)
-    #                 os.kill(p.pid, signal.SIGUSR1)
-    #
-    # config.ConfigSignals.PRODUCER_CHANGE.connect(handle_producer_config_change_signal)
-
-    # def handle_consumer_config_change_signal(
-    #     sender, added: Set[str], removed: Set[str], changed: Set[str]
-    # ):
-    #     for new_cid in added:
-    #         start_new_story_proc(new_cid)
-    #
-    #     removed_cids = removed.intersection(list(story_procs.keys()))
-    #     for cid in removed_cids:
-    #         stop_story_proc(cid, waiting_seconds=grace_term_period)
-    #
-    #     changed_cids = changed.intersection(list(story_procs.keys()))
-    #     for cid in changed_cids:
-    #         stop_story_proc(cid, waiting_seconds=grace_term_period)
-    #         if not config.get().consumers[cid].disabled:
-    #             start_new_story_proc(cid)
-    #
-    # config.ConfigSignals.CONSUMER_CHANGE.connect(handle_consumer_config_change_signal)
-
     # --- monitor config change and sub-processes ---
 
     def get_alive_procs() -> List[Process]:
-        return [p for p in list(story_procs.values()) if p.is_alive()]
-
-    local_config_last_update_time = config.get().last_update_time
-    watch_config_file(config.get().config_file_path, checking_interval=3)
+        return [p for _, p in list(story_procs.values()) if p.is_alive()]
 
     try:
+        # waiting for all procs to quit
         while alive_procs := get_alive_procs():
-            if (
-                config.get().last_update_time > local_config_last_update_time
-            ):  # if config get updated by another thread
-                config.send_signals()
-                local_config_last_update_time = config.get().last_update_time
-
             sleep(0.1)
 
     except KeyboardInterrupt:

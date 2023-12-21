@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from loguru import logger
+from kazoo.protocol.states import ZnodeStat
 
 from eventbus import config
 from eventbus.model import KafkaParams, SinkType, StoryParams, TransformType
@@ -12,7 +13,9 @@ class ZooDataParser:
     def __init__(self, zoo_client: ZooClient):
         self._zoo_client = zoo_client
 
-    def get_story_params(self, story_id: str) -> Optional[StoryParams]:
+    def get_story_params(
+        self, story_id: str, story_data: bytes, znode_stats: ZnodeStat
+    ) -> Optional[StoryParams]:
         try:
             story_path = config.get().zookeeper.story_path + "/" + story_id
 
