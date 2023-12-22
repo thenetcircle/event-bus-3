@@ -1,4 +1,3 @@
-import re
 from typing import List, Optional
 
 from eventbus.event import KafkaEvent

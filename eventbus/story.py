@@ -14,8 +14,8 @@ from eventbus.errors import (
 )
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.factories import SinkFactory, TransformFactory
-from eventbus.kafka_consumer import KafkaConsumer
-from eventbus.kafka_producer import KafkaProducer
+from eventbus.kafka.confluent_consumer import ConfluentKafkaConsumer
+from eventbus.kafka.confluent_producer import ConfluentKafkaProducer
 from eventbus.model import AbsSink, StoryParams, StoryStatus
 
 
@@ -35,7 +35,7 @@ class Story:
             consumer_kafka_config[
                 "bootstrap.servers"
             ] = story_params.kafka.bootstrap_servers
-        self._consumer = KafkaConsumer(
+        self._consumer = ConfluentKafkaConsumer(
             self.id,
             consumer_kafka_config,
             story_params.kafka.topics,
@@ -43,7 +43,7 @@ class Story:
         )
 
         producer_kafka_config = config.get().kafka.producer.copy()
-        self._producer = KafkaProducer(
+        self._producer = ConfluentKafkaProducer(
             self.id, producer_kafka_config, story_params.max_produce_retry_times
         )
 
@@ -70,12 +70,14 @@ class Story:
         return f"Story#{self.id}"
 
     async def init(self) -> None:
+        logger.info("Initing {}", self.fullname)
         await asyncio.gather(
             self._producer.init(),
             self._consumer.init(),
             self._sink.init(),
             *[t.init() for t in self._transforms],
         )
+        logger.info("{} inited", self.fullname)
 
     async def close(self) -> None:
         if not self._closing:
@@ -105,6 +107,7 @@ class Story:
 
     async def run(self) -> None:
         try:
+            logger.info("Start running {}", self.fullname)
             while True:
                 sending_events: List[KafkaEvent] = []
 
@@ -115,6 +118,7 @@ class Story:
                             event = await self._consumer.poll(
                                 self._params.event_poll_interval
                             )
+
                             logger.debug("Polling event: {}", event)
 
                             if event is None:
@@ -175,13 +179,13 @@ class Story:
 
         except asyncio.CancelledError:
             logger.info(
-                "{} run is aborted by asyncio.CancelledError",
+                "{}'s running is aborted by asyncio.CancelledError",
                 self.fullname,
             )
 
         except Exception as ex:
             logger.error(
-                "{} run is aborted by <{}> {}. tp_queue: {}",
+                "{}'s running is aborted by <{}> {}. tp_queue: {}",
                 self.fullname,
                 type(ex).__name__,
                 ex,

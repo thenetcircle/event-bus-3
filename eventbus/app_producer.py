@@ -12,7 +12,7 @@ from eventbus import config, model
 from eventbus.aio_zoo_client import AioZooClient
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
-from eventbus.kafka_producer import KafkaProducer
+from eventbus.kafka.confluent_producer import ConfluentKafkaProducer
 from eventbus.metrics import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
@@ -24,7 +24,7 @@ topic_resolver = TopicResolver()
 zoo_client = AioZooClient(
     hosts=config.get().zookeeper.hosts, timeout=config.get().zookeeper.timeout
 )
-producer = KafkaProducer(
+producer = ConfluentKafkaProducer(
     f"app_producer_{socket.gethostname()}",
     config.get().kafka.producer,
     config.get().app.max_produce_retry_times,

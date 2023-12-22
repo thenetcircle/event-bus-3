@@ -1,17 +1,15 @@
 import asyncio
-import json
 import os
 import signal
 import socket
 from multiprocessing import Process
 from time import sleep, time
-from typing import Dict, List, Optional, Set, Tuple
-from kazoo.protocol.states import WatchedEvent, ZnodeStat
+from typing import Dict, List, Optional, Tuple
 
+from kazoo.protocol.states import WatchedEvent, ZnodeStat
 from loguru import logger
 
-from eventbus import config, zoo_data_parser
-from eventbus.config_watcher import watch_config_file
+from eventbus import config
 from eventbus.metrics import stats_client
 from eventbus.model import StoryParams, StoryStatus
 from eventbus.story import Story
@@ -24,6 +22,7 @@ def story_main(config_file_path: str, story_params: StoryParams):
     config.update_from_yaml(config_file_path)
     setup_logger()
     stats_client.init(config.get())
+
     story = Story(story_params)
     # run story
     asyncio.run(run_story(story))
@@ -64,7 +63,9 @@ def main():
     setup_logger()
 
     # setup_zookeeper
-    zoo_client = ZooClient()
+    zoo_client = ZooClient(
+        hosts=config.get().zookeeper.hosts, timeout=config.get().zookeeper.timeout
+    )
     zoo_client.init()
     zoo_data_parser = ZooDataParser(zoo_client)
 
@@ -104,8 +105,8 @@ def main():
             return
         p = story_procs[story_id][1]
         if p and p.is_alive():
-            logger.warning("Sending SIGTERM to {}", p)
             if p.pid:
+                logger.warning("Sending SIGTERM to {}", p)
                 os.kill(p.pid, signal.SIGTERM)
 
             t = time()
@@ -115,9 +116,13 @@ def main():
                     p.kill()
                 sleep(0.1)
 
+    changing_story = True
+
     def watch_story_changes(
         story_id: str, data: bytes, stats: ZnodeStat, event: Optional[WatchedEvent]
     ):
+        global changing_story
+        changing_story = True
         try:
             if pdata := story_procs.get(story_id):
                 if pdata[0] < stats.version:
@@ -141,6 +146,8 @@ def main():
                     start_new_story(stats.version, story_params)
         except Exception as ex:
             logger.error("Failed to process story data change: {}", ex)
+        finally:
+            changing_story = False
 
     def watch_story_list(story_ids: List[str]):
         add_list = set(story_ids).difference(list(story_procs.keys()))
@@ -178,7 +185,7 @@ def main():
 
     try:
         # waiting for all procs to quit
-        while alive_procs := get_alive_procs():
+        while alive_procs := get_alive_procs() or changing_story:
             sleep(0.1)
 
     except KeyboardInterrupt:
@@ -186,8 +193,9 @@ def main():
 
     finally:
         for p in get_alive_procs():
-            logger.warning("Sending SIGTERM to {}", p)
-            os.kill(p.pid, signal.SIGTERM)
+            if p.pid:
+                logger.warning("Sending SIGTERM to {}", p)
+                os.kill(p.pid, signal.SIGINT)
 
         t = time()
         while alive_procs := get_alive_procs():

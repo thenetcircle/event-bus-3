@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from asyncio import AbstractEventLoop
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
 from confluent_kafka import Consumer, KafkaException, Message, TopicPartition
@@ -15,7 +16,7 @@ from eventbus.event import KafkaEvent, parse_kafka_message
 from eventbus.metrics import stats_client
 
 
-class KafkaConsumer:
+class ConfluentKafkaConsumer:
     def __init__(
         self,
         id: str,
@@ -31,9 +32,11 @@ class KafkaConsumer:
         self._topics = topics
         self._group_id = group_id
         self._group_instance_id = group_instance_id
-        self._real_consumer: Optional[Consumer] = None
-        self._loop: Optional[AbstractEventLoop] = None
+        self._real_consumer: Consumer = None
+        self._loop: AbstractEventLoop = None
         self._is_closed = False
+        self._pull_executor: ThreadPoolExecutor = None
+        self._commit_executor: ThreadPoolExecutor = None
 
     @property
     def id(self):
@@ -44,7 +47,10 @@ class KafkaConsumer:
         return f"KafkaConsumer#{self.id}"
 
     async def init(self) -> None:
+        logger.info("Initing {}", self.fullname)
         self._loop = asyncio.get_running_loop()
+        self._pull_executor = ThreadPoolExecutor(max_workers=1)
+        self._commit_executor = ThreadPoolExecutor(max_workers=1)
 
         kafka_config = self._kafka_config.copy()
         if self._group_id:
@@ -61,6 +67,7 @@ class KafkaConsumer:
             on_revoke=self._on_revoke,
             on_lost=self._on_lost,
         )
+        logger.info("{} inited", self.fullname)
 
     async def close(self) -> None:
         if not self._is_closed:
@@ -87,7 +94,9 @@ class KafkaConsumer:
             raise KafkaConsumerClosedError
 
         try:
-            msg: Message = self._real_consumer.poll(timeout=timeout)
+            msg: Message = await self._loop.run_in_executor(
+                self._pull_executor, self._real_consumer.poll, timeout
+            )
             if msg is None:
                 return None
 
@@ -162,8 +171,10 @@ class KafkaConsumer:
 
         try:
             # https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html#confluent_kafka.Consumer.store_offsets
-            self._real_consumer.store_offsets(
-                offsets=self._get_offsets_from_events(*events)
+            await self._loop.run_in_executor(
+                self._commit_executor,
+                self._real_consumer.store_offsets,
+                offsets=self._get_offsets_from_events(*events),
             )
 
             stats_client.incr("consumer.event.commit.succ")

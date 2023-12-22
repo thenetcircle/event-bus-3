@@ -1,5 +1,5 @@
 loguru==0.6.0
-confluent-kafka==1.8.2
+aiokafka==0.10.0
 starlette==0.20.0
 pydantic==1.9.0
 PyYAML==6.0

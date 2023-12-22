@@ -9,7 +9,7 @@ from utils import create_event_from_dict, create_kafka_message_from_dict
 
 from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
-from eventbus.kafka_producer import KafkaProducer
+from eventbus.confluent_kafka_producer import ConfluentKafkaProducer
 
 
 @pytest_asyncio.fixture
@@ -66,14 +66,16 @@ async def mock_producer(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
     mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
 
-    producer = KafkaProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
+    producer = ConfluentKafkaProducer(
+        "test", UseProducersConfig(producer_ids=["p1", "p2"])
+    )
     await producer.init()
     yield producer
     await producer.close()
 
 
 @pytest.mark.asyncio
-async def test_produce_succeed(mock_producer: KafkaProducer):
+async def test_produce_succeed(mock_producer: ConfluentKafkaProducer):
     e1 = create_event_from_dict({"payload": {"title": "p1_normal"}})
     msg = await mock_producer.produce("t1", e1)
     assert isinstance(msg, Message)
@@ -86,7 +88,7 @@ async def test_produce_succeed(mock_producer: KafkaProducer):
 
 
 @pytest.mark.asyncio
-async def test_produce_retry(mock_producer: KafkaProducer):
+async def test_produce_retry(mock_producer: ConfluentKafkaProducer):
     with pytest.raises(KafkaException):
         e1 = create_event_from_dict({"payload": {"title": "p1_retry_fail"}})
         msg = await mock_producer.produce("t1", e1)
@@ -100,7 +102,9 @@ async def test_produce_retry(mock_producer: KafkaProducer):
 @pytest.mark.asyncio
 async def test_config_change_signal(mocker: MockFixture):
     mocker.patch("eventbus.producer.KafkaProducer.init")
-    producer = KafkaProducer("test", UseProducersConfig(producer_ids=["p1", "p2"]))
+    producer = ConfluentKafkaProducer(
+        "test", UseProducersConfig(producer_ids=["p1", "p2"])
+    )
     await producer.init()
 
     for p_id in ["p1", "p2"]:

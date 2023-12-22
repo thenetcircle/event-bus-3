@@ -29,8 +29,9 @@ class HttpSink(AbsSink):
         return f"HttpSink#{self.id}"
 
     async def init(self):
-        logger.info("Initing {}", self.fullname)
+        logger.info("Init {}", self.fullname)
         self._client = ClientSession()
+        logger.info("{} inited", self.fullname)
 
     async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, EventStatus]:
         retry_times = 0

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import random
 from asyncio import Future
 from threading import Thread
 from typing import Callable, Dict, Optional, Tuple
@@ -13,7 +14,7 @@ from eventbus.event import Event, create_kafka_message
 from eventbus.metrics import stats_client
 
 
-class KafkaProducer:
+class ConfluentKafkaProducer:
     """
     KafkaProducer based on Asyncio, use another thread to poll and send result to the event loop in current thread.
 
@@ -49,14 +50,14 @@ class KafkaProducer:
         return f"KafkaProducer#{self.id}"
 
     async def init(self) -> None:
-        logger.info("{} is initing", self.fullname)
+        logger.info("Init {}", self.fullname)
         self._loop = asyncio.get_running_loop()
         self._real_producer = Producer(
             self._kafka_config, logger=logging.getLogger(self.fullname)
         )
         self._poll_thread = Thread(target=self._poll, name=f"{self.fullname}-poll")
         self._poll_thread.start()
-        logger.info("{} is inited", self.fullname)
+        logger.info("{} inited", self.fullname)
 
     async def close(self) -> None:
         logger.info("{} is closing", self.fullname)
@@ -182,11 +183,14 @@ class KafkaProducer:
         try:
             while not self._is_closed:
                 processed_callbacks = self._real_producer.poll(0.1)
-                logger.debug(
-                    "`_poll` of {} processed {} `on_delivery` callbacks",
-                    self.fullname,
-                    processed_callbacks,
-                )
+
+                # randomly record debug log
+                if random.random() < 0.05:
+                    logger.debug(
+                        "`_poll` of {} processed {} `on_delivery` callbacks",
+                        self.fullname,
+                        processed_callbacks,
+                    )
 
             logger.info("`_poll` of {} is over", self.fullname)
             # make sure all messages to be sent after cancelled
