@@ -28,12 +28,10 @@ def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser)
     data, stats = zoo_client.get(f"{config.get().zookeeper.story_path}/{story_id}")
     story_params = zoo_data_parser.get_story_params(story_id, data, stats)
     assert story_params.id == story_id
-    assert story_params.kafka == KafkaParams(
-        topics=["event-v2-popp-payment-callback"],
-        topic_pattern=None,
-        group_id=None,
-        bootstrap_servers="maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094",
-    )
+    assert story_params.consumer_params == {
+        "topics": ["event-v2-popp-payment-callback"],
+        "bootstrap_servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094",
+    }
     assert story_params.sink == (
         SinkType.HTTP,
         {

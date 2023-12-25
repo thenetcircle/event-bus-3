@@ -47,15 +47,15 @@ class AppConfig(EventBusBaseModel):
     max_produce_retry_times: int = 3
 
 
-class KafkaConfig(EventBusBaseModel):
-    producer: Dict[str, str]
-    consumer: Dict[str, str]
+class DefaultKafkaConfig(EventBusBaseModel):
+    producer: Dict[str, Any]
+    consumer: Dict[str, Any]
 
 
 class Config(EventBusBaseModel):
     app: AppConfig
     zookeeper: ZookeeperConfig
-    kafka: KafkaConfig
+    kafka: DefaultKafkaConfig
     sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
     last_update_time: Optional[float] = None

@@ -47,9 +47,15 @@ asyncio_mode = "auto"
 files="eventbus,tests"
 ignore_missing_imports=true
 
-[tool.pyright]
 # https://microsoft.github.io/pyright/#/configuration?id=main-configuration-options
-# venvPath = "."
-# venv = "venv"
+[tool.pyright]
+include = ["eventbus", "tests"]
+exclude = ["**/node_modules", "**/__pycache__"]
+reportMissingImports = true
+reportMissingModuleSource = true
+reportOptionalSubscript = false
+reportOptionalMemberAccess = false
+useLibraryCodeForTypes = true
+venvPath = "."
+venv = "venv"
 # verboseOutput = true
-pythonVersion = "3.9"

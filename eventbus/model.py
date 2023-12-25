@@ -10,7 +10,7 @@ from eventbus.event import EventStatus, KafkaEvent
 
 class EventBusBaseModel(BaseModel):
     class Config:
-        allow_mutation = False
+        frozen = True
 
 
 # Topic mapping related
@@ -63,22 +63,13 @@ class StoryStatus(str, Enum):
     DISABLED = "DISABLED"
 
 
-class KafkaParams(EventBusBaseModel):
-    topics: List[StrictStr]
-    topic_pattern: Optional[StrictStr] = None
-    group_id: Optional[StrictStr] = None
-    bootstrap_servers: Optional[StrictStr] = None
-
-
 class StoryParams(EventBusBaseModel):
     id: StrictStr
-    kafka: KafkaParams
+    consumer_params: Dict[str, Any]
     sink: Tuple[SinkType, Dict[str, Any]]
     status: StoryStatus = StoryStatus.NORMAL
     transforms: Optional[List[Tuple[TransformType, Dict[str, Any]]]] = None
-    concurrent_events: int = 1
-    event_poll_interval: float = 1.0
-    max_produce_retry_times: int = 2
+    concurrent_per_partition: int = 1
     max_commit_retry_times: int = 2
 
 

@@ -12,26 +12,17 @@ from eventbus.model import AbsSink, HttpSinkParams
 
 
 class HttpSink(AbsSink):
-    def __init__(self, id: str, sink_params: HttpSinkParams):
-        self._id = id
+    def __init__(self, sink_params: HttpSinkParams):
         self._params = sink_params
         self._client: Optional[ClientSession] = None
 
         self._max_retry_times = self._params.max_retry_times
         self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def fullname(self):
-        return f"HttpSink#{self.id}"
-
     async def init(self):
-        logger.info("Init {}", self.fullname)
+        logger.info("Initing HttpSink")
         self._client = ClientSession()
-        logger.info("{} inited", self.fullname)
+        logger.info("Inited HttpSink")
 
     async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, EventStatus]:
         retry_times = 0
@@ -187,12 +178,12 @@ class HttpSink(AbsSink):
 
     async def close(self):
         if self._client:
-            logger.info("Closing {}", self.fullname)
+            logger.info("Closing HttpSink")
 
             await self._client.close()
             self._client = None
 
-            logger.info("{} is closed", self.fullname)
+            logger.info("Closed HttpSink")
 
     def _get_backoff_sleep_time(self, retry_times: int) -> float:
         return min(

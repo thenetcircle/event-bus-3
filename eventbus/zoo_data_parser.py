@@ -1,11 +1,11 @@
 import json
 from typing import Optional
 
-from loguru import logger
 from kazoo.protocol.states import ZnodeStat
+from loguru import logger
 
 from eventbus import config
-from eventbus.model import KafkaParams, SinkType, StoryParams, TransformType
+from eventbus.model import SinkType, StoryParams, TransformType
 from eventbus.zoo_client import ZooClient
 
 
@@ -26,15 +26,20 @@ class ZooDataParser:
             source_type, source_params = source_data.decode("utf-8").split("#", 1)
             assert source_type == "kafka"
             source_params = json.loads(source_params)
-            topic_patterns = source_params.get("topic-pattern")
-            if topic_patterns == "":
-                topic_patterns = None
-            kafka_params = KafkaParams(
-                topics=source_params.get("topics"),
-                topic_pattern=topic_patterns,
-                group_id=source_params.get("group_id"),
-                bootstrap_servers=source_params.get("bootstrap-servers"),
-            )
+            topic_pattern = source_params.get("topic-pattern")
+            if topic_pattern == "":
+                topic_pattern = None
+            consumer_params = {}
+            if source_params.get("topics"):
+                consumer_params["topics"] = source_params.get("topics")
+            if topic_pattern:
+                consumer_params["topic_pattern"] = topic_pattern
+            if source_params.get("group-id"):
+                consumer_params["group_id"] = source_params.get("group-id")
+            if source_params.get("bootstrap-servers"):
+                consumer_params["bootstrap_servers"] = source_params.get(
+                    "bootstrap-servers"
+                )
 
             # sink
             sink_data, _ = self._zoo_client.get(f"{story_path}/sink")
@@ -72,7 +77,7 @@ class ZooDataParser:
 
             story_params = StoryParams(
                 id=story_id,
-                kafka=kafka_params,
+                consumer_params=consumer_params,
                 sink=sink,
                 transforms=transforms,
             )

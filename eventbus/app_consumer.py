@@ -32,7 +32,7 @@ async def run_story(story: Story):
     loop = asyncio.get_event_loop()
 
     def term_callback():
-        logger.info("Get TERM signals, going to terminate {}.", story.fullname)
+        logger.info("Get TERM signals, going to terminate Story.")
         asyncio.run_coroutine_threadsafe(story.close(), loop)
 
     # add signals handlers

@@ -18,8 +18,8 @@ from utils import create_event_from_dict
 from eventbus import config
 from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.http_sink import HttpSink
-from eventbus.confluent_kafka_consumer import EventConsumer
-from eventbus.confluent_kafka_producer import ConfluentKafkaProducer
+from eventbus.kafka.confluent_consumer import EventConsumer
+from eventbus.kafka.confluent_producer import ConfluentKafkaProducer
 
 
 @pytest.fixture

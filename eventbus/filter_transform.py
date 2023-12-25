@@ -1,14 +1,14 @@
 from typing import List, Optional
 
+import re
 from eventbus.event import KafkaEvent
 from eventbus.model import AbsTransform, FilterTransformParams
 
 
 class FilterTransform(AbsTransform):
-    def __init__(self, id: str, params: FilterTransformParams):
+    def __init__(self, params: FilterTransformParams):
         assert params.include_events or params.exclude_events, "Empty filter params"
 
-        self._id = id
         self._params = params
 
     async def init(self):

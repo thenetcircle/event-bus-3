@@ -10,7 +10,7 @@ from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 
 from eventbus.config import ConsumerConfig
 from eventbus.event import EventStatus, KafkaEvent
-from eventbus.confluent_kafka_consumer import EventConsumer, ConfluentKafkaConsumer
+from eventbus.kafka.confluent_consumer import EventConsumer, ConfluentKafkaConsumer
 from eventbus.model import HttpSinkMethod, HttpSinkParams
 
 

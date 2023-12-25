@@ -11,33 +11,27 @@ zookeeper:
   topic_mapping_path: /event-bus-3/test/topics
   story_path: /event-bus-3/test/stories
 
+# confluent_kafka:
+#   https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
+#   https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+# aiokafka:
+#   https://aiokafka.readthedocs.io/en/stable/api.html#consumer-class
 kafka:
-  # https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
-  # https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
   producer:
-    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-    "enable.idempotence": "true"
-    "delivery.timeout.ms": "1500" # Set according to the formula (request.timeout.ms + linger.ms) * retries.
+    "bootstrap_servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+    "enable_idempotence": "true"
     "acks": "all"
-    "socket.keepalive.enable": "true"
-    "metadata.max.age.ms": "180000"
-    "partitioner": "consistent_random"
-    "compression.codec": "none"
 
   consumer:
-    "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-    "enable.auto.commit": "true"
-    "auto.commit.interval.ms": "2000"
-    "enable.auto.offset.store": "false"
-    "auto.offset.reset": "latest"
-    "max.poll.interval.ms": "600000" # offset commit failures because of rebalance
-    "socket.keepalive.enable": "true"
-    "topic.metadata.refresh.interval.ms": "180000"
-    "metadata.max.age.ms": "180000"
-    "heartbeat.interval.ms": "3000"
-    "session.timeout.ms": "60000" # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
-    "allow.auto.create.topics": "true" # doesn't work
-    "partition.assignment.strategy": "cooperative-sticky"
+    "bootstrap_servers": ["maggie-kafka-1:9094", "maggie-kafka-2:9094", "maggie-kafka-3:9094"]
+    "enable_auto_commit": false
+    "auto_commit_interval_ms": 2000
+    "auto_offset_reset": "latest"
+    "max_poll_interval_ms": 600000 # offset commit failures because of rebalance
+    "metadata_max_age_ms": 180000
+    "heartbeat_interval_ms": 3000
+    "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
+    # "max_poll_records": 30
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
