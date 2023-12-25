@@ -13,9 +13,10 @@ from eventbus.metrics import stats_client
 
 class KafkaConsumerParams(EventBusBaseModel):
     client_args: Dict[str, Any]  # AIOKafkaConsumer.__init__ args
-    poll_timeout: int = 100  # ms, AIOKafkaConsumer.getmany
     topics: Optional[List[str]] = None
     topic_pattern: Optional[str] = None
+    poll_timeout: int = 1000  # ms, AIOKafkaConsumer.getmany
+    pull_max_records: int = 100
 
 
 class KafkaConsumer:
@@ -57,7 +58,8 @@ class KafkaConsumer:
 
     async def poll(self) -> Dict[KafkaTP, List[KafkaEvent]]:
         msgs: Dict[TopicPartition, List[ConsumerRecord]] = await self._consumer.getmany(
-            timeout_ms=self._params.poll_timeout
+            timeout_ms=self._params.poll_timeout,
+            max_records=self._params.pull_max_records,
         )
         if len(msgs) > 0:
             logger.info(

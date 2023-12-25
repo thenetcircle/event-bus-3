@@ -86,35 +86,32 @@ class Story:
             while True:
                 events_buffer = await self._consumer.poll()
 
-                while (
-                    len(events_buffer) > 0
-                    and sum([len(buffer) for buffer in list(events_buffer.values())])
-                    > 0
-                ):
-                    # loop until the buffer is empty
-                    event_batch: List[KafkaEvent] = []
-                    commit_offsets: Dict[KafkaTP, int] = {}
+                while len(events_buffer) > 0:
+                    sending_events: List[KafkaEvent] = []
+                    committing_offsets: Dict[KafkaTP, int] = {}
 
-                    for _ in range(self._params.concurrent_per_partition):
-                        for tp, events in events_buffer.items():
-                            last_offset = None
-                            while events:
-                                event = events.pop(0)  # TODO pop(0) or pop()
-                                last_offset = event.offset
+                    for tp in list(events_buffer.keys()):
+                        events = events_buffer[tp]
+                        for _ in range(self._params.concurrent_per_partition):
+                            while len(events) > 0:
+                                event = events.pop(0)
+                                committing_offsets[tp] = event.offset + 1
                                 event = await self._transform(event)
                                 if event:
                                     logger.debug("Transformed event: {}", event)
-                                    event_batch.append(event)
+                                    sending_events.append(event)
                                     break
-                            if last_offset is not None:
-                                commit_offsets[tp] = last_offset + 1
 
-                    if not event_batch:
-                        break
+                        # if the tp buffer is empty, remove the topic-partition from the buffer
+                        if len(events) == 0:
+                            del events_buffer[tp]
+
+                    if len(sending_events) == 0:
+                        continue
 
                     # sending the events to the sink
                     sending_tasks = []
-                    for event in event_batch:
+                    for event in sending_events:
                         logger.info("Sending event: {}", event)
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
@@ -143,24 +140,31 @@ class Story:
                     if producing_tasks:
                         await asyncio.gather(*producing_tasks)
 
+                    # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
                     for i in range(1, self._params.max_commit_retry_times + 1):
                         try:
                             logger.debug(
                                 "Committing offsets {} at the {} times",
-                                commit_offsets,
+                                committing_offsets,
                                 i,
                             )
-                            await self._consumer.commit(commit_offsets)
-                            logger.info("Committed offsets {}", commit_offsets)
+                            await self._consumer.commit(committing_offsets)
+                            logger.info("Committed offsets {}", committing_offsets)
                             break
                         except Exception as ex:
-                            logger.error(
-                                "Commit offsets failed with exception: <{}> {}",
-                                type(ex).__name__,
-                                ex,
-                            )
                             if i == self._params.max_commit_retry_times:
+                                logger.error(
+                                    "Commit offsets failed with exception: <{}> {}",
+                                    type(ex).__name__,
+                                    ex,
+                                )
                                 raise
+                            else:
+                                logger.error(
+                                    "Commit offsets failed with exception: <{}> {}, going to retry.",
+                                    type(ex).__name__,
+                                    ex,
+                                )
 
         except (asyncio.CancelledError, ConsumerStoppedError) as ex:
             logger.warning("Story quit by <{}> {}", type(ex).__name__, ex)
