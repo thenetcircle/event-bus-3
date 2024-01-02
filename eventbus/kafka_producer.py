@@ -1,13 +1,12 @@
 from eventbus.model import EventBusBaseModel
 
 from eventbus.event import Event, create_kafka_message
-from eventbus.errors import InitKafkaProducerError
 import asyncio
 from aiokafka import AIOKafkaProducer
 
 from loguru import logger
 from asyncio import AbstractEventLoop
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 
 class KafkaProducerParams(EventBusBaseModel):

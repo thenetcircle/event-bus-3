@@ -11,7 +11,7 @@ from utils import create_kafka_event_from_dict, create_kafka_message_from_dict
 from eventbus.config import ConsumerConfig
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.kafka.confluent_consumer import EventConsumer, ConfluentKafkaConsumer
-from eventbus.model import HttpSinkMethod, HttpSinkParams
+from eventbus.http_sink import HttpSinkMethod, HttpSinkParams
 
 
 @pytest.fixture

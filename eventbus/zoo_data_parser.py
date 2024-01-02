@@ -5,7 +5,8 @@ from kazoo.protocol.states import ZnodeStat
 from loguru import logger
 
 from eventbus import config
-from eventbus.model import SinkType, StoryParams, TransformType
+from eventbus.model import SinkType, TransformType
+from eventbus.story import StoryParams
 from eventbus.zoo_client import ZooClient
 
 
@@ -36,10 +37,10 @@ class ZooDataParser:
                 consumer_params["topic_pattern"] = topic_pattern
             if source_params.get("group-id"):
                 consumer_params["group_id"] = source_params.get("group-id")
-            if source_params.get("bootstrap-servers"):
-                consumer_params["bootstrap_servers"] = source_params.get(
-                    "bootstrap-servers"
-                )
+            # if source_params.get("bootstrap-servers"):
+            #     consumer_params["bootstrap_servers"] = source_params.get(
+            #         "bootstrap-servers"
+            #     )
 
             # sink
             sink_data, _ = self._zoo_client.get(f"{story_path}/sink")

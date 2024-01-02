@@ -1,5 +1,4 @@
 import asyncio
-import socket
 from typing import List, Union
 
 from confluent_kafka import Message
@@ -8,13 +7,13 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
 
-from eventbus import config, model
+from eventbus import config
 from eventbus.aio_zoo_client import AioZooClient
 from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
-from eventbus.kafka.confluent_producer import ConfluentKafkaProducer
+from eventbus.kafka_producer import KafkaProducer, KafkaProducerParams
 from eventbus.metrics import stats_client
-from eventbus.topic_resolver import TopicResolver
+from eventbus.topic_resolver import TopicResolver, convert_str_to_topic_mappings
 from eventbus.utils import setup_logger
 
 config.load_from_environ()
@@ -24,11 +23,7 @@ topic_resolver = TopicResolver()
 zoo_client = AioZooClient(
     hosts=config.get().zookeeper.hosts, timeout=config.get().zookeeper.timeout
 )
-producer = ConfluentKafkaProducer(
-    f"app_producer_{socket.gethostname()}",
-    config.get().kafka.producer,
-    config.get().app.max_produce_retry_times,
-)
+producer = KafkaProducer(KafkaProducerParams(client_args=config.get().kafka.producer))
 
 
 async def startup():
@@ -41,7 +36,7 @@ async def startup():
                 logger.warning("topic mapping is empty")
                 return
             logger.info("get new topic mapping data from zookeeper: {}", data)
-            topic_mappings = model.convert_str_to_topic_mappings(data)
+            topic_mappings = convert_str_to_topic_mappings(data)
             await topic_resolver.set_topic_mappings(topic_mappings)
         except Exception as ex:
             logger.error("update topic mapping error: {}", ex)
@@ -56,8 +51,7 @@ async def startup():
 
 async def shutdown():
     logger.info("The app is shutting down")
-    await producer.close()
-    await zoo_client.close()
+    await asyncio.gather(producer.close(), zoo_client.close())
 
 
 def home(request):

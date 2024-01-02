@@ -18,12 +18,12 @@ zookeeper:
 #   https://aiokafka.readthedocs.io/en/stable/api.html#consumer-class
 kafka:
   producer:
-    "bootstrap_servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
+    "bootstrap_servers": ["localhost:9092"]
     "enable_idempotence": "true"
     "acks": "all"
 
   consumer:
-    "bootstrap_servers": ["maggie-kafka-1:9094", "maggie-kafka-2:9094", "maggie-kafka-3:9094"]
+    "bootstrap_servers": ["localhost:9092"]
     "enable_auto_commit": false
     "auto_commit_interval_ms": 2000
     "auto_offset_reset": "latest"

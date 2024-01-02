@@ -11,8 +11,7 @@ from loguru import logger
 
 from eventbus import config
 from eventbus.metrics import stats_client
-from eventbus.model import StoryParams, StoryStatus
-from eventbus.story import Story
+from eventbus.story import Story, StoryParams, StoryStatus
 from eventbus.utils import setup_logger
 from eventbus.zoo_client import ZooClient
 from eventbus.zoo_data_parser import ZooDataParser

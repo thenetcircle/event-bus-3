@@ -1,8 +1,14 @@
 from typing import List, Optional
 
+from pydantic import StrictStr
 import re
 from eventbus.event import KafkaEvent
-from eventbus.model import AbsTransform, FilterTransformParams
+from eventbus.model import AbsTransform, EventBusBaseModel
+
+
+class FilterTransformParams(EventBusBaseModel):
+    include_events: Optional[List[StrictStr]] = None
+    exclude_events: Optional[List[StrictStr]] = None
 
 
 class FilterTransform(AbsTransform):

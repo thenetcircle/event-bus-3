@@ -1,11 +1,18 @@
 import re
+import json
+from pydantic import StrictStr
+from eventbus.model import EventBusBaseModel
 from typing import List, Optional
 
 from loguru import logger
 
 from eventbus.errors import InitError
 from eventbus.event import Event
-from eventbus.model import TopicMappingEntry
+
+
+class TopicMappingEntry(EventBusBaseModel):
+    topic: StrictStr
+    patterns: List[StrictStr]
 
 
 class TopicResolver:
@@ -44,3 +51,8 @@ class TopicResolver:
                 ):  # if there are repetitive patterns, they will be abandoned
                     new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
+
+
+def convert_str_to_topic_mappings(json_data: str) -> List[TopicMappingEntry]:
+    json_list = json.loads(json_data)
+    return [TopicMappingEntry(**m) for m in json_list]

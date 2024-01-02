@@ -1,14 +1,32 @@
 import asyncio
 from datetime import datetime
-from typing import Optional, Tuple
+from enum import Enum
+from typing import Dict, Optional, Tuple
 
 import aiohttp
 from aiohttp import ClientSession
 from loguru import logger
+from pydantic import StrictStr
 
 from eventbus.event import EventStatus, KafkaEvent
 from eventbus.metrics import stats_client
-from eventbus.model import AbsSink, HttpSinkParams
+from eventbus.model import AbsSink, EventBusBaseModel
+
+
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+
+
+class HttpSinkParams(EventBusBaseModel):
+    url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
+    headers: Optional[Dict[str, str]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
 
 
 class HttpSink(AbsSink):

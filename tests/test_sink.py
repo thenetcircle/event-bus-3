@@ -7,8 +7,7 @@ from utils import create_kafka_event_from_dict
 
 from eventbus.config import ConsumerConfig, UseProducersConfig
 from eventbus.event import EventStatus
-from eventbus.http_sink import HttpSink
-from eventbus.model import HttpSinkMethod, HttpSinkParams
+from eventbus.http_sink import HttpSink, HttpSinkMethod, HttpSinkParams
 
 
 @pytest.mark.asyncio

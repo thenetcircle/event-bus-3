@@ -1,6 +1,8 @@
 import asyncio
+from pydantic import StrictStr
+from enum import Enum
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 from aiokafka.errors import ConsumerStoppedError
@@ -10,8 +12,44 @@ from eventbus.event import EventStatus, KafkaEvent, KafkaTP
 from eventbus.factories import SinkFactory, TransformFactory
 from eventbus.kafka_consumer import KafkaConsumer, KafkaConsumerParams
 from eventbus.kafka_producer import KafkaProducer, KafkaProducerParams
-from eventbus.model import AbsSink, StoryParams
+from eventbus.model import (
+    AbsSink,
+    EventBusBaseModel,
+    SinkType,
+    TransformType,
+)
 from eventbus.utils import deep_merge_two_dict
+
+
+class StoryStatus(str, Enum):
+    NORMAL = "NORMAL"
+    DISABLED = "DISABLED"
+
+
+class StoryParams(EventBusBaseModel):
+    id: StrictStr
+    consumer_params: Dict[str, Any]
+    sink: Tuple[SinkType, Dict[str, Any]]
+    status: StoryStatus = StoryStatus.NORMAL
+    transforms: Optional[List[Tuple[TransformType, Dict[str, Any]]]] = None
+    concurrent_per_partition: int = 1
+    max_commit_retry_times: int = 2
+
+
+# class StoryInfo(EventBusModel):
+#     kafka_topic: StrictStr
+#     sink: StrictStr
+#     event_poll_interval: float = 1.0
+#     include_events: Optional[List[StrictStr]] = None
+#     exclude_events: Optional[List[StrictStr]] = None
+#     concurrent_per_partition: int = 1
+#     send_queue_size: int = 100
+#     commit_queue_size: int = 10
+#     tp_queue_size: int = 3
+#     max_produce_retries = 3
+#     max_commit_retries = 2
+#     max_skipped_events = 100
+#     disabled = False
 
 
 class Story:

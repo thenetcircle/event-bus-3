@@ -1,12 +1,10 @@
 from typing import Any, Dict
 
-from eventbus.filter_transform import FilterTransform
-from eventbus.http_sink import HttpSink
+from eventbus.filter_transform import FilterTransform, FilterTransformParams
+from eventbus.http_sink import HttpSink, HttpSinkParams
 from eventbus.model import (
     AbsSink,
     AbsTransform,
-    FilterTransformParams,
-    HttpSinkParams,
     SinkType,
     TransformType,
 )
@@ -14,9 +12,7 @@ from eventbus.model import (
 
 class SinkFactory:
     @staticmethod
-    def create_sink(
-        sink_type: SinkType, sink_params: Dict[str, Any]
-    ) -> AbsSink:
+    def create_sink(sink_type: SinkType, sink_params: Dict[str, Any]) -> AbsSink:
         if sink_type == SinkType.HTTP:
             return HttpSink(HttpSinkParams(**sink_params))
 
