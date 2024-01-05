@@ -10,4 +10,4 @@ lint:
 	black --check eventbus tests
 
 start-producer:
-	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus web:app
+	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app

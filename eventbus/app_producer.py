@@ -1,7 +1,6 @@
 import asyncio
-from typing import List, Union
+from typing import Any, List
 
-from confluent_kafka import Message
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -75,7 +74,7 @@ async def receive_events(request):
     if "max_resp_time" in request.query_params:
         max_resp_time = int(request.query_params["max_resp_time"])
 
-    events = None
+    events: List[Event] = []
     try:
         if "gzip" in request.query_params:
             request_body = _ungzip_request_body(request_body)
@@ -101,7 +100,7 @@ async def receive_events(request):
         )
 
 
-async def handler_event(*events: Event) -> List[Union[Message, Exception]]:
+async def handler_event(*events: Event) -> List[Any]:
     tasks = []
     for event in events:
         stats_client.incr("producer.event.new")
@@ -116,15 +115,16 @@ async def handler_event(*events: Event) -> List[Union[Message, Exception]]:
 
 
 def _create_response(
-    event_ids: List[str], results: List[Union[Message, Exception]], resp_format: str
+    event_ids: List[str], results: List[Any], resp_format: str
 ) -> Response:
-    succ_events_len = len(list(filter(lambda r: isinstance(r, Message), results)))
+    # succ_events_len = len(list(filter(lambda r: isinstance(r, Message), results)))
+    succ_events_len = sum(1 for item in results if not isinstance(item, Exception))
 
     def _get_details():
         details = {}
         for i, event_id in enumerate(event_ids):
             result = results[i]
-            if not isinstance(result, Message):
+            if isinstance(result, Exception):
                 details[event_id] = f"<{type(result).__name__}> {result}"
         return (
             details

@@ -52,7 +52,7 @@ async def start(request):
         for i in range(100, req_num + 100):
             pb = datetime.now()
             new_msg = {
-                "id": i,
+                "id": f"{i}",
                 "title": f"stress_test.event_{i}",
                 "published": pb.strftime(dateformat),
             }
@@ -76,12 +76,12 @@ async def start(request):
 async def receive_events(request):
     request_body = await request.body()
     data = json.loads(request_body)
-    print(json.dumps(data, indent=4))
-    # if isinstance(data, dict):
-    #     id = int(data["id"])
-    #     # new_pb = datetime.strptime(data["published"], dateformat)
-    #     new_pb = datetime.now()
-    #     msgs[id]["rt"] = (new_pb - msgs[id]["pb"]).microseconds * pow(10, -6)
+    # print(json.dumps(data, indent=4))
+    if isinstance(data, dict):
+        id = int(data["id"])
+        # new_pb = datetime.strptime(data["published"], dateformat)
+        new_pb = datetime.now()
+        msgs[id]["rt"] = (new_pb - msgs[id]["pb"]).microseconds * pow(10, -6)
     return PlainTextResponse("ok")
 
 

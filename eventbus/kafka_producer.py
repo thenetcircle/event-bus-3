@@ -58,7 +58,9 @@ class KafkaProducer:
 
         try:
             key, value = create_kafka_message(event)
-            await self._producer.send_and_wait(topic, value, key=key)
+            await self._producer.send_and_wait(
+                topic, value.encode("utf-8"), key=key.encode("utf-8")
+            )
         except Exception as ex:
             logger.error(
                 "KafkaProducer produce event failed with error: <{}> {}",
