@@ -5,7 +5,6 @@ from aiohttp import web
 from loguru import logger
 from utils import create_kafka_event_from_dict
 
-from eventbus.config import ConsumerConfig, UseProducersConfig
 from eventbus.event import EventStatus
 from eventbus.http_sink import HttpSink, HttpSinkMethod, HttpSinkParams
 
@@ -55,16 +54,9 @@ async def test_httpsink_send_event(aiohttp_client):
     client = await aiohttp_client(app)
 
     sink = HttpSink(
-        "test_sink",
-        ConsumerConfig(
-            id="test_consumer",
-            kafka_topics=["topic1"],
-            kafka_config={},
-            use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkParams(
-                url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
-            ),
-        ),
+        HttpSinkParams(
+            url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
+        )
     )
     sink._client = client
 
@@ -90,18 +82,11 @@ async def test_httpsink_send_event(aiohttp_client):
     assert (await sink.send_event(retry_event))[1] == EventStatus.DONE
 
     sink2 = HttpSink(
-        "test_sink",
-        ConsumerConfig(
-            id="test_consumer2",
-            kafka_topics=["topic1"],
-            kafka_config={},
-            use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkParams(
-                url="/unknown",
-                method=HttpSinkMethod.POST,
-                timeout=0.2,
-                max_retry_times=3,
-            ),
+        HttpSinkParams(
+            url="/unknown",
+            method=HttpSinkMethod.POST,
+            timeout=0.2,
+            max_retry_times=3,
         ),
     )
     sink2._client = client

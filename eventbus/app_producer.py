@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from typing import Any, List
 
 from loguru import logger
@@ -12,7 +13,7 @@ from eventbus.errors import EventValidationError, NoMatchedKafkaTopicError
 from eventbus.event import Event, parse_request_body
 from eventbus.kafka_producer import KafkaProducer, KafkaProducerParams
 from eventbus.metrics import stats_client
-from eventbus.topic_resolver import TopicResolver, convert_str_to_topic_mappings
+from eventbus.topic_resolver import TopicResolver
 from eventbus.utils import setup_logger
 
 config.load_from_environ()
@@ -25,32 +26,22 @@ zoo_client = AioZooClient(
 producer = KafkaProducer(KafkaProducerParams(client_args=config.get().kafka.producer))
 
 
-async def startup():
-    logger.info("The app is starting up")
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    try:
+        logger.info("The app is starting up")
 
-    async def _set_topic_mapping(data, stats):
-        try:
-            data = data.decode("utf-8")
-            if data == "":
-                logger.warning("topic mapping is empty")
-                return
-            logger.info("get new topic mapping data from zookeeper: {}", data)
-            topic_mappings = convert_str_to_topic_mappings(data)
-            await topic_resolver.set_topic_mappings(topic_mappings)
-        except Exception as ex:
-            logger.error("update topic mapping error: {}", ex)
+        await zoo_client.init()
+        await zoo_client.watch_data(
+            config.get().zookeeper.topic_mapping_path, _set_topic_mapping
+        )
+        await producer.init()
 
-    await zoo_client.init()
-    await zoo_client.watch_data(
-        config.get().zookeeper.topic_mapping_path, _set_topic_mapping
-    )
+        yield
 
-    await producer.init()
-
-
-async def shutdown():
-    logger.info("The app is shutting down")
-    await asyncio.gather(producer.close(), zoo_client.close())
+    finally:
+        logger.info("The app is shutting down")
+        await asyncio.gather(producer.close(), zoo_client.close())
 
 
 def home(request):
@@ -59,7 +50,7 @@ def home(request):
 
 def show_config(request):
     """Print current running config"""
-    return JSONResponse(config.get().dict())
+    return JSONResponse(config.get().model_dump())
 
 
 async def receive_events(request):
@@ -72,7 +63,7 @@ async def receive_events(request):
 
     max_resp_time = config.get().app.max_response_time  # seconds
     if "max_resp_time" in request.query_params:
-        max_resp_time = int(request.query_params["max_resp_time"])
+        max_resp_time = float(request.query_params["max_resp_time"])
 
     events: List[Event] = []
     try:
@@ -157,6 +148,19 @@ def _create_response(
         return PlainTextResponse(resp)
 
 
+async def _set_topic_mapping(data, stats):
+    try:
+        data = data.decode("utf-8")
+        if data == "":
+            logger.warning("topic mapping is empty")
+            return
+        logger.info("get new topic mapping data from zookeeper: {}", data)
+        topic_mapping = TopicResolver.convert_str_to_topic_mapping(data)
+        await topic_resolver.set_topic_mapping(topic_mapping)
+    except Exception as ex:
+        logger.error("update topic mapping error: {}", ex)
+
+
 def _ungzip_request_body(request_body: str) -> str:
     raise NotImplementedError
 
@@ -167,9 +171,4 @@ routes = [
     Route("/events", receive_events, methods=["POST"]),
 ]
 
-app = Starlette(
-    debug=config.get().app.debug,
-    routes=routes,
-    on_startup=[startup],
-    on_shutdown=[shutdown],
-)
+app = Starlette(debug=config.get().app.debug, routes=routes, lifespan=lifespan)

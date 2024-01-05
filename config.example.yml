@@ -2,20 +2,14 @@ app:
   project_id: example
   env: test
   debug: false
-  max_response_time: 5
-  max_produce_retry_times: 3
+  max_response_time: 5 #seconds
 
 zookeeper:
-  hosts: localhost:12181
+  hosts: localhost:2181
   timeout: 10.0
   topic_mapping_path: /event-bus-3/test/topics
   story_path: /event-bus-3/test/stories
 
-# confluent_kafka:
-#   https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
-#   https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-# aiokafka:
-#   https://aiokafka.readthedocs.io/en/stable/api.html#consumer-class
 kafka:
   producer:
     "bootstrap_servers": ["localhost:9092"]
@@ -31,7 +25,6 @@ kafka:
     "metadata_max_age_ms": 180000
     "heartbeat_interval_ms": 3000
     "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
-    # "max_poll_records": 30
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
@@ -40,27 +33,3 @@ statsd:
   host: 10.20.2.118
   port: 8125
   prefix: eventbus3
-
-#sinks:
-#  test_sink:
-#    url: http://localhost:8081/receive_events
-#    timeout: 5
-#
-#stories:
-#  - kafka_topic: "event-v2-test-topic1"
-#    include_events: [ "test.event1", "test.event2" ]
-#    exclude_events: [ "test.event3" ]
-#    concurrent_per_partition: 1
-#    dead_letter_topic: "event-v2-test-topic1-dl"
-#    sink: test_sink
-#
-#topic_mapping:
-#  - topic: event-v3-stress-test-4
-#    patterns:
-#      - stress_test\..*
-#  - topic: event-v3-test-topic5
-#    patterns:
-#      - test\.event1
-#  - topic: event-v3-test-default5
-#    patterns:
-#      - .*

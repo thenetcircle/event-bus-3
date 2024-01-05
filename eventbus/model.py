@@ -2,14 +2,13 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from eventbus.event import EventStatus, KafkaEvent
 
 
 class EventBusBaseModel(BaseModel):
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class SinkType(str, Enum):

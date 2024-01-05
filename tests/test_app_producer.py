@@ -1,11 +1,12 @@
+import asyncio
 import json
-from threading import Thread
 
 import pytest
 from pytest_mock import MockFixture
 from requests.models import Response
 from starlette.testclient import TestClient
-from utils import create_kafka_message_from_dict
+
+from eventbus.topic_resolver import TopicMappingEntry
 
 
 @pytest.fixture()
@@ -13,24 +14,32 @@ def client(mocker: MockFixture):
     """Need mock the Kafka producer first, otherwise the `librdkafka` will be inited,
     and the tests won't be finished"""
 
-    def produce_mock(self, topic, value, **kwargs) -> None:
-        def delivery(err, msg):
-            Thread(target=kwargs["on_delivery"], args=(err, msg), daemon=True).start()
-
+    async def send_and_wait(self, topic, value, **kwargs) -> None:
         data = json.loads(value)
 
         if data["title"] == "normal_event":
-            msg = create_kafka_message_from_dict({})
-            delivery(None, msg)
+            pass
+        if data["title"] == "timeout_event":
+            await asyncio.sleep(0.5)
         elif data["title"] == "exceptional_event":
-            delivery(RuntimeError("exceptional_event"), None)
+            raise RuntimeError("exceptional_event")
 
-    mocker.patch("eventbus.config_watcher.async_watch_config_file")
     mocker.patch("eventbus.config.load_from_environ")
-    mocker.patch("eventbus.producer.KafkaProducer.init")
-    mocker.patch("eventbus.producer.KafkaProducer.produce", produce_mock)
+    mocker.patch("eventbus.aio_zoo_client.AioZooClient.init")
+    mocker.patch("eventbus.aio_zoo_client.AioZooClient.watch_data")
+    mocker.patch("eventbus.aio_zoo_client.AioZooClient.close")
+    mocker.patch("aiokafka.producer.producer.AIOKafkaProducer.start")
+    mocker.patch(
+        "aiokafka.producer.producer.AIOKafkaProducer.send_and_wait", send_and_wait
+    )
 
-    from eventbus.app_producer import app
+    from eventbus.app_producer import app, topic_resolver
+
+    asyncio.run(
+        topic_resolver.set_topic_mapping(
+            [TopicMappingEntry(topic="event-v3-test", patterns=[".*"])]
+        )
+    )
 
     with TestClient(app) as client:
         yield client
@@ -52,7 +61,7 @@ def test_show_config(client: TestClient):
 
 def test_send_an_event(client: TestClient):
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json",
         json={
             "id": "e1",
             "title": "normal_event",
@@ -63,7 +72,7 @@ def test_send_an_event(client: TestClient):
     assert response.json()["status"] == "all_succ"
 
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json",
         json={
             "id": "e1",
             "title": "exceptional_event",
@@ -76,22 +85,21 @@ def test_send_an_event(client: TestClient):
 
 def test_event_format(client: TestClient):
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json",
         json={"id": "e1"},
     )
     assert response.json()["status"] == "all_fail"
     assert "EventValidationError" in response.json()["details"]["root"]
 
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json",
         json={
             "id": "e1",
             "title": "normal_event",
             "published": "2021-08-01",
         },
     )
-    assert response.json()["status"] == "all_fail"
-    assert "EventValidationError" in response.json()["details"]["root"]
+    assert response.json()["status"] == "all_succ"
 
 
 # TODO test published date format
@@ -99,7 +107,7 @@ def test_event_format(client: TestClient):
 
 def test_resp_format(client: TestClient):
     response: Response = client.post(
-        "/events?resp_format=2",
+        "/events",
         json={
             "id": "e1",
             "title": "normal_event",
@@ -112,7 +120,7 @@ def test_resp_format(client: TestClient):
 
 def test_send_multiple_events(client: TestClient):
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json",
         json=[
             {
                 "id": "e1",
@@ -134,13 +142,13 @@ def test_send_multiple_events(client: TestClient):
     assert response.status_code == 200
     assert response.json() == {
         "status": "part_succ",
-        "details": {"e2": "<KafkaException> exceptional_event"},
+        "details": {"e2": "<RuntimeError> exceptional_event"},
     }
 
 
 def test_timeout(client: TestClient):
     response: Response = client.post(
-        "/events",
+        "/events?resp_format=json&max_resp_time=0.2",
         json={
             "id": "e1",
             "title": "timeout_event",

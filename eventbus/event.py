@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import aiokafka
 
 from eventbus.errors import EventValidationError
@@ -15,13 +15,12 @@ class Event(BaseModel):
                int or float as a string (assumed as Unix time)
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     id: str
     title: str
     published: str
     payload: str
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def __str__(self):
         return f"Event({self.title}#{self.id})"
@@ -33,6 +32,7 @@ KafkaTP = aiokafka.TopicPartition
 class KafkaEvent(Event):
     tp: KafkaTP
     offset: int
+    key: Optional[str] = None
 
     @property
     def topic(self) -> str:
@@ -80,6 +80,7 @@ def parse_aiokafka_msg(msg) -> KafkaEvent:
         "payload": payload,
         "tp": KafkaTP(topic=msg.topic, partition=msg.partition),
         "offset": msg.offset,
+        "key": msg.key,
     }
     return KafkaEvent(**event_attrs)
 

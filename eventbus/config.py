@@ -43,8 +43,7 @@ class AppConfig(EventBusBaseModel):
     project_id: StrictStr
     env: Env
     debug: bool
-    max_response_time: int = 3
-    max_produce_retry_times: int = 3
+    max_response_time: float = 3.0
 
 
 class DefaultKafkaConfig(EventBusBaseModel):
@@ -138,4 +137,4 @@ def get_old() -> Optional[Config]:
 def _update_config(config: Config) -> None:
     global _old_config, _config
     _old_config = _config
-    _config = config.copy(update={"last_update_time": datetime.now().timestamp()})
+    _config = config.model_copy(update={"last_update_time": datetime.now().timestamp()})

@@ -1,4 +1,6 @@
 import asyncio
+import json
+from eventbus.model import SinkType
 import time
 from unittest.mock import AsyncMock, Mock
 
@@ -7,6 +9,7 @@ import pytest
 from eventbus import config
 from eventbus.zoo_client import ZooClient
 from eventbus.aio_zoo_client import AioZooClient
+from eventbus.zoo_data_parser import ZooDataParser
 
 
 @pytest.fixture
@@ -31,6 +34,12 @@ async def aio_zoo_client(zoo_client: ZooClient):
     await aio_zoo_client.close()
 
 
+@pytest.fixture
+def zoo_data_parser(zoo_client) -> ZooDataParser:
+    yield ZooDataParser(zoo_client)
+
+
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_aio_zoo_client(aio_zoo_client: AioZooClient):
     test_path = "/event-bus-3/test/client/aio_zoo_client"
@@ -75,6 +84,7 @@ async def test_aio_zoo_client(aio_zoo_client: AioZooClient):
     await _aio_wait_and_check(children_change_callback, 4, ["child1"])
 
 
+@pytest.mark.integration
 def test_zoo_client(zoo_client: ZooClient):
     test_path = "/event-bus-3/test/client/zoo_client"
     test_data = b"test_data"
@@ -93,6 +103,43 @@ def test_zoo_client(zoo_client: ZooClient):
 
     zoo_client.set(test_path, b"test_data_new")
     _wait_and_check(data_change_callback, 2, b"test_data_new")
+
+
+@pytest.mark.integration
+def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
+    story_id = "payment-callback"
+    data, stats = zoo_client.get(f"{config.get().zookeeper.story_path}/{story_id}")
+    story_params = zoo_data_parser.get_story_params(story_id, data, stats)
+    assert story_params.id == story_id
+    assert story_params.consumer_params == {
+        "topics": ["event-v2-popp-payment-callback"],
+        "bootstrap_servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094",
+    }
+    assert story_params.sink == (
+        SinkType.HTTP,
+        {
+            "url": "http://rose.kevin.poppen2.lab/api/internal/eventbus/receiver",
+            "headers": {"accept": "application/json;version=1"},
+        },
+    )
+    assert story_params.transforms == None
+    print(json.dumps(json.loads(story_params.json()), indent=4))
+
+
+@pytest.mark.skip
+def test_print_all_stories(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
+    story_path = config.get().zookeeper.story_path
+    stories_ids = zoo_client.get_children(story_path)
+    for story_id in stories_ids:
+        story_path = f"{story_path}/{story_id}"
+        data, stats = zoo_client.get(story_path)
+        story_params = zoo_data_parser.get_story_params(story_path, data, stats)
+        print("=======\n", story_id)
+        if story_params is None:
+            print(None)
+        else:
+            print(json.dumps(json.loads(story_params.json()), indent=4))
+        print("\n\n\n")
 
 
 async def _aio_wait_and_check(mock_callback, call_count, call_args):

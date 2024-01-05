@@ -33,7 +33,7 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rsxX -l --tb=short --strict-markers -s -m 'not integration and not benchmark'"
+addopts = "-rsxX -l --tb=short --strict-markers -v -s -m 'not integration and not benchmark'"
 xfail_strict = true
 testpaths = ["tests"]
 markers = [

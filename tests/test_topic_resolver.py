@@ -2,8 +2,7 @@ import pytest
 from pytest_mock import MockFixture
 from utils import create_event_from_dict
 
-from eventbus.model import TopicMappingEntry
-from eventbus.topic_resolver import TopicResolver
+from eventbus.topic_resolver import TopicResolver, TopicMappingEntry
 
 
 @pytest.mark.parametrize(
@@ -30,13 +29,24 @@ from eventbus.topic_resolver import TopicResolver
 @pytest.mark.asyncio
 async def test_resolve(mapping, test_cases):
     resolver = TopicResolver()
-    await resolver.set_topic_mappings(
+    await resolver.set_topic_mapping(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in mapping]
     )
     for case in test_cases:
         event = create_event_from_dict({"title": case[0]})
         real = resolver.resolve(event)
         assert real == case[1]
+
+
+def test_convert_str_to_topic_mapping():
+    thestr = '[{"topic": "event-v2-happ-greenarrow", "patterns": ["greenarrow\\\\..*"]}, {"topic": "event-v2-happ-default", "patterns": [".*"]}]'
+
+    assert TopicResolver.convert_str_to_topic_mapping(thestr) == [
+        TopicMappingEntry(
+            topic="event-v2-happ-greenarrow", patterns=["greenarrow\\..*"]
+        ),
+        TopicMappingEntry(topic="event-v2-happ-default", patterns=[".*"]),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -90,11 +100,11 @@ async def test_resolve(mapping, test_cases):
     ],
 )
 @pytest.mark.asyncio
-async def test_config_change_signal(
+async def test_update_mapping(
     init_mapping, new_mapping, should_do_reindex, event_cases, mocker: MockFixture
 ):
     resolver = TopicResolver()
-    await resolver.set_topic_mappings(
+    await resolver.set_topic_mapping(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in init_mapping]
     )
 
@@ -103,7 +113,7 @@ async def test_config_change_signal(
             resolver.resolve(create_event_from_dict({"title": event_title})) == topic1
         )
 
-    await resolver.set_topic_mappings(
+    await resolver.set_topic_mapping(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in new_mapping]
     )
 

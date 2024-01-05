@@ -9,17 +9,12 @@ from typing import Dict, List
 
 import pytest
 from aiohttp import web
-from confluent_kafka import Consumer, Message, Producer, TopicPartition
-from confluent_kafka.admin import AdminClient, NewTopic
 from loguru import logger
 from pytest_mock import MockFixture
 from utils import create_event_from_dict
 
 from eventbus import config
-from eventbus.config import ProducerConfig, UseProducersConfig
 from eventbus.http_sink import HttpSink
-from eventbus.kafka.confluent_consumer import EventConsumer
-from eventbus.kafka.confluent_producer import ConfluentKafkaProducer
 
 
 @pytest.fixture
