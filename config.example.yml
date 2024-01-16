@@ -10,7 +10,15 @@ zookeeper:
   topic_mapping_path: /event-bus-3/test/topics
   story_path: /event-bus-3/test/stories
 
-kafka:
+sentry:
+  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
+
+statsd:
+  host: 10.20.2.118
+  port: 8125
+  prefix: eventbus3
+
+default_kafka_params:
   producer:
     "bootstrap_servers": ["localhost:9092"]
     "enable_idempotence": "true"
@@ -26,10 +34,13 @@ kafka:
     "heartbeat_interval_ms": 3000
     "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
 
-sentry:
-  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
-
-statsd:
-  host: 10.20.2.118
-  port: 8125
-  prefix: eventbus3
+predefined_sinks:
+  test:
+    type: HTTP
+    params:
+      url: http://localhost:8081/receive_events
+      method: POST
+      headers:
+        Content-type: application/json
+      timeout: 3
+      max_retry_times: 0

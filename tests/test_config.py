@@ -16,7 +16,7 @@ def test_update_from_yaml():
         topic_mapping_path="/event-bus-3/test/topics",
         story_path="/event-bus-3/test/stories",
     )
-    assert config_data.kafka == config.DefaultKafkaConfig(
+    assert config_data.default_kafka_params == config.DefaultKafkaParams(
         producer={
             "bootstrap_servers": ["localhost:9092"],
             "enable_idempotence": "true",

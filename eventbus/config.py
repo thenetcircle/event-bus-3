@@ -9,7 +9,7 @@ from loguru import logger
 from pydantic import StrictStr
 
 from eventbus.errors import ConfigNoneError, ConfigUpdateError
-from eventbus.model import EventBusBaseModel
+from eventbus.model import EventBusBaseModel, SinkType
 
 
 class Env(str, Enum):
@@ -46,15 +46,21 @@ class AppConfig(EventBusBaseModel):
     max_response_time: float = 3.0
 
 
-class DefaultKafkaConfig(EventBusBaseModel):
+class DefaultKafkaParams(EventBusBaseModel):
     producer: Dict[str, Any]
     consumer: Dict[str, Any]
+
+
+class SinkConfig(EventBusBaseModel):
+    type: SinkType
+    params: Dict[str, Any]
 
 
 class Config(EventBusBaseModel):
     app: AppConfig
     zookeeper: ZookeeperConfig
-    kafka: DefaultKafkaConfig
+    default_kafka_params: DefaultKafkaParams
+    predefined_sinks: Optional[Dict[str, SinkConfig]] = None
     sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
     last_update_time: Optional[float] = None

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict
 import aiokafka
@@ -47,9 +47,9 @@ class KafkaEvent(Event):
 
 
 class EventStatus(str, Enum):
-    DONE = "done"
-    DEAD_LETTER = "dead_letter"
-    DISCARD = "discard"
+    DONE = "DONE"
+    DEAD_LETTER = "DEAD_LETTER"
+    DISCARD = "DISCARD"
 
 
 def create_kafka_message(event: Event) -> Tuple[str, str]:
@@ -113,7 +113,7 @@ def parse_confluent_kafka_msg(msg) -> KafkaEvent:
 
 
 # TODO improve performance of this func
-def parse_request_body(request_body: str) -> List[Event]:
+def parse_request_body(request_body: Union[str, bytes]) -> List[Event]:
     try:
         json_body = json.loads(request_body)
     except Exception:

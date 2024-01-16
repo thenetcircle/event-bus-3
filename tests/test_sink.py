@@ -61,25 +61,25 @@ async def test_httpsink_send_event(aiohttp_client):
     sink._client = client
 
     ok_event = create_kafka_event_from_dict({"payload": b"ok"})
-    assert (await sink.send_event(ok_event))[1] == EventStatus.DONE
+    assert (await sink.send_event(ok_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"retry"})
-    assert (await sink.send_event(retry_event))[1] == EventStatus.DEAD_LETTER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     ok_event = create_kafka_event_from_dict({"payload": b"retry2"})
-    assert (await sink.send_event(ok_event))[1] == EventStatus.DONE
+    assert (await sink.send_event(ok_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"unexpected_resp"})
-    assert (await sink.send_event(retry_event))[1] == EventStatus.DEAD_LETTER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     retry_event = create_kafka_event_from_dict({"payload": b"timeout"})
-    assert (await sink.send_event(retry_event))[1] == EventStatus.DONE
+    assert (await sink.send_event(retry_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"non-200"})
-    assert (await sink.send_event(retry_event))[1] == EventStatus.DEAD_LETTER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     retry_event = create_kafka_event_from_dict({"payload": b"connection-error"})
-    assert (await sink.send_event(retry_event))[1] == EventStatus.DONE
+    assert (await sink.send_event(retry_event)).status == EventStatus.DONE
 
     sink2 = HttpSink(
         HttpSinkParams(
@@ -90,4 +90,4 @@ async def test_httpsink_send_event(aiohttp_client):
         ),
     )
     sink2._client = client
-    assert (await sink2.send_event(ok_event))[1] == EventStatus.DEAD_LETTER
+    assert (await sink2.send_event(ok_event)).status == EventStatus.DEAD_LETTER

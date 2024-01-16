@@ -8,9 +8,9 @@ from aiohttp import ClientSession
 from loguru import logger
 from pydantic import StrictStr
 
-from eventbus.event import EventStatus, KafkaEvent
+from eventbus.event import Event, EventStatus
 from eventbus.metrics import stats_client
-from eventbus.model import AbsSink, EventBusBaseModel
+from eventbus.model import AbsSink, EventBusBaseModel, SinkResult
 
 
 class HttpSinkMethod(str, Enum):
@@ -42,7 +42,7 @@ class HttpSink(AbsSink):
         self._client = ClientSession()
         logger.info("Inited HttpSink")
 
-    async def send_event(self, event: KafkaEvent) -> Tuple[KafkaEvent, EventStatus]:
+    async def send_event(self, event: Event) -> SinkResult:
         retry_times = 0
         req_func = getattr(self._client, self._params.method.lower())
         req_url = self._params.url
@@ -75,21 +75,26 @@ class HttpSink(AbsSink):
                                 retry_times,
                             )
                             stats_client.incr("consumer.event.send.done")
-                            return event, EventStatus.DONE
+                            return SinkResult(event, EventStatus.DONE)
 
                         elif resp_body == "retry":
                             # retry logic
                             if retry_times >= self._max_retry_times:
-                                logger.info(
-                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                if retry_times > 0:
+                                    logger.info(
+                                        'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                        event,
+                                        req_url,
+                                        retry_times,
+                                        _cost_time,
+                                    )
+                                return SinkResult(
                                     event,
-                                    req_url,
-                                    retry_times,
-                                    _cost_time,
+                                    EventStatus.DEAD_LETTER,
+                                    Exception("Maximum Retry"),
                                 )
-                                stats_client.incr("consumer.event.send.retry")
-                                return event, EventStatus.DEAD_LETTER
                             else:
+                                stats_client.incr("consumer.event.send.retry")
                                 retry_times += 1
                                 continue
 
@@ -103,7 +108,11 @@ class HttpSink(AbsSink):
                                 resp_body,
                             )
                             stats_client.incr("consumer.event.send.retry")
-                            return event, EventStatus.DEAD_LETTER
+                            return SinkResult(
+                                event,
+                                EventStatus.DEAD_LETTER,
+                                Exception(f"Unexpected Response: {resp_body}"),
+                            )
 
                     else:
                         logger.warning(
@@ -116,16 +125,21 @@ class HttpSink(AbsSink):
 
                         # non-200 status code, use retry logic
                         if retry_times >= self._max_retry_times:
-                            logger.info(
-                                'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                            if retry_times > 0:
+                                logger.info(
+                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    event,
+                                    req_url,
+                                    retry_times,
+                                    _cost_time,
+                                )
+                            return SinkResult(
                                 event,
-                                req_url,
-                                retry_times,
-                                _cost_time,
+                                EventStatus.DEAD_LETTER,
+                                Exception(f"Non-200 Status Code: {resp.status}"),
                             )
-                            stats_client.incr("consumer.event.send.retry")
-                            return event, EventStatus.DEAD_LETTER
                         else:
+                            stats_client.incr("consumer.event.send.retry")
                             retry_times += 1
                             continue
 
@@ -172,7 +186,7 @@ class HttpSink(AbsSink):
                 )
                 # TODO trigger alert
                 stats_client.incr("consumer.event.send.retry")
-                return event, EventStatus.DEAD_LETTER
+                return SinkResult(event, EventStatus.DEAD_LETTER, ex)
 
             except Exception as ex:
                 sleep_time = self._get_backoff_sleep_time(retry_times)

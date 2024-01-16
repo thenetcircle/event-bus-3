@@ -17,6 +17,7 @@ from eventbus.model import (
     EventBusBaseModel,
     SinkType,
     TransformType,
+    SinkResult,
 )
 from eventbus.utils import deep_merge_two_dict
 
@@ -62,7 +63,7 @@ class Story:
         )
 
         consumer_params = deep_merge_two_dict(
-            config.get().kafka.consumer, story_params.consumer_params
+            config.get().default_kafka_params.consumer, story_params.consumer_params
         )
         assert (
             "topics" in consumer_params or "topic_pattern" in consumer_params
@@ -79,7 +80,7 @@ class Story:
             )
         )
 
-        producer_params = config.get().kafka.producer
+        producer_params = config.get().default_kafka_params.producer
         self._producer = KafkaProducer(KafkaProducerParams(client_args=producer_params))
 
         self._transforms = []
@@ -154,26 +155,28 @@ class Story:
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
 
-                    sending_results: List[
-                        Tuple[KafkaEvent, EventStatus]
-                    ] = await asyncio.gather(*sending_tasks)
+                    sending_results: List[SinkResult] = await asyncio.gather(
+                        *sending_tasks
+                    )
 
                     # sending failed tasks to another kafka topics
                     producing_tasks = []
-                    for event, status in sending_results:
-                        if status == EventStatus.DONE:
+                    for _result in sending_results:
+                        if _result.status == EventStatus.DONE:
                             pass
-                        elif status == EventStatus.DISCARD:
+                        elif _result.status == EventStatus.DISCARD:
                             pass
-                        elif status == EventStatus.DEAD_LETTER:
-                            dead_letter_topic = self._get_dead_letter_topic(event)
+                        elif _result.status == EventStatus.DEAD_LETTER:
+                            dead_letter_topic = self._get_dead_letter_topic(
+                                _result.event
+                            )
                             logger.info(
                                 "Sending event {} to dead_letter_topic {}",
-                                event,
+                                _result.event,
                                 dead_letter_topic,
                             )
                             producing_tasks.append(
-                                self._producer.produce(dead_letter_topic, event)
+                                self._producer.produce(dead_letter_topic, _result.event)
                             )
                     if producing_tasks:
                         await asyncio.gather(*producing_tasks)
