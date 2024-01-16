@@ -1,10 +1,10 @@
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from confluent_kafka import TIMESTAMP_NOT_AVAILABLE, Message
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
+import aiokafka
 
 from eventbus.errors import EventValidationError
 
@@ -15,50 +15,81 @@ class Event(BaseModel):
                int or float as a string (assumed as Unix time)
     """
 
-    id: str = Field(min_length=2, max_length=500, regex=r"[\w-]+")
-    title: str
-    published: datetime
-    payload: str
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    class Config:
-        arbitrary_types_allowed = True
-        underscore_attrs_are_private = True
+    id: str
+    title: str
+    published: str
+    payload: str
 
     def __str__(self):
         return f"Event({self.title}#{self.id})"
 
 
+KafkaTP = aiokafka.TopicPartition
+
+
 class KafkaEvent(Event):
-    is_subscribed: bool = True
-    msg: Message
+    tp: KafkaTP
+    offset: int
+    key: Optional[str] = None
 
     @property
-    def topic(self) -> Optional[str]:
-        return self.msg.topic()
+    def topic(self) -> str:
+        return self.tp.topic
 
     @property
-    def partition(self) -> Optional[int]:
-        return self.msg.partition()
-
-    @property
-    def offset(self) -> Optional[int]:
-        return self.msg.offset()
+    def partition(self) -> int:
+        return self.tp.partition
 
     def __str__(self):
         return f"KafkaEvent({self.title}#{self.id}@{self.topic}:{self.partition}:{self.offset})"
 
 
-class EventProcessStatus(str, Enum):
-    DONE = "done"
-    RETRY_LATER = "retry_later"
-    DISCARD = "discard"
+class EventStatus(str, Enum):
+    DONE = "DONE"
+    DEAD_LETTER = "DEAD_LETTER"
+    DISCARD = "DISCARD"
 
 
 def create_kafka_message(event: Event) -> Tuple[str, str]:
     return event.id, event.payload
 
 
-def parse_kafka_message(msg: Message) -> KafkaEvent:
+def parse_aiokafka_msg(msg) -> KafkaEvent:
+    from aiokafka import ConsumerRecord
+
+    assert isinstance(msg, ConsumerRecord)
+
+    payload = msg.value
+    if not payload:
+        raise EventValidationError(f"Message value must not be empty.")
+
+    try:
+        json_body = json.loads(payload)
+    except Exception:
+        raise EventValidationError(f"Request body must not an non-empty Json.")
+
+    if not isinstance(json_body, dict):
+        raise EventValidationError("Invalid format of the event")
+
+    event_attrs = {
+        "id": json_body.get("id"),
+        "title": json_body.get("title"),
+        "published": json_body.get("published"),
+        "payload": payload,
+        "tp": KafkaTP(topic=msg.topic, partition=msg.partition),
+        "offset": msg.offset,
+        "key": msg.key,
+    }
+    return KafkaEvent(**event_attrs)
+
+
+def parse_confluent_kafka_msg(msg) -> KafkaEvent:
+    from confluent_kafka import Message
+
+    assert isinstance(msg, Message)
+
     payload = msg.value()
     if not payload:
         raise EventValidationError(f"Message value must not be empty.")
@@ -82,7 +113,7 @@ def parse_kafka_message(msg: Message) -> KafkaEvent:
 
 
 # TODO improve performance of this func
-def parse_request_body(request_body: str) -> List[Event]:
+def parse_request_body(request_body: Union[str, bytes]) -> List[Event]:
     try:
         json_body = json.loads(request_body)
     except Exception:

@@ -5,14 +5,8 @@ from aiohttp import web
 from loguru import logger
 from utils import create_kafka_event_from_dict
 
-from eventbus.config import (
-    ConsumerConfig,
-    HttpSinkConfig,
-    HttpSinkMethod,
-    UseProducersConfig,
-)
-from eventbus.event import EventProcessStatus
-from eventbus.sink import HttpSink
+from eventbus.event import EventStatus
+from eventbus.http_sink import HttpSink, HttpSinkMethod, HttpSinkParams
 
 
 @pytest.mark.asyncio
@@ -60,54 +54,40 @@ async def test_httpsink_send_event(aiohttp_client):
     client = await aiohttp_client(app)
 
     sink = HttpSink(
-        "test_sink",
-        ConsumerConfig(
-            id="test_consumer",
-            kafka_topics=["topic1"],
-            kafka_config={},
-            use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkConfig(
-                url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
-            ),
-        ),
+        HttpSinkParams(
+            url="/", method=HttpSinkMethod.POST, timeout=0.2, max_retry_times=3
+        )
     )
     sink._client = client
 
     ok_event = create_kafka_event_from_dict({"payload": b"ok"})
-    assert (await sink.send_event(ok_event))[1] == EventProcessStatus.DONE
+    assert (await sink.send_event(ok_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"retry"})
-    assert (await sink.send_event(retry_event))[1] == EventProcessStatus.RETRY_LATER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     ok_event = create_kafka_event_from_dict({"payload": b"retry2"})
-    assert (await sink.send_event(ok_event))[1] == EventProcessStatus.DONE
+    assert (await sink.send_event(ok_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"unexpected_resp"})
-    assert (await sink.send_event(retry_event))[1] == EventProcessStatus.RETRY_LATER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     retry_event = create_kafka_event_from_dict({"payload": b"timeout"})
-    assert (await sink.send_event(retry_event))[1] == EventProcessStatus.DONE
+    assert (await sink.send_event(retry_event)).status == EventStatus.DONE
 
     retry_event = create_kafka_event_from_dict({"payload": b"non-200"})
-    assert (await sink.send_event(retry_event))[1] == EventProcessStatus.RETRY_LATER
+    assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
     retry_event = create_kafka_event_from_dict({"payload": b"connection-error"})
-    assert (await sink.send_event(retry_event))[1] == EventProcessStatus.DONE
+    assert (await sink.send_event(retry_event)).status == EventStatus.DONE
 
     sink2 = HttpSink(
-        "test_sink",
-        ConsumerConfig(
-            id="test_consumer2",
-            kafka_topics=["topic1"],
-            kafka_config={},
-            use_producers=UseProducersConfig(producer_ids=["p1"]),
-            sink=HttpSinkConfig(
-                url="/unknown",
-                method=HttpSinkMethod.POST,
-                timeout=0.2,
-                max_retry_times=3,
-            ),
+        HttpSinkParams(
+            url="/unknown",
+            method=HttpSinkMethod.POST,
+            timeout=0.2,
+            max_retry_times=3,
         ),
     )
     sink2._client = client
-    assert (await sink2.send_event(ok_event))[1] == EventProcessStatus.RETRY_LATER
+    assert (await sink2.send_event(ok_event)).status == EventStatus.DEAD_LETTER

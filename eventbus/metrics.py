@@ -8,11 +8,11 @@ class StatsClientProxy:
         self.client: StatsClient = None
 
     def init(self, config: Config):
-        if config.app.statsd:
+        if config.statsd:
             self.client = StatsClient(
-                host=config.app.statsd.host,
-                port=config.app.statsd.port,
-                prefix=config.app.statsd.prefix,
+                host=config.statsd.host,
+                port=config.statsd.port,
+                prefix=config.statsd.prefix,
             )
 
     def incr(self, key: str):

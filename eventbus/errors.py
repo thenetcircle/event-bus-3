@@ -35,7 +35,7 @@ class EventProducingError(EventBusError):
     pass
 
 
-class InitProducerError(EventBusError):
+class InitKafkaProducerError(EventBusError):
     pass
 
 
@@ -43,17 +43,17 @@ class InitConsumerError(EventBusError):
     pass
 
 
-class EventConsumerNotFoundError(EventBusError):
+class StoryDisabledError(EventBusError):
     pass
 
 
-class ConsumerPollingError(EventBusError):
+class KafkaConsumerPollingError(EventBusError):
+    pass
+
+
+class KafkaConsumerClosedError(EventBusError):
     pass
 
 
 class InvalidArgumentError(EventBusError):
-    pass
-
-
-class ClosedError(EventBusError):
     pass

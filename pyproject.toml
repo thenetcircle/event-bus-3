@@ -33,7 +33,8 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rsxX -l --tb=short --strict-markers -m 'not integration and not benchmark'"
+addopts = "-rsxX -l --tb=short --strict-markers -v -m 'not integration and not benchmark'"
+#addopts = "-rsxX -l --tb=short --strict-markers -v -s -m 'not integration and not benchmark'"
 xfail_strict = true
 testpaths = ["tests"]
 markers = [
@@ -41,7 +42,21 @@ markers = [
     "integration: Integration tests",
     "benchmark: Benchmark tests",
 ]
+asyncio_mode = "auto"
 
 [tool.mypy]
 files="eventbus,tests"
 ignore_missing_imports=true
+
+# https://microsoft.github.io/pyright/#/configuration?id=main-configuration-options
+[tool.pyright]
+include = ["eventbus", "tests"]
+exclude = ["**/node_modules", "**/__pycache__"]
+reportMissingImports = true
+reportMissingModuleSource = true
+reportOptionalSubscript = false
+reportOptionalMemberAccess = false
+useLibraryCodeForTypes = true
+venvPath = "."
+venv = "venv"
+# verboseOutput = true

@@ -3,6 +3,7 @@ import sys
 from loguru import logger
 
 from eventbus import config
+import inspect
 
 
 def setup_logger():
@@ -24,16 +25,19 @@ def setup_logger():
     import logging
 
     class InterceptHandler(logging.Handler):
-        def emit(self, record):
+        def emit(self, record: logging.LogRecord):
             # Get corresponding Loguru level if it exists
+            level: str | int
             try:
                 level = logger.level(record.levelname).name
             except ValueError:
                 level = record.levelno
 
             # Find caller from where originated the logged message
-            frame, depth = logging.currentframe(), 2
-            while frame.f_code.co_filename == logging.__file__:
+            frame, depth = inspect.currentframe(), 0
+            while frame and (
+                depth == 0 or frame.f_code.co_filename == logging.__file__
+            ):
                 frame = frame.f_back
                 depth += 1
 
@@ -41,21 +45,18 @@ def setup_logger():
                 level, record.getMessage()
             )
 
-    logging.basicConfig(handlers=[InterceptHandler()], level=0)
+    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
-    if config.get().app.sentry:
+    if config.get().sentry:
         logger.info(
             "Detected sentry_dsh: {}, going to set up Sentry.",
-            config.get().app.sentry.dsn,
+            config.get().sentry.dsn,
         )
 
         # https://docs.sentry.io/platforms/python/guides/logging/
         import sentry_sdk
-        from sentry_sdk.integrations.logging import (
-            BreadcrumbHandler,
-            EventHandler,
-            LoggingIntegration,
-        )
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        from sentry_sdk.integrations.loguru import LoguruIntegration
 
         # from sentry_sdk.integrations.logging import LoggingIntegration
         # sentry_logging = LoggingIntegration(
@@ -64,14 +65,16 @@ def setup_logger():
         # )
         # https://docs.sentry.io/platforms/python/configuration/options/
         sentry_sdk.init(
-            dsn=config.get().app.sentry.dsn,
+            dsn=config.get().sentry.dsn,
             debug=config.get().app.debug,
             environment=str(config.get().app.env),
-            sample_rate=config.get().app.sentry.sample_rate,
-            traces_sample_rate=config.get().app.sentry.traces_sample_rate,
+            sample_rate=config.get().sentry.sample_rate,
+            traces_sample_rate=config.get().sentry.traces_sample_rate,
             integrations=[
-                LoggingIntegration(level=None, event_level=None),
+                LoguruIntegration(level=None, event_level=logging.ERROR),
+                # LoggingIntegration(level=None, event_level=logging.ERROR),
             ],
+            default_integrations=False,
         )
 
         # logger.add(
@@ -80,8 +83,19 @@ def setup_logger():
         #     level=logging.DEBUG,
         # )
 
-        logger.add(
-            EventHandler(level=logging.ERROR),
-            diagnose=True,
-            level="ERROR",
-        )
+        # logger.add(
+        #     EventHandler(level=logging.ERROR),
+        #     diagnose=True,
+        #     level="ERROR",
+        # )
+
+
+def deep_merge_two_dict(dict1, dict2):
+    for key, val in dict1.items():
+        if isinstance(val, dict):
+            dict2_node = dict2.setdefault(key, {})
+            deep_merge_two_dict(val, dict2_node)
+        else:
+            if key not in dict2:
+                dict2[key] = val
+    return dict2

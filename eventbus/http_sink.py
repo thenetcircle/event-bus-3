@@ -1,66 +1,57 @@
 import asyncio
-from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Tuple
+from enum import Enum
+from typing import Dict, Optional, Tuple
 
 import aiohttp
 from aiohttp import ClientSession
 from loguru import logger
+from pydantic import StrictStr
 
-from eventbus.config import ConsumerConfig
-from eventbus.event import EventProcessStatus, KafkaEvent
+from eventbus.event import Event, EventStatus
 from eventbus.metrics import stats_client
+from eventbus.model import AbsSink, EventBusBaseModel, SinkResult
 
 
-class Sink(ABC):
-    @abstractmethod
-    async def init(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    async def send_event(
-        self, event: KafkaEvent
-    ) -> Tuple[KafkaEvent, EventProcessStatus]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def close(self):
-        raise NotImplementedError
+class HttpSinkMethod(str, Enum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
 
 
-class HttpSink(Sink):
-    def __init__(self, consumer_name: str, consumer_conf: ConsumerConfig):
-        self._consumer_name = consumer_name
-        self._config = consumer_conf
+class HttpSinkParams(EventBusBaseModel):
+    url: StrictStr
+    method: HttpSinkMethod = HttpSinkMethod.POST
+    headers: Optional[Dict[str, str]] = None
+    timeout: float = 300  # seconds
+    max_retry_times: int = 3
+    backoff_retry_step: float = 0.1
+    backoff_retry_max_time: float = 60.0
+
+
+class HttpSink(AbsSink):
+    def __init__(self, sink_params: HttpSinkParams):
+        self._params = sink_params
         self._client: Optional[ClientSession] = None
 
-        self._max_retry_times = self._config.sink.max_retry_times
-        self._timeout = aiohttp.ClientTimeout(total=self._config.sink.timeout)
-
-    @property
-    def consumer_name(self):
-        return self._consumer_name
-
-    @property
-    def fullname(self):
-        return f"HttpSink#{self.consumer_name}"
+        self._max_retry_times = self._params.max_retry_times
+        self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
     async def init(self):
-        logger.info("Initing {}", self.fullname)
+        logger.info("Initing HttpSink")
         self._client = ClientSession()
+        logger.info("Inited HttpSink")
 
-    async def send_event(
-        self, event: KafkaEvent
-    ) -> Tuple[KafkaEvent, EventProcessStatus]:
+    async def send_event(self, event: Event) -> SinkResult:
         retry_times = 0
-        req_func = getattr(self._client, self._config.sink.method.lower())
-        req_url = self._config.sink.url
+        req_func = getattr(self._client, self._params.method.lower())
+        req_url = self._params.url
         req_kwargs = {
             "data": event.payload,
             "timeout": self._timeout,
         }
-        if self._config.sink.headers:
-            req_kwargs["headers"] = self._config.sink.headers
+        if self._params.headers:
+            req_kwargs["headers"] = self._params.headers
 
         stats_client.incr("consumer.event.send.new")
 
@@ -84,21 +75,26 @@ class HttpSink(Sink):
                                 retry_times,
                             )
                             stats_client.incr("consumer.event.send.done")
-                            return event, EventProcessStatus.DONE
+                            return SinkResult(event, EventStatus.DONE)
 
                         elif resp_body == "retry":
                             # retry logic
                             if retry_times >= self._max_retry_times:
-                                logger.info(
-                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                if retry_times > 0:
+                                    logger.info(
+                                        'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                        event,
+                                        req_url,
+                                        retry_times,
+                                        _cost_time,
+                                    )
+                                return SinkResult(
                                     event,
-                                    req_url,
-                                    retry_times,
-                                    _cost_time,
+                                    EventStatus.DEAD_LETTER,
+                                    Exception("Maximum Retry"),
                                 )
-                                stats_client.incr("consumer.event.send.retry")
-                                return event, EventProcessStatus.RETRY_LATER
                             else:
+                                stats_client.incr("consumer.event.send.retry")
                                 retry_times += 1
                                 continue
 
@@ -112,7 +108,11 @@ class HttpSink(Sink):
                                 resp_body,
                             )
                             stats_client.incr("consumer.event.send.retry")
-                            return event, EventProcessStatus.RETRY_LATER
+                            return SinkResult(
+                                event,
+                                EventStatus.DEAD_LETTER,
+                                Exception(f"Unexpected Response: {resp_body}"),
+                            )
 
                     else:
                         logger.warning(
@@ -125,16 +125,21 @@ class HttpSink(Sink):
 
                         # non-200 status code, use retry logic
                         if retry_times >= self._max_retry_times:
-                            logger.info(
-                                'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                            if retry_times > 0:
+                                logger.info(
+                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    event,
+                                    req_url,
+                                    retry_times,
+                                    _cost_time,
+                                )
+                            return SinkResult(
                                 event,
-                                req_url,
-                                retry_times,
-                                _cost_time,
+                                EventStatus.DEAD_LETTER,
+                                Exception(f"Non-200 Status Code: {resp.status}"),
                             )
-                            stats_client.incr("consumer.event.send.retry")
-                            return event, EventProcessStatus.RETRY_LATER
                         else:
+                            stats_client.incr("consumer.event.send.retry")
                             retry_times += 1
                             continue
 
@@ -181,7 +186,7 @@ class HttpSink(Sink):
                 )
                 # TODO trigger alert
                 stats_client.incr("consumer.event.send.retry")
-                return event, EventProcessStatus.RETRY_LATER
+                return SinkResult(event, EventStatus.DEAD_LETTER, ex)
 
             except Exception as ex:
                 sleep_time = self._get_backoff_sleep_time(retry_times)
@@ -205,18 +210,18 @@ class HttpSink(Sink):
 
     async def close(self):
         if self._client:
-            logger.info("Closing {}", self.fullname)
+            logger.info("Closing HttpSink")
 
             await self._client.close()
             self._client = None
 
-            logger.info("{} is closed", self.fullname)
+            logger.info("Closed HttpSink")
 
     def _get_backoff_sleep_time(self, retry_times: int) -> float:
         return min(
             [
-                (retry_times + 1) * self._config.sink.backoff_retry_step,
-                self._config.sink.backoff_retry_max_time,
+                (retry_times + 1) * self._params.backoff_retry_step,
+                self._params.backoff_retry_max_time,
             ]
         )
 

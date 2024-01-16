@@ -1,28 +1,42 @@
 import re
-from typing import Optional
+import json
+from pydantic import StrictStr
+from eventbus.model import EventBusBaseModel
+from typing import List, Optional
 
 from loguru import logger
 
-from eventbus import config
+from eventbus.errors import InitError
 from eventbus.event import Event
+
+
+class TopicMappingEntry(EventBusBaseModel):
+    topic: StrictStr
+    patterns: List[StrictStr]
 
 
 class TopicResolver:
     def __init__(self):
         self._index = {}
-        self._current_topic_mapping = config.get().topic_mapping
+        self._topic_mapping = None
+        self._cache = {}
 
-    async def init(self) -> None:
+    async def set_topic_mapping(self, topic_mapping: List[TopicMappingEntry]) -> None:
+        logger.info("Updating topic mappings")
+        self._topic_mapping = topic_mapping
+        self._cache = {}
         self.reindex()
-        config.ConfigSignals.TOPIC_MAPPING_CHANGE.connect(
-            self._handle_config_change_signal
-        )
+        logger.info("Updated topic mappings")
 
-    # TODO add cache
     def resolve(self, event: Event) -> Optional[str]:
         """Resolve event topic by event title according to the topic mapping"""
+        if self._topic_mapping is None:
+            raise InitError("topic mappings is empty")
+        if event.title in self._cache:
+            return self._cache[event.title]
         for _, (pattern, topic) in self._index.items():
             if re.match(pattern, event.title):
+                self._cache[event.title] = topic
                 return topic
         return None
 
@@ -30,7 +44,7 @@ class TopicResolver:
         """Index the topic mapping with structure:
         pattern: { (compiled_pattern, topic) ... }"""
         new_index = {}
-        for mp in self._current_topic_mapping:
+        for mp in self._topic_mapping:
             for patn in mp.patterns:
                 if (
                     patn not in new_index
@@ -38,9 +52,7 @@ class TopicResolver:
                     new_index[patn] = (re.compile(patn, re.I), mp.topic)
         self._index = new_index
 
-    def _handle_config_change_signal(self, sender, **kwargs) -> None:
-        """Subscribing the topic mapping changes signal, and update related index accordingly."""
-        logger.info("Handling topic mapping signal")
-        self._current_topic_mapping = config.get().topic_mapping
-        self.reindex()
-        logger.info("Topic mapping signal handled")
+    @staticmethod
+    def convert_str_to_topic_mapping(json_data: str) -> List[TopicMappingEntry]:
+        json_list = json.loads(json_data)
+        return [TopicMappingEntry(**m) for m in json_list]

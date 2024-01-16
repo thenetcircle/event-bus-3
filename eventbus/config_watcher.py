@@ -68,8 +68,8 @@ def _watch_file(
                 )
 
                 config.update_from_yaml(config_file_path)
-                if loop:
-                    loop.call_soon_threadsafe(config.send_signals)
+                # if loop:
+                #     loop.call_soon_threadsafe(config.send_signals)
 
                 last_update_time = new_update_time
 

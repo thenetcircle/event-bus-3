@@ -2,51 +2,26 @@ app:
   project_id: it
   env: test
   debug: false
+  max_response_time: 5
+
+zookeeper:
+  hosts: 10.60.1.127:2181
+  timeout: 10.0
+  topic_mapping_path: /event-bus-3/test/topics
+  story_path: /event-bus-3/test/stories
+
+kafka:
   producer:
-    use_producers:
-      producer_ids: [p1]
-    max_response_time: 1
-
-default_producer_config:
-  kafka_config:
-    "enable.idempotence": "true"
+    "bootstrap_servers": ["maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"]
+    "enable_idempotence": "true"
     "acks": "all"
-    "delivery.timeout.ms": "3000"
 
-producers:
-  p1:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
-  p2:
-    kafka_config:
-      "bootstrap.servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094"
-
-default_consumer_config:
-  kafka_config:
-    "bootstrap.servers": "maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"
-    "enable.auto.commit": "true"
-    "auto.commit.interval.ms": "1"
-    "enable.auto.offset.store": "false"
-    "auto.offset.reset": "earliest"
-
-consumers:
-  c1:
-    kafka_topics: [ "topic1" ]
-    use_producers:
-      producer_ids: [ p1 ]
-    concurrent_per_partition: 1
-    sink:
-      url: /
-      method: POST
-      timeout: 5
-
-topic_mapping:
-  - topic: primary-success
-    patterns:
-      - test\.primary-success
-  - topic: secondary-success
-    patterns:
-      - test\.secondary-success
-  - topic: event-v3-${env}-default
-    patterns:
-      - .*
+  consumer:
+    "bootstrap_servers": ["maggie-kafka-1:9092,maggie-kafka-2:9092,maggie-kafka-3:9092"]
+    "enable_auto_commit": true
+    "auto_commit_interval_ms": 2000
+    "auto_offset_reset": "earliest"
+    "max_poll_interval_ms": 600000 # offset commit failures because of rebalance
+    "metadata_max_age_ms": 180000
+    "heartbeat_interval_ms": 3000
+    "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
