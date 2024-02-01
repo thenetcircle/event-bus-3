@@ -12,7 +12,7 @@ def setup_logger():
     format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "
         "| <level>{level: <8}</level> "
-        "| <cyan>{process.name}</cyan>:<cyan>{thread.name}</cyan> "
+        "| <cyan>{process.name}</cyan> "  # :<cyan>{thread.name}</cyan>
         "| <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> "
         "- <level>{message}</level>"
     )

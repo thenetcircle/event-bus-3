@@ -39,7 +39,10 @@ async def run_story(story: Story):
     loop.add_signal_handler(signal.SIGINT, term_callback)
 
     await story.init()
-    await story.run()
+    try:
+        await story.run()
+    finally:
+        await story.close()
 
 
 def main():
@@ -74,14 +77,15 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    story_procs: Dict[str, Tuple[int, Process]] = {}
+    story_procs: Dict[str, Tuple[int, StoryParams, Process]] = {}
+    story_is_changing = True
 
     def start_new_story(znode_version: int, story_params: StoryParams):
         story_id = story_params.id
         if story_params.status == StoryStatus.DISABLED:
             logger.info('Story "{}" is disabled, skip to start.', story_id)
             return
-        if story_id in story_procs and story_procs[story_id][1].is_alive():
+        if story_id in story_procs and story_procs[story_id][2].is_alive():
             # TODO trigger alert on all errors
             logger.error(
                 "Consumer#{} already in consumer_procs and is alive, something went wrong!",
@@ -97,12 +101,12 @@ def main():
             daemon=True,
         )
         p.start()
-        story_procs[story_id] = (znode_version, p)
+        story_procs[story_id] = (znode_version, story_params, p)
 
     def stop_story(story_id: str, waiting_seconds: int):
         if story_id not in story_procs:
             return
-        p = story_procs[story_id][1]
+        p = story_procs[story_id][2]
         if p and p.is_alive():
             if p.pid:
                 logger.warning("Sending SIGTERM to {}", p)
@@ -115,13 +119,11 @@ def main():
                     p.kill()
                 sleep(0.1)
 
-    changing_story = True
-
     def watch_story_changes(
         story_id: str, data: bytes, stats: ZnodeStat, event: Optional[WatchedEvent]
     ):
-        global changing_story
-        changing_story = True
+        nonlocal story_is_changing
+        story_is_changing = True
         try:
             if pdata := story_procs.get(story_id):
                 if pdata[0] < stats.version:
@@ -146,7 +148,7 @@ def main():
         except Exception as ex:
             logger.error("Failed to process story data change: {}", ex)
         finally:
-            changing_story = False
+            story_is_changing = False
 
     def watch_story_list(story_ids: List[str]):
         add_list = set(story_ids).difference(list(story_procs.keys()))
@@ -154,13 +156,11 @@ def main():
         logger.info("Story list changed: add={}, remove={}", add_list, remove_list)
 
         for story_id in add_list:
-
-            def wrapped_watch_story_changes(data, stats, event):
-                watch_story_changes(story_id, data, stats, event)
-
             zoo_client.watch_data(
                 config.get().zookeeper.story_path + "/" + story_id,
-                wrapped_watch_story_changes,
+                lambda data, stats, event: watch_story_changes(
+                    story_id, data, stats, event
+                ),
             )
 
         for story_id in remove_list:
@@ -180,12 +180,30 @@ def main():
     # --- monitor config change and sub-processes ---
 
     def get_alive_procs() -> List[Process]:
-        return [p for _, p in list(story_procs.values()) if p.is_alive()]
+        return [p for _, _, p in list(story_procs.values()) if p.is_alive()]
 
     try:
-        # waiting for all procs to quit
-        while alive_procs := get_alive_procs() or changing_story:
-            sleep(0.1)
+        while True:
+            while story_is_changing:
+                sleep(0.2)
+
+            for story_id in list(story_procs.keys()):
+                zversion, story_params, p = story_procs[story_id]
+                if not p.is_alive():
+                    if p.exitcode:  # if not exit normally, restart
+                        logger.error(
+                            "Story {} exited abnormally with code {}, will restart!",
+                            story_id,
+                            p.exitcode,
+                        )
+                        start_new_story(zversion, story_params)
+                    else:
+                        logger.warning("Story {} process exited normally!", story_id)
+                        story_procs.pop(story_id)
+            if len(story_procs) > 0:
+                sleep(0.5)
+            else:
+                break
 
     except KeyboardInterrupt:
         logger.warning("Caught KeyboardInterrupt! Stopping consumers...")

@@ -14,6 +14,8 @@ from eventbus.topic_resolver import TopicResolver, TopicMappingEntry
                 ("message_topic", [r"message\..*"]),
                 ("profile_topic", [r"profile\..*"]),
                 ("user2_topic", [r"use.*"]),
+                ("test_guangqi_topic", [r"test\.guangqi\..*"]),
+                ("test_topic", [r"test\..*"]),
                 ("default_topic", [r".*"]),
             ],
             [
@@ -21,6 +23,8 @@ from eventbus.topic_resolver import TopicResolver, TopicMappingEntry
                 ("my.message.send", "default_topic"),
                 ("user.login", "user_topic"),
                 ("user_.login", "user2_topic"),
+                ("test.guangqi.callback", "test_guangqi_topic"),
+                ("test.callback", "test_topic"),
                 ("profile.visit", "profile_topic"),
             ],
         )
