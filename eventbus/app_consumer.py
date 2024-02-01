@@ -43,6 +43,7 @@ async def run_story(story: Story):
         await story.run()
     finally:
         await story.close()
+        await asyncio.sleep(5)
 
 
 def main():
@@ -191,17 +192,17 @@ def main():
                 zversion, story_params, p = story_procs[story_id]
                 if not p.is_alive():
                     if p.exitcode:  # if not exit normally, restart
-                        logger.error(
+                        logger.info(
                             "Story {} exited abnormally with code {}, will restart!",
                             story_id,
                             p.exitcode,
                         )
                         start_new_story(zversion, story_params)
                     else:
-                        logger.warning("Story {} process exited normally!", story_id)
+                        logger.info("Story {} process exited normally!", story_id)
                         story_procs.pop(story_id)
             if len(story_procs) > 0:
-                sleep(0.5)
+                sleep(0.2)
             else:
                 break
 

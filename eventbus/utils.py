@@ -56,7 +56,7 @@ def setup_logger():
         # https://docs.sentry.io/platforms/python/guides/logging/
         import sentry_sdk
         from sentry_sdk.integrations.logging import LoggingIntegration
-        from sentry_sdk.integrations.loguru import LoguruIntegration
+        from sentry_sdk.integrations.loguru import LoguruIntegration, LoggingLevels
 
         # from sentry_sdk.integrations.logging import LoggingIntegration
         # sentry_logging = LoggingIntegration(
@@ -64,14 +64,19 @@ def setup_logger():
         #     event_level=logging.ERROR,  # Send errors as events
         # )
         # https://docs.sentry.io/platforms/python/configuration/options/
+        # https://docs.sentry.io/platforms/python/integrations/loguru/
         sentry_sdk.init(
             dsn=config.get().sentry.dsn,
             debug=config.get().app.debug,
             environment=str(config.get().app.env),
             sample_rate=config.get().sentry.sample_rate,
             traces_sample_rate=config.get().sentry.traces_sample_rate,
+            max_breadcrumbs=50,
             integrations=[
-                LoguruIntegration(level=None, event_level=logging.ERROR),
+                LoguruIntegration(
+                    level=LoggingLevels.INFO.value,
+                    event_level=LoggingLevels.ERROR.value,
+                ),
                 # LoggingIntegration(level=None, event_level=logging.ERROR),
             ],
             default_integrations=False,
