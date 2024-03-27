@@ -20,7 +20,8 @@ from eventbus.zoo_data_parser import ZooDataParser
 def story_main(config_file_path: str, story_params: StoryParams):
     config.update_from_yaml(config_file_path)
     setup_logger()
-    stats_client.init(config.get())
+    stats_client.init()
+    stats_client.incr("app.consumer.story.init")
 
     story = Story(story_params)
     # run story
@@ -42,6 +43,7 @@ async def run_story(story: Story):
     try:
         await story.run()
     finally:
+        stats_client.incr("app.consumer.story.quit")
         await story.close()
         await asyncio.sleep(5)
 
@@ -62,8 +64,10 @@ def main():
         config.update_from_yaml(args.config_file)
     else:
         config.load_from_environ()
-
     setup_logger()
+    stats_client.init()
+
+    stats_client.incr("app.consumer.init")
 
     # setup_zookeeper
     zoo_client = ZooClient(
@@ -223,6 +227,7 @@ def main():
                     p.kill()
             sleep(0.01)
 
+    stats_client.incr("app.consumer.quit")
     logger.warning("Main process quit.")
 
 

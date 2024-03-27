@@ -26,18 +26,18 @@ class KafkaProducer:
         self._producer: AIOKafkaProducer = None
 
     async def init(self):
-        logger.info("Initing KafkaProducer")
+        logger.info("Initializing KafkaProducer")
         self._loop = asyncio.get_running_loop()
         self._producer = AIOKafkaProducer(**self._params.client_args)
         await self._producer.start()
-        logger.info("Inited KafkaProducer")
+        logger.info("KafkaProducer has been initialized")
 
     async def close(self):
         try:
             logger.info("Closing KafkaProducer")
             if self._producer:
                 await self._producer.stop()
-            logger.info("Closed KafkaProducer")
+            logger.info("KafkaProducer has been closed")
         except Exception as ex:
             logger.error(
                 "Closing KafkaProducer failed with error: <{}> {}",
@@ -48,12 +48,12 @@ class KafkaProducer:
     async def produce(self, topic: str, event: Event):
         if self._producer is None or self._loop is None:
             logger.error(
-                "KafkaProducer is not inited, _producer: {}, _loop: {}",
+                "KafkaProducer has not been initialized, _producer: {}, _loop: {}",
                 self._producer,
                 self._loop,
             )
             raise RuntimeError(
-                "Need init KafkaProducer before call the produce method."
+                "Need initialize KafkaProducer before call the produce method."
             )
 
         try:
@@ -63,7 +63,7 @@ class KafkaProducer:
             )
         except Exception as ex:
             logger.error(
-                "KafkaProducer produce event failed with error: <{}> {}",
+                "KafkaProducer producing an event failed with error: <{}> {}",
                 type(ex).__name__,
                 ex,
             )

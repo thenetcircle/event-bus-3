@@ -16,22 +16,22 @@ class SinkPool:
             self._sinks[sink_id] = sink
 
     async def init(self):
-        logger.info("Initing SinkPool")
+        logger.info("Initializing SinkPool")
         for sink_id in list(self._sinks.keys()):
             try:
-                logger.info("Initing sink {}", sink_id)
+                logger.info("Initializing sink {}", sink_id)
                 await self._sinks[sink_id].init()
             except Exception as ex:
                 del self._sinks[sink_id]
                 logger.error("Failed to init sink {}, caused by {}", sink_id, ex)
-        logger.info("Inited SinkPool")
+        logger.info("SinkPool has been initialized")
 
     async def close(self):
         logger.info("Closing SinkPool")
         await asyncio.gather(
             *[sink.close() for _, sink in self._sinks.items()],
         )
-        logger.info("Closed SinkPool")
+        logger.info("SinkPool has been closed")
 
     def get_sink(self, sink_id: str) -> Optional[AbsSink]:
         return self._sinks.get(sink_id)

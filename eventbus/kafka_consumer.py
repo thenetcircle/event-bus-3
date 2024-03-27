@@ -32,7 +32,7 @@ class KafkaConsumer:
         self._consumer: AIOKafkaConsumer = None
 
     async def init(self):
-        logger.info("Initing KafkaConsumer")
+        logger.info("Initializing KafkaConsumer")
         self._loop = asyncio.get_running_loop()
         self._consumer = AIOKafkaConsumer(**self._params.client_args)
         self._consumer.subscribe(
@@ -41,14 +41,14 @@ class KafkaConsumer:
             listener=MyAssignmentListener(),
         )
         await self._consumer.start()
-        logger.info("Inited KafkaConsumer")
+        logger.info("KafkaConsumer has been initialized")
 
     async def close(self):
         try:
             logger.info("Closing KafkaConsumer")
             if self._consumer:
                 await self._consumer.stop()
-            logger.info("Closed KafkaConsumer")
+            logger.info("KafkaConsumer has been closed")
         except Exception as ex:
             logger.error(
                 "Closing AioConsmer failed with error: <{}> {}",
@@ -63,7 +63,7 @@ class KafkaConsumer:
         )
         if len(msgs) > 0:
             logger.info(
-                "Polled a bunch of messages from Kafka topic-partitions: {}",
+                "Have polled a bunch of messages from Kafka topic-partitions: {}",
                 [(tp, len(records)) for tp, records in msgs.items()],
             )
 
@@ -72,11 +72,11 @@ class KafkaConsumer:
             results[tp] = []
             for record in records:
                 try:
-                    stats_client.incr("consumer.msg.new")
+                    stats_client.incr("consumer.event.new")
                     event = parse_aiokafka_msg(record)
                     results[tp].append(event)
                 except Exception as ex:
-                    stats_client.incr("consumer.msg.error")
+                    stats_client.incr("consumer.event.fail")
                     logger.error(
                         "Parsing a message from Kafka failed with error: <{}> {}",
                         type(ex).__name__,
@@ -90,7 +90,7 @@ class KafkaConsumer:
             await self._consumer.commit(offsets=offsets)
             logger.debug("Committed offsets {}", offsets)
         except Exception as ex:
-            stats_client.incr("consumer.event.commit.error")
+            stats_client.incr("consumer.event.commit.fail")
             logger.error(
                 "Committing a message from Kafka failed with error: <{}> {}",
                 type(ex).__name__,
@@ -108,7 +108,9 @@ class MyAssignmentListener(ConsumerRebalanceListener):
     """
 
     def on_partitions_revoked(self, revoked: List[TopicPartition]):
+        stats_client.incr("consumer.partitions.revoked")
         logger.info("Called on_partitions_revoked with partitions: {}", revoked)
 
     def on_partitions_assigned(self, assigned: List[TopicPartition]):
+        stats_client.incr("consumer.partitions.assigned")
         logger.info("Called on_partitions_assigned with partitions: {}", assigned)

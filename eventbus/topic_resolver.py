@@ -26,12 +26,12 @@ class TopicResolver:
         self._topic_mapping = topic_mapping
         self._cache = {}
         self.reindex()
-        logger.info("Updated topic mappings")
+        logger.info("Topic mappings have been updated")
 
     def resolve(self, event: Event) -> Optional[str]:
         """Resolve event topic by event title according to the topic mapping"""
         if self._topic_mapping is None:
-            raise InitError("topic mappings is empty")
+            raise InitError("Topic mappings is empty")
         if event.title in self._cache:
             return self._cache[event.title]
         for _, (pattern, topic) in self._index.items():

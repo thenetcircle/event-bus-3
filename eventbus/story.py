@@ -1,23 +1,23 @@
 import asyncio
-from pydantic import StrictStr
-from enum import Enum
 import re
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from loguru import logger
 from aiokafka.errors import ConsumerStoppedError
+from loguru import logger
+from pydantic import StrictStr
 
 from eventbus import config
-from eventbus.event import EventStatus, KafkaEvent, KafkaTP
+from eventbus.event import Event, EventStatus, KafkaEvent, KafkaTP
 from eventbus.factories import SinkFactory, TransformFactory
 from eventbus.kafka_consumer import KafkaConsumer, KafkaConsumerParams
 from eventbus.kafka_producer import KafkaProducer, KafkaProducerParams
 from eventbus.model import (
     AbsSink,
     EventBusBaseModel,
+    SinkResult,
     SinkType,
     TransformType,
-    SinkResult,
 )
 from eventbus.utils import deep_merge_two_dict
 
@@ -96,7 +96,7 @@ class Story:
         )
 
     async def init(self) -> None:
-        logger.info("Initing Story")
+        logger.info("Initializing Story")
         await asyncio.gather(
             self._producer.init(),
             self._consumer.init(),

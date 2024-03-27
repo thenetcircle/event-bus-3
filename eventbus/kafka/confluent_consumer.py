@@ -47,7 +47,7 @@ class ConfluentKafkaConsumer:
         return f"KafkaConsumer#{self.id}"
 
     async def init(self) -> None:
-        logger.info("Initing {}", self.fullname)
+        logger.info("Initializing {}", self.fullname)
         self._loop = asyncio.get_running_loop()
         self._pull_executor = ThreadPoolExecutor(max_workers=1)
         self._commit_executor = ThreadPoolExecutor(max_workers=1)

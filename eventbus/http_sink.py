@@ -38,9 +38,9 @@ class HttpSink(AbsSink):
         self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
     async def init(self):
-        logger.info("Initing HttpSink")
+        logger.info("Initializing HttpSink")
         self._client = ClientSession()
-        logger.info("Inited HttpSink")
+        logger.info("HttpSink has been initialized")
 
     async def send_event(self, event: Event) -> SinkResult:
         retry_times = 0
@@ -215,7 +215,7 @@ class HttpSink(AbsSink):
             await self._client.close()
             self._client = None
 
-            logger.info("Closed HttpSink")
+            logger.info("HttpSink has been closed")
 
     def _get_backoff_sleep_time(self, retry_times: int) -> float:
         return min(

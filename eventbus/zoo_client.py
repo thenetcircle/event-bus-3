@@ -71,14 +71,14 @@ class ZooClient:
         self._client_params = kwargs
 
     def init(self):
-        logger.info("init zoo client")
+        logger.info("Initializing zoo client")
         if "logger" not in self._client_params:
             self._client_params["logger"] = logging.getLogger("ZooClient")
         self._kazoo_client = KazooClient(**self._client_params)
         self._kazoo_client.start()
 
     def close(self):
-        logger.info("stop zoo client")
+        logger.info("Stopping zoo client")
         self._kazoo_client.stop()
 
     def create(
@@ -118,13 +118,13 @@ class ZooClient:
         return self._kazoo_client.delete(path, version, recursive)
 
     def watch_data(self, path, callback, *args, **kwargs):
-        logger.info("start watching zookeeper's data from path: {}", path)
+        logger.info("Start watching zookeeper's data from path: {}", path)
         return self._kazoo_client.DataWatch(path, callback, *args, **kwargs)
 
     def watch_children(
         self, path, callback, allow_session_lost: bool = True, send_event: bool = False
     ):
-        logger.info("start watching zookeeper's children from path: {}", path)
+        logger.info("Start watching zookeeper's children from path: {}", path)
         return self._kazoo_client.ChildrenWatch(
             path, callback, allow_session_lost=allow_session_lost, send_event=send_event
         )

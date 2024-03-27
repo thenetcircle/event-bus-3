@@ -1,18 +1,19 @@
 from statsd import StatsClient
 
-from eventbus.config import Config
-
 
 class StatsClientProxy:
     def __init__(self):
         self.client: StatsClient = None
 
-    def init(self, config: Config):
-        if config.statsd:
+    def init(self):
+        from eventbus import config
+
+        _config = config.get()
+        if _config.statsd:
             self.client = StatsClient(
-                host=config.statsd.host,
-                port=config.statsd.port,
-                prefix=config.statsd.prefix,
+                host=_config.statsd.host,
+                port=_config.statsd.port,
+                prefix=_config.statsd.prefix,
             )
 
     def incr(self, key: str):

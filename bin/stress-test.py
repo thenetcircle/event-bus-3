@@ -25,6 +25,7 @@ async def shutdown():
 
 
 msgs: Dict[int, Dict[str, Any]] = {}
+received_ids = []
 dateformat = "%Y-%m-%dT%H:%M:%S.%f"
 
 
@@ -82,6 +83,7 @@ async def receive_events(request):
         # new_pb = datetime.strptime(data["published"], dateformat)
         new_pb = datetime.now()
         msgs[id]["rt"] = (new_pb - msgs[id]["pb"]).microseconds * pow(10, -6)
+        received_ids.append(id)
     return PlainTextResponse("ok")
 
 

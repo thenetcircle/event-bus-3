@@ -82,7 +82,7 @@ class AioZooClient:
         return self._client
 
     async def init(self):
-        logger.info("init aio zoo client")
+        logger.info("Initializing aio zoo client")
         self._loop = asyncio.get_running_loop()
         self._executor = ThreadPoolExecutor(
             max_workers=3, thread_name_prefix="ZooClientExecutor"
@@ -93,7 +93,7 @@ class AioZooClient:
         self._client.init()
 
     async def close(self):
-        logger.info("stop aio zoo client")
+        logger.info("Stopping aio zoo client")
         self._executor.shutdown()
         self._client.close()
 

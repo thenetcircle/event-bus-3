@@ -22,11 +22,12 @@ from eventbus.metrics import stats_client
 from eventbus.topic_resolver import TopicResolver
 from eventbus.sink_pool import SinkPool
 from eventbus.utils import setup_logger
-from eventbus.model import SinkResult
+from eventbus.model import AbsSink, SinkResult
 
 config.load_from_environ()
 setup_logger()
-stats_client.init(config.get())
+stats_client.init()
+
 topic_resolver = TopicResolver()
 zoo_client = AioZooClient(
     hosts=config.get().zookeeper.hosts, timeout=config.get().zookeeper.timeout
@@ -41,6 +42,7 @@ sink_pool = SinkPool()
 async def lifespan(app):
     try:
         logger.info("The app is starting up")
+        stats_client.incr("app.producer.init")
 
         await zoo_client.init()
         await zoo_client.watch_data(
@@ -52,6 +54,7 @@ async def lifespan(app):
         yield
 
     finally:
+        stats_client.incr("app.producer.quit")
         logger.info("The app is shutting down")
         await asyncio.gather(producer.close(), zoo_client.close(), sink_pool.close())
 
@@ -90,9 +93,14 @@ async def main(request):
         events = parse_request_body(request_body)
         if not events:
             raise EventValidationError("Invalid format of request body.")
+        logger.info('Get new events: "{}"', events)
+
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]
         stats_client.incr("producer.request.fail")
+        logger.warning(
+            'Parsing request failed: "{}", the request body: "{}"', ex, request_body
+        )
         return _create_response(
             event_ids, [ex for _ in event_ids], request_context.resp_format
         )
@@ -106,13 +114,13 @@ async def main(request):
 
 
 async def send_to_sink(sink_id: str, context: RequestContext):
+    stats_client.incr("producer.request.sink.new")
     if sink := sink_pool.get_sink(sink_id):
         events = context.events
         try:
-            tasks = asyncio.gather(
-                *[sink.send_event(event) for event in events], return_exceptions=True
+            results = await asyncio.wait_for(
+                do_send_events_to_sink(sink, *events), context.max_resp_time
             )
-            results = await asyncio.wait_for(tasks, context.max_resp_time)
 
             def convert_results(r):
                 if isinstance(r, SinkResult):
@@ -123,16 +131,18 @@ async def send_to_sink(sink_id: str, context: RequestContext):
                 else:
                     return r
 
+            stats_client.incr("producer.request.sink.succ")
             results = list(map(convert_results, results))
             return _create_response(
                 [e.id for e in events], results, context.resp_format
             )
         except Exception as ex:
-            stats_client.incr("producer.request.fail")
+            stats_client.incr("producer.request.sink.fail")
             return _create_response(
                 [e.id for e in events], [ex for _ in events], context.resp_format
             )
     else:
+        stats_client.incr("producer.request.sink.fail")
         return _create_response(
             ["root"],
             [InvalidArgumentError(f"Sink '{sink_id}' not found.")],
@@ -141,24 +151,37 @@ async def send_to_sink(sink_id: str, context: RequestContext):
 
 
 async def send_to_kafka(context: RequestContext):
+    stats_client.incr("producer.request.kafka.new")
     events = context.events
     try:
-        results = await asyncio.wait_for(handler_event(*events), context.max_resp_time)
+        results = await asyncio.wait_for(
+            do_send_events_to_kafka(*events), context.max_resp_time
+        )
 
-        stats_client.incr("producer.request.succ")
+        stats_client.incr("producer.request.kafka.succ")
         return _create_response([e.id for e in events], results, context.resp_format)
 
     except Exception as ex:
-        stats_client.incr("producer.request.fail")
+        stats_client.incr("producer.request.kafka.fail")
         return _create_response(
             [e.id for e in events], [ex for _ in events], context.resp_format
         )
 
 
-async def handler_event(*events: Event) -> List[Any]:
+async def do_send_events_to_sink(sink: AbsSink, *events: Event) -> List[Any]:
+    def _send(event):
+        stats_client.incr("producer.event.sink.new")
+        return sink.send_event(event)
+
+    return await asyncio.gather(
+        *[_send(event) for event in events], return_exceptions=True
+    )
+
+
+async def do_send_events_to_kafka(*events: Event) -> List[Any]:
     tasks = []
     for event in events:
-        stats_client.incr("producer.event.new")
+        stats_client.incr("producer.event.kafka.new")
 
         if event_topic := topic_resolver.resolve(event):
             task = asyncio.create_task(producer.produce(event_topic, event))
@@ -214,15 +237,16 @@ def _create_response(
 
 async def _set_topic_mapping(data, stats):
     try:
+        stats_client.incr("producer.topic_mapping.update")
         data = data.decode("utf-8")
         if data == "":
-            logger.warning("topic mapping is empty")
+            logger.warning("Get new topic mapping from zookeeper which is empty")
             return
-        logger.info("get new topic mapping data from zookeeper: {}", data)
+        logger.info("Get new topic mapping from zookeeper: {}", data)
         topic_mapping = TopicResolver.convert_str_to_topic_mapping(data)
         await topic_resolver.set_topic_mapping(topic_mapping)
     except Exception as ex:
-        logger.error("update topic mapping error: {}", ex)
+        logger.error("Updating topic mapping failed with error: {}", ex)
 
 
 routes = [
