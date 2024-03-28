@@ -1,0 +1,155 @@
+stages:
+  - docs
+  - build and publish
+  - test
+  - deploy to lab
+
+# DOCKER_REGISTRY is defined as CI/CD variables in GitLab for the whole
+# tnc-service-team group, and is automatically set for every project in
+# the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
+variables:
+  TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
+
+# update the handbook repo
+build docs:
+  tags:
+    # decided which gitlab runner will build the docs, this has to be `thin-runner`
+    # since the script will update the handbook repo from this machine where it's
+    # cloned
+    - thin-runner
+  stage: docs
+  # adjust the `wget` and `git add` commands with the correct location and filename
+  script:
+    - >
+      cd /usr/local/tncdata/source/handbook &&
+      git clean --force -d -x &&
+      git reset --hard &&
+      git checkout master &&
+      git fetch &&
+      git pull &&
+      wget -O /usr/local/tncdata/source/handbook/docs/eventbus3.md http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/raw/main/README.md &&
+      cd /usr/local/tncdata/source/handbook &&
+      git add docs/eventbus3.md &&
+      (git diff --quiet && git diff --staged --quiet || git commit -m 'updated eventbus3 doc') &&
+      git push
+
+# build the image and push to Harbor in lab
+build:
+  # use the specific docker version, `:latest` has been broken for a long time
+  image: $DOCKER_REGISTRY/dockerhub-replica/docker:20.10.12
+  stage: build and publish
+  # this makes sure we build from within another docker container (dind)
+  services:
+    - name: $DOCKER_REGISTRY/dockerhub-replica/docker:dind
+      command:
+        [
+          "--insecure-registry=thin.thenetcircle.lab:5000 --insecure-registry=http://thin.thenetcircle.lab:5000",
+        ]
+  tags:
+    # either `docker` or `overlay2`
+    - docker
+  script:
+    - DOCKER_BUILDKIT=1 docker build -f Dockerfile -t $TAG_LATEST .
+    - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY
+    - docker push $TAG_LATEST
+
+# another stage for running tests; here we need to replace the entrypoint
+# when running, otherwise uvicorn will start from the default entrypoint
+coverage:
+  # no point in trying to run the tests if the previous build failed
+  when: on_success
+  # we run the image from inside another docker container to make sure
+  # the gitlab runner environment doesn't interfere
+  image: $DOCKER_REGISTRY/dockerhub-replica/docker:20.10.12
+  stage: test
+  variables:
+    # don't need to clone the repo for this stage, since we're pulling the
+    # image from Harbor
+    GIT_STRATEGY: none
+  environment:
+    name: lab
+    deployment_tier: testing
+  services:
+    - name: $DOCKER_REGISTRY/dockerhub-replica/docker:dind
+      command:
+        [
+          "--insecure-registry=thin.thenetcircle.lab:5000 --insecure-registry=http://thin.thenetcircle.lab:5000",
+        ]
+  tags:
+    # use either `docker` or `overlay2`
+    - docker
+  script:
+    # remove the test container if it's already running
+    - docker container rm -f eventbus3-test || true
+    - docker pull $TAG_LATEST
+    # here we're overwriting the entrypoint with the test script
+    - docker run --name eventbus3-test $TAG_LATEST coverage
+  # this line is needed for gitlab to be able to display a test coverage
+  # percentage badge on the repository page; it's a regex to catch the final
+  # output from `coverage`
+  coverage: "/TOTAL.+ ([0-9]{1,3}%)/"
+
+# deploy from inside an alpine docker container, to make sure we don't fail
+# because of changes to the runner machine
+deploy:
+  when: on_success
+  # 'environment' lets us choose which values to use for SERVER_USER/IP and ID_RSA
+  environment:
+    name: lab
+    deployment_tier: development
+  image: $DOCKER_REGISTRY/dockerhub-replica/alpine:latest # 3.18.3 when manually uploaded to harbor; china blocking docker hub
+  stage: deploy to lab
+  only:
+    # either `main` or `master`, the name of the main branch in the repo
+    - main
+  tags:
+    - docker
+  # SERVER_USER/IP is defined in GitLab as CI/CD variables, one for each
+  # environment (only lab currently) and is for now gitlab@fat; ID_RSA
+  # is a generated private key for the gitlab user on fat, also a CI/CD
+  # variable
+  #
+  # also use the chinese mirror, otherwise apk will timeout sometimes,
+  # breaking the build
+  script:
+    - chmod og= $ID_RSA
+
+    - echo http://mirrors.bfsu.edu.cn/alpine/v3.15/main > /etc/apk/repositories;
+      echo http://mirrors.bfsu.edu.cn/alpine/v3.15/community >> /etc/apk/repositories
+
+    - apk update && apk add openssh
+
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY"
+
+    # get the latest image from harbor, which is the one we built earlier
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker pull $TAG_LATEST"
+
+    # remove any existing deployment of this image
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker container rm -f eventbus3-consumer || true"
+
+    # remove any existing deployment of this image
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker container rm -f eventbus3-producer || true"
+
+    # this `docker run` command should be very similar to what's
+    # in the deployment section of the `README.md`
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker run -d
+      -v /data/some-folder:/code/app/data
+      --restart unless-stopped
+      --log-opt max-size=50m
+      --log-opt max-file=1
+      --name eventbus3-consumer
+      $TAG_LATEST consumer"
+
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker run -d
+      -v /data/some-folder:/code/app/data
+      --restart unless-stopped
+      --log-opt max-size=50m
+      --log-opt max-file=1
+      --name eventbus3-producer
+      $TAG_LATEST producer"

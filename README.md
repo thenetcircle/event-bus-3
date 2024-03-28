@@ -1,4 +1,56 @@
-# EventBus 3
+# Deploying
+
+## Lab
+
+Pushing changes to gitlab will run the tests and build the image, then deploy 
+the docker image to `fat`.
+
+## Staging
+
+Running on `cloud-host-xx`. Deployment command:
+
+```shell
+docker pull cloud-host-01.austria.private:5001/library/my-service:latest
+docker run -d -p 7760:8080 \
+    -v /data/some-folder:/code/app/data \
+    --name my-service-staging \
+    --log-opt max-size=100m \
+    --log-opt max-file=1 \
+    cloud-host-01.austria.private:5001/library/my-service:latest
+```
+
+## Production
+
+Running on `cloud-host-xx`. Deployment command:
+
+```shell
+docker pull cloud-host-01.austria.private:5001/library/my-service:latest
+docker run -d -p 7770:8080 \
+    -v /data/some-folder:/code/app/data \
+    --name my-service-prod \
+    --log-opt max-size=100m \
+    --log-opt max-file=1 \
+    --name my-service \
+    cloud-host-01.austria.private:5001/library/my-service:latest
+```
+
+## Starting/stopping
+
+Starting it if it's down:
+
+```shell
+docker restart quizmatch-service-fetiprod
+```
+
+## Logs
+
+Use `--since` to get less logs. Pipe to `stdout` and paginate using `less`:
+
+```shell
+docker logs --since '2024-01-18T00:00:00' my-service-prod 2>&1 | less
+```
+
+## Features & Change Logs
 A reliable event/message hub for boosting Event-Driven architecture &amp; big data ingestion.
 
 TODO:

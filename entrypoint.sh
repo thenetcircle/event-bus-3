@@ -16,6 +16,11 @@ case $CMD in
   test)
     exec pytest "$@"
     ;;
+  coverage)
+    coverage run -m pytest
+    coverage report -m
+    echo "all done!"
+    ;;
   *)
     echo "Usage: {consumer|producer|test} ..."
     exit 1
