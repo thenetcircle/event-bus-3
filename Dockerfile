@@ -20,8 +20,8 @@ RUN pip3 install \
 
 ENV PYTHONPATH .
 
-COPY eventbus ./
-COPY tests ./
+COPY eventbus eventbus
+COPY tests tests
 COPY pyproject.toml ./
 COPY entrypoint.sh ./
 
