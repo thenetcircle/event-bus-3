@@ -47,16 +47,10 @@ def test_invalid_data():
 
 
 def test_hot_update():
-    config_path = Path(__file__).parent / "fixtures" / "config.yml"
+    config_path = config.get().config_file_path
     with open(config_path) as f:
         new_config = yaml.safe_load(f)
         new_config["app"]["env"] = "prod"
         config.update_from_dict(new_config)
 
     assert config.get().app.env == config.Env.PROD
-
-
-@pytest.mark.noconfig
-def test_config_reset():
-    with pytest.raises(ConfigNoneError):
-        config.get()

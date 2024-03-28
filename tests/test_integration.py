@@ -68,7 +68,7 @@ def assert_produced_msgs(temp_topic: str, events_num: int):
     assert len(msg_partitions) == 3
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 async def test_producer(setup_kafka_cluster, producer_ids=None):
     temp_topic, admin_client = setup_kafka_cluster
@@ -89,7 +89,7 @@ async def test_producer(setup_kafka_cluster, producer_ids=None):
     assert_produced_msgs(temp_topic, events_num)
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 @pytest.mark.skip  # skip it cause too slow
 async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
@@ -101,7 +101,7 @@ async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
     await test_producer(setup_kafka_cluster, ["p1", "p2"])
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFixture):
     temp_topic, admin_client = setup_kafka_cluster
@@ -144,7 +144,7 @@ async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFi
     assert_produced_msgs(temp_topic, events_num)
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 async def test_consumer(
     setup_kafka_cluster, aiohttp_client, round=1, consumer_group_id=None
@@ -223,7 +223,7 @@ async def test_consumer(
     assert sum([p.offset for p in curr_positions]) == events_num * round
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 async def test_consumer_reconnect(setup_kafka_cluster, aiohttp_client):
     consumer_group_id = f"event-bus-3-it-{time.time()}"

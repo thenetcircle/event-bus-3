@@ -39,7 +39,7 @@ def zoo_data_parser(zoo_client) -> ZooDataParser:
     yield ZooDataParser(zoo_client)
 
 
-@pytest.mark.integration
+@pytest.mark.it
 @pytest.mark.asyncio
 async def test_aio_zoo_client(aio_zoo_client: AioZooClient):
     test_path = "/event-bus-3/test/client/aio_zoo_client"
@@ -84,7 +84,7 @@ async def test_aio_zoo_client(aio_zoo_client: AioZooClient):
     await _aio_wait_and_check(children_change_callback, 4, ["child1"])
 
 
-@pytest.mark.integration
+@pytest.mark.it
 def test_zoo_client(zoo_client: ZooClient):
     test_path = "/event-bus-3/test/client/zoo_client"
     test_data = b"test_data"
@@ -105,7 +105,7 @@ def test_zoo_client(zoo_client: ZooClient):
     _wait_and_check(data_change_callback, 2, b"test_data_new")
 
 
-@pytest.mark.integration
+@pytest.mark.it
 def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
     story_id = "payment-callback"
     data, stats = zoo_client.get(f"{config.get().zookeeper.story_path}/{story_id}")

@@ -9,5 +9,8 @@ lint:
 	flake8 eventbus/ tests/
 	black --check eventbus tests
 
+build:
+	docker build -t eventbus3 .
+
 start-producer:
 	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app

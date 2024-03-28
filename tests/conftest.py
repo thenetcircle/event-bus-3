@@ -24,8 +24,9 @@ def init_logger():
 @pytest.fixture(autouse=True)
 def setup_config(request):
     if "noconfig" not in request.keywords:
-        config_path = Path(__file__).parent / "fixtures" / "config.yml"
-        config.update_from_yaml(config_path)
+        # config_path = Path(__file__).parent / "fixtures" / "config.yml"
+        # config.update_from_yaml(config_path)
+        config.load_from_environ()
 
     yield
 
