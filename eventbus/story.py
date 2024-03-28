@@ -103,7 +103,7 @@ class Story:
             self._sink.init(),
             *[t.init() for t in self._transforms],
         )
-        logger.info("Inited Story")
+        logger.info("Story has benn initialized")
 
     async def close(self) -> None:
         logger.info("Closing Story")
@@ -115,7 +115,7 @@ class Story:
         ]
         closing_results = await asyncio.gather(*closing_tasks, return_exceptions=True)
         logger.info(
-            "Closed Story. With results: {}",
+            "Story has been closed with results: {}",
             closing_results,
         )
 
@@ -208,11 +208,11 @@ class Story:
                                 )
 
         except (asyncio.CancelledError, ConsumerStoppedError) as ex:
-            logger.warning("Story quit by <{}> {}", type(ex).__name__, ex)
+            logger.warning("Story has been quit by <{}> {}", type(ex).__name__, ex)
 
         except Exception as ex:
             logger.error(
-                "Story quit by <{}> {}",
+                "Story has been quit by <{}> {}",
                 type(ex).__name__,
                 ex,
             )

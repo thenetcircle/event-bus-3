@@ -49,13 +49,14 @@ def setup_logger():
 
     if config.get().sentry:
         logger.info(
-            "Detected sentry_dsh: {}, going to set up Sentry.",
+            "Detected sentry_dsn: {}, going to set up Sentry.",
             config.get().sentry.dsn,
         )
 
         # https://docs.sentry.io/platforms/python/guides/logging/
         import sentry_sdk
-        from sentry_sdk.integrations.logging import LoggingIntegration
+
+        # from sentry_sdk.integrations.logging import LoggingIntegration
         from sentry_sdk.integrations.loguru import LoguruIntegration, LoggingLevels
 
         # from sentry_sdk.integrations.logging import LoggingIntegration

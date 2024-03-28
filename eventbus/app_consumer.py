@@ -2,6 +2,7 @@ import asyncio
 import os
 import signal
 import socket
+import multiprocessing
 from multiprocessing import Process
 from time import sleep, time
 from typing import Dict, List, Optional, Tuple
@@ -84,6 +85,8 @@ def main():
 
     story_procs: Dict[str, Tuple[int, StoryParams, Process]] = {}
     story_is_changing = True
+
+    multiprocessing.set_start_method("spawn")
 
     def start_new_story(znode_version: int, story_params: StoryParams):
         story_id = story_params.id
@@ -201,6 +204,8 @@ def main():
                             story_id,
                             p.exitcode,
                         )
+                        stats_client.incr("app.consumer.story.quit.abnormal")
+                        sleep(3)
                         start_new_story(zversion, story_params)
                     else:
                         logger.info("Story {} process exited normally!", story_id)

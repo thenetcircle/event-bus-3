@@ -9,11 +9,15 @@ class StatsClientProxy:
         from eventbus import config
 
         _config = config.get()
+        prefix = _config.statsd.prefix
+        if _config.app.env == config.Env.STAGE:
+            prefix = f"{prefix}.staging"
+
         if _config.statsd:
             self.client = StatsClient(
                 host=_config.statsd.host,
                 port=_config.statsd.port,
-                prefix=_config.statsd.prefix,
+                prefix=prefix,
             )
 
     def incr(self, key: str):
