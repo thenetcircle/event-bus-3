@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import os
 import pytest
 import yaml
 
@@ -54,3 +55,8 @@ def test_hot_update():
         config.update_from_dict(new_config)
 
     assert config.get().app.env == config.Env.PROD
+
+def test_environment_variables():
+    os.environ["STATSD_PREFIX"] = "test_prefix"
+    config.load_from_environ()
+    assert config.get().statsd.prefix == "test_prefix"

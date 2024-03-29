@@ -1,5 +1,5 @@
 app:
-  project_id: example
+  project_id: test
   env: test
   debug: false
   max_response_time: 5 #seconds
@@ -16,7 +16,7 @@ sentry:
 statsd:
   host: localhost
   port: 8125
-  prefix: eventbus3.popp
+  prefix: ${STATSD_PREFIX}
 
 default_kafka_params:
   producer:

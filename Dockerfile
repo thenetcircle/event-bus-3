@@ -22,9 +22,9 @@ ENV PYTHONPATH .
 
 COPY eventbus eventbus
 COPY tests tests
+COPY configs configs
 COPY pyproject.toml ./
 COPY entrypoint.sh ./
-COPY config.example.yml ./
 
 RUN chmod +x ./entrypoint.sh
 

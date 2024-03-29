@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from string import Template
 
 import yaml
 from loguru import logger
@@ -105,10 +106,16 @@ def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:
     if not yaml_file_path.exists():
         raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
 
-    with open(yaml_file_path) as f:
-        parsed_config = yaml.safe_load(f)
-        parsed_config["config_file_path"] = str(yaml_file_path)
-        return parsed_config
+    with open(yaml_file_path, 'r') as file:
+        raw_config = file.read()
+
+    template = Template(raw_config)
+    filled_config = template.safe_substitute(os.environ)
+
+    parsed_config = yaml.safe_load(filled_config)
+    parsed_config["config_file_path"] = str(yaml_file_path)
+
+    return parsed_config
 
 
 def load_from_environ() -> None:

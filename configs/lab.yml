@@ -1,0 +1,46 @@
+app:
+  project_id: ${COMM}
+  env: lab
+  debug: false
+  max_response_time: 5 #seconds
+
+zookeeper:
+  hosts: 10.60.1.127:2181,10.60.1.128:2181
+  timeout: 10.0
+  topic_mapping_path: /event-bus/${COMM}/dev/topics
+  story_path: /event-bus/${COMM}/dev/stories
+
+sentry:
+  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
+
+statsd:
+  host: localhost
+  port: 8125
+  prefix: eventbus3.${COMM}
+
+default_kafka_params:
+  producer:
+    "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
+    "enable_idempotence": "true"
+    "acks": "all"
+
+  consumer:
+    "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
+    "enable_auto_commit": false
+    "auto_commit_interval_ms": 2000
+    "auto_offset_reset": "latest"
+    "max_poll_interval_ms": 600000 # offset commit failures because of rebalance
+    "metadata_max_age_ms": 180000
+    "heartbeat_interval_ms": 3000
+    "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
+
+predefined_sinks:
+  test:
+    type: HTTP
+    params:
+      url: http://localhost:8081/receive_events
+      method: POST
+      headers:
+        Content-type: application/json
+      timeout: 3
+      max_retry_times: 0

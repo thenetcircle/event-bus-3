@@ -12,5 +12,8 @@ lint:
 build:
 	docker build -t eventbus3 .
 
+test:
+	EVENTBUS_CONFIG=configs/test.yml pytest
+
 start-producer:
 	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app
