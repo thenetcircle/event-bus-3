@@ -84,8 +84,8 @@ coverage:
     - docker pull $TAG_LATEST
     # here we're overwriting the entrypoint with the test script
     - >
-      wget -O config.example.yml http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/raw/main/config.example.yml &&
-      docker run --name eventbus3-test -v config.example.yml:/app/config.yml -e "EVENTBUS_CONFIG=/app/config.yml" $TAG_LATEST coverage
+      wget -O ./config.example.yml http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/raw/main/config.example.yml &&
+      docker run --name eventbus3-test -v "./config.example.yml:/app/config.yml" -e "EVENTBUS_CONFIG=/app/config.yml" $TAG_LATEST coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
@@ -130,11 +130,7 @@ deploy:
 
     # remove any existing deployment of this image
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker container rm -f eventbus3-consumer || true"
-
-    # remove any existing deployment of this image
-    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker container rm -f eventbus3-producer || true"
+      "docker container rm -f eventbus3-consumer eventbus3-producer || true"
 
     # this `docker run` command should be very similar to what's
     # in the deployment section of the `README.md`
