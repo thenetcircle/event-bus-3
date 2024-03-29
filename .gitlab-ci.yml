@@ -82,8 +82,9 @@ coverage:
     # remove the test container if it's already running
     - docker container rm -f eventbus3-test || true
     - docker pull $TAG_LATEST
+    - wget -O ./config.example.yml http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/raw/main/config.example.yml
     # here we're overwriting the entrypoint with the test script
-    - docker run --name eventbus3-test $TAG_LATEST coverage
+    - docker run --name eventbus3-test -v ./config.example.yml:/app/config.yml $TAG_LATEST coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
