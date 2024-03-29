@@ -18,6 +18,12 @@ case $CMD in
     ;;
   coverage)
     coverage run -m pytest
+    # Capture the exit code of pytest
+    TEST_EXIT_CODE=$?
+    if [ $TEST_EXIT_CODE -ne 0 ]; then
+      echo "Tests failed"
+      exit $TEST_EXIT_CODE
+    fi
     coverage report -m
     echo "all done!"
     ;;

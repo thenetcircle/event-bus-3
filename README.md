@@ -1,11 +1,16 @@
-# Deploying
+# EventBus v3
 
-## Lab
+[![pipeline status](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/pipeline.svg)](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/commits/main) 
+[![test coverage](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/coverage.svg?job=coverage)](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/coverage.svg?job=coverage)
+
+## Deploying
+
+### Lab
 
 Pushing changes to gitlab will run the tests and build the image, then deploy 
 the docker image to `fat`.
 
-## Staging
+### Staging
 
 Running on `cloud-host-xx`. Deployment command:
 
@@ -19,7 +24,7 @@ docker run -d -p 7760:8080 \
     cloud-host-01.austria.private:5001/library/my-service:latest
 ```
 
-## Production
+### Production
 
 Running on `cloud-host-xx`. Deployment command:
 
@@ -34,7 +39,7 @@ docker run -d -p 7770:8080 \
     cloud-host-01.austria.private:5001/library/my-service:latest
 ```
 
-## Starting/stopping
+### Starting/stopping
 
 Starting it if it's down:
 
@@ -42,7 +47,7 @@ Starting it if it's down:
 docker restart quizmatch-service-fetiprod
 ```
 
-## Logs
+### Logs
 
 Use `--since` to get less logs. Pipe to `stdout` and paginate using `less`:
 
