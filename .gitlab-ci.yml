@@ -85,7 +85,7 @@ coverage:
     # here we're overwriting the entrypoint with the test script
     - >
       wget -O config.example.yml http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/raw/main/config.example.yml &&
-      docker run --name eventbus3-test -v config.example.yml:/app/config.yml $TAG_LATEST coverage
+      docker run --name eventbus3-test -v config.example.yml:/app/config.yml -e "EVENTBUS_CONFIG=/app/config.yml" $TAG_LATEST coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
