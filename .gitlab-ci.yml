@@ -131,8 +131,17 @@ deploy:
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
       "docker container rm -f eventbus3-consumer eventbus3-producer || true"
 
-    # this `docker run` command should be very similar to what's
-    # in the deployment section of the `README.md`
+    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+      "docker run -d
+      -p 8899:8000
+      -e \"COMM=popp\"
+      -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
+      --restart unless-stopped
+      --log-opt max-size=50m
+      --log-opt max-file=1
+      --name eventbus3-producer
+      $TAG_LATEST producer"
+
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
       "docker run -d
       -e \"COMM=popp\"
@@ -143,13 +152,3 @@ deploy:
       --name eventbus3-consumer
       $TAG_LATEST consumer"
 
-    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker run -d
-      -p 8000:8000
-      -e \"COMM=popp\"
-      -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
-      --restart unless-stopped
-      --log-opt max-size=50m
-      --log-opt max-file=1
-      --name eventbus3-producer
-      $TAG_LATEST producer"
