@@ -15,7 +15,7 @@ from eventbus.model import EventBusBaseModel, SinkType
 
 class Env(str, Enum):
     PROD = "prod"
-    STAGE = "stage"
+    STAGING = "staging"
     LAB = "lab"
     DEV = "dev"
     TEST = "test"
@@ -106,7 +106,7 @@ def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:
     if not yaml_file_path.exists():
         raise FileNotFoundError(f"The config file `{yaml_file_path}` does not exist.")
 
-    with open(yaml_file_path, 'r') as file:
+    with open(yaml_file_path, "r") as file:
         raw_config = file.read()
 
     template = Template(raw_config)

@@ -233,7 +233,7 @@ class Story:
         return event
 
     def _create_group_id(self):
-        return f"eventbus3-{config.get().app.project_id}-{config.get().app.env}-{self._params.id}"
+        return f"event-bus_consumer_{config.get().app.project_id}_{config.get().app.env}_{self._params.id}"
 
     @staticmethod
     def _get_dead_letter_topic(event: KafkaEvent) -> str:
