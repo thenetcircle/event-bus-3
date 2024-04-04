@@ -166,7 +166,7 @@ def main():
         for story_id in add_list:
             zoo_client.watch_data(
                 config.get().zookeeper.story_path + "/" + story_id,
-                lambda data, stats, event: watch_story_changes(
+                lambda data, stats, event, story_id=story_id: watch_story_changes(
                     story_id, data, stats, event
                 ),
             )
