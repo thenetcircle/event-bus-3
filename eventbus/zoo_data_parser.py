@@ -6,7 +6,7 @@ from loguru import logger
 
 from eventbus import config
 from eventbus.model import SinkType, TransformType
-from eventbus.story import StoryParams
+from eventbus.story import StoryParams, StoryStatus
 from eventbus.zoo_client import ZooClient
 
 
@@ -73,14 +73,19 @@ class ZooDataParser:
                     ]
                 transforms = [(TransformType.FILTER, transform_params)]
 
-            status, _ = self._zoo_client.get(f"{story_path}/status")
-            assert status == b"INIT"
+            _status, _ = self._zoo_client.get(f"{story_path}/status")
+            # assert _status == b"INIT"
+            if _status == b"DISABLED":
+                status = StoryStatus.DISABLED
+            else:
+                status = StoryStatus.NORMAL
 
             story_params = StoryParams(
                 id=story_id,
                 consumer_params=consumer_params,
                 sink=sink,
                 transforms=transforms,
+                status=status,
             )
             return story_params
 
