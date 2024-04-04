@@ -95,6 +95,8 @@ class Story:
             story_params.sink[0], story_params.sink[1]
         )
 
+        self._is_closing = False
+
     async def init(self) -> None:
         logger.info("Initializing Story")
         await asyncio.gather(
@@ -106,6 +108,10 @@ class Story:
         logger.info("Story has benn initialized")
 
     async def close(self) -> None:
+        if self._is_closing:
+            return
+        self._is_closing = True
+
         logger.info("Closing Story")
         closing_tasks = [
             self._consumer.close(),
@@ -118,6 +124,7 @@ class Story:
             "Story has been closed with results: {}",
             closing_results,
         )
+        self._is_closing = False
 
     async def run(self) -> None:
         try:
