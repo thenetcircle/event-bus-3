@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import os
 import signal
 import socket
@@ -43,6 +44,9 @@ async def run_story(story: Story):
     await story.init()
     try:
         await story.run()
+    except Exception as ex:
+        logger.info("Process of story {} is quitting on code 1", story._params.id)
+        sys.exit(1)
     finally:
         stats_client.incr("app.consumer.story.quit")
         await story.close()
@@ -171,8 +175,9 @@ def main():
                 ),
             )
 
-        for story_id in remove_list:
-            stop_story(story_id, grace_term_period)
+        if len(remove_list) > 0:
+            for story_id in remove_list:
+                stop_story(story_id, grace_term_period)
 
     zoo_client.watch_children(config.get().zookeeper.story_path, watch_story_list)
 
@@ -198,7 +203,7 @@ def main():
             for story_id in list(story_procs.keys()):
                 zversion, story_params, p = story_procs[story_id]
                 if not p.is_alive():
-                    if p.exitcode:  # if not exit normally, restart
+                    if p.exitcode == 1:  # if not exit normally, restart
                         logger.info(
                             "Story {} exited abnormally with code {}, will restart!",
                             story_id,
