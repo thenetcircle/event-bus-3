@@ -19,11 +19,13 @@ statsd:
   prefix: eventbus3.${COMM}
 
 default_kafka_params:
+  # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
   producer:
     "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
     "enable_idempotence": "true"
     "acks": "all"
 
+  # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
     "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
     "enable_auto_commit": false
