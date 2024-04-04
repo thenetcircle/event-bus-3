@@ -10,7 +10,7 @@ class StatsClientProxy:
 
         _config = config.get()
         prefix = _config.statsd.prefix
-        if _config.app.env == config.Env.STAGE:
+        if _config.app.env == config.Env.STAGING:
             prefix = f"{prefix}.staging"
 
         if _config.statsd:
