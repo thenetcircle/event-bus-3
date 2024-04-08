@@ -5,13 +5,10 @@ app:
   max_response_time: 5 #seconds
 
 zookeeper:
-  hosts: localhost:2181
+  hosts: localhost:12181
+  root_path: /event-bus-3/dev
+  v2_runners: [gpu01, ch06]
   timeout: 10.0
-  topic_mapping_path: /event-bus-3/test/topics
-  story_path: /event-bus-3/test/stories
-
-sentry:
-  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
 
 statsd:
   host: localhost

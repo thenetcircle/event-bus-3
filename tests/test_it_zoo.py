@@ -1,4 +1,6 @@
 import asyncio
+from utils import create_event_from_dict
+from eventbus.topic_resolver import TopicResolver
 import json
 from eventbus.model import SinkType
 import time
@@ -108,17 +110,16 @@ def test_zoo_client(zoo_client: ZooClient):
 @pytest.mark.it
 def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
     story_id = "payment-callback"
-    data, stats = zoo_client.get(f"{config.get().zookeeper.story_path}/{story_id}")
-    story_params = zoo_data_parser.get_story_params(story_id, data, stats)
+    data, stats = zoo_client.get(f"{ZooDataParser.get_story_path()}/{story_id}")
+    story_params = zoo_data_parser.create_story_params(story_id)
     assert story_params.id == story_id
     assert story_params.consumer_params == {
         "topics": ["event-v2-popp-payment-callback"],
-        "bootstrap_servers": "maggie-kafka-1:9094,maggie-kafka-2:9094,maggie-kafka-3:9094",
     }
     assert story_params.sink == (
         SinkType.HTTP,
         {
-            "url": "http://rose.kevin.poppen2.lab/api/internal/eventbus/receiver",
+            "url": "http://green.seven.poppen2.lab/api/internal/eventbus/receiver",
             "headers": {"accept": "application/json;version=1"},
         },
     )
@@ -126,14 +127,35 @@ def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser)
     print(json.dumps(json.loads(story_params.json()), indent=4))
 
 
+@pytest.mark.it
+@pytest.mark.asyncio
+async def test_topic_mapping(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
+    data, stats = zoo_client.get(ZooDataParser.get_topic_path())
+    topic_resolver = TopicResolver()
+    await topic_resolver.set_topic_mapping(
+        TopicResolver.convert_str_to_topic_mapping(data.decode("utf-8"))
+    )
+
+    cases = {
+        "queue.test": "event-v2-popp-queue",
+        "test.new": "event-v2-popp-test",
+        "messenger.attachment.send": "event-v2-popp-messenger",
+        "push-notification.request.new": "event-v2-popp-push-notification-new",
+        "push_notification.send.request": "event-v2-popp-push-notification",
+        "preference.user.update": "event-v2-popp-preference",
+    }
+    for title, topic in cases.items():
+        assert topic_resolver.resolve(create_event_from_dict({"title": title})) == topic
+
+
 @pytest.mark.skip
 def test_print_all_stories(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
-    story_path = config.get().zookeeper.story_path
+    story_path = ZooDataParser.get_story_path()
     stories_ids = zoo_client.get_children(story_path)
     for story_id in stories_ids:
         story_path = f"{story_path}/{story_id}"
         data, stats = zoo_client.get(story_path)
-        story_params = zoo_data_parser.get_story_params(story_path, data, stats)
+        story_params = zoo_data_parser.create_story_params(story_path)
         print("=======\n", story_id)
         if story_params is None:
             print(None)

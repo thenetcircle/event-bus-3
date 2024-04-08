@@ -1,7 +1,6 @@
 import json
-from typing import Optional
+from typing import List, Tuple
 
-from kazoo.protocol.states import ZnodeStat
 from loguru import logger
 
 from eventbus import config
@@ -14,11 +13,27 @@ class ZooDataParser:
     def __init__(self, zoo_client: ZooClient):
         self._zoo_client = zoo_client
 
-    def get_story_params(
-        self, story_id: str, story_data: bytes, znode_stats: ZnodeStat
-    ) -> Optional[StoryParams]:
+    @staticmethod
+    def get_story_path() -> str:
+        return f"{config.get().zookeeper.root_path}/stories"
+
+    @staticmethod
+    def get_topic_path() -> str:
+        return f"{config.get().zookeeper.root_path}/topics"
+
+    @staticmethod
+    def get_v2_runner_paths() -> List[Tuple[str, str]]:
+        return [
+            (
+                v2_runner,
+                f"{config.get().zookeeper.root_path}/runners/{v2_runner}/stories",
+            )
+            for v2_runner in config.get().zookeeper.v2_runners
+        ]
+
+    def create_story_params(self, story_id: str) -> StoryParams:
         try:
-            story_path = config.get().zookeeper.story_path + "/" + story_id
+            story_path = self.get_story_path() + "/" + story_id
 
             # check if it has `params` node
 
@@ -90,5 +105,5 @@ class ZooDataParser:
             return story_params
 
         except Exception as ex:
-            logger.error("parse story data error: {}", ex)
-            return None
+            logger.error("parse story data error: <{}> {}", type(ex).__name__, ex)
+            raise

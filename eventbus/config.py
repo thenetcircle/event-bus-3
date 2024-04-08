@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from string import Template
 
 import yaml
@@ -35,8 +35,8 @@ class SentryConfig(EventBusBaseModel):
 
 class ZookeeperConfig(EventBusBaseModel):
     hosts: StrictStr
-    topic_mapping_path: StrictStr
-    story_path: StrictStr
+    root_path: StrictStr
+    v2_runners: List[StrictStr]
     timeout: float = 10.0
 
 

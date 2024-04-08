@@ -12,10 +12,10 @@ def test_update_from_yaml():
     config_data = config.get()
     assert config_data.app.env == config.Env.TEST
     assert config_data.zookeeper == config.ZookeeperConfig(
-        hosts="localhost:2181",
+        hosts="localhost:12181",
         timeout=10.0,
-        topic_mapping_path="/event-bus-3/test/topics",
-        story_path="/event-bus-3/test/stories",
+        root_path="/event-bus-3/dev",
+        v2_runners=["gpu01", "ch06"],
     )
     assert config_data.default_kafka_params == config.DefaultKafkaParams(
         producer={
@@ -55,6 +55,7 @@ def test_hot_update():
         config.update_from_dict(new_config)
 
     assert config.get().app.env == config.Env.PROD
+
 
 def test_environment_variables():
     os.environ["STATSD_PREFIX"] = "test_prefix"

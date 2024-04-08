@@ -7,8 +7,10 @@ import multiprocessing
 from multiprocessing import Process
 from time import sleep, time
 from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from functools import partial
 
-from kazoo.protocol.states import WatchedEvent, ZnodeStat
+from kazoo.protocol.states import WatchedEvent, ZnodeStat, EventType
 from loguru import logger
 
 from eventbus import config
@@ -87,17 +89,24 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    story_procs: Dict[str, Tuple[int, StoryParams, Process]] = {}
+    @dataclass
+    class StoryProcess:
+        params: StoryParams
+        process: Process
+        znode_version: int
+        v2_runner: str
+
+    story_procs: Dict[str, StoryProcess] = {}
     story_is_changing = True
 
     multiprocessing.set_start_method("spawn")
 
-    def start_new_story(znode_version: int, story_params: StoryParams):
+    def start_new_story(story_params: StoryParams, znode_version: int, v2_runner: str):
         story_id = story_params.id
         if story_params.status == StoryStatus.DISABLED:
             logger.info('Story "{}" is disabled, skip to start.', story_id)
             return
-        if story_id in story_procs and story_procs[story_id][2].is_alive():
+        if story_id in story_procs and story_procs[story_id].process.is_alive():
             # TODO trigger alert on all errors
             logger.error(
                 "Consumer#{} already in consumer_procs and is alive, something went wrong!",
@@ -113,12 +122,17 @@ def main():
             daemon=True,
         )
         p.start()
-        story_procs[story_id] = (znode_version, story_params, p)
+        story_procs[story_id] = StoryProcess(
+            params=story_params,
+            process=p,
+            znode_version=znode_version,
+            v2_runner=v2_runner,
+        )
 
     def stop_story(story_id: str, waiting_seconds: int):
         if story_id not in story_procs:
             return
-        p = story_procs[story_id][2]
+        p = story_procs[story_id].process
         if p and p.is_alive():
             if p.pid:
                 logger.warning("Sending SIGTERM to {}", p)
@@ -132,54 +146,75 @@ def main():
                 sleep(0.1)
 
     def watch_story_changes(
-        story_id: str, data: bytes, stats: ZnodeStat, event: Optional[WatchedEvent]
+        v2_runner: str,
+        story_id: str,
+        data: bytes,
+        stats: ZnodeStat,
+        event: Optional[WatchedEvent],
     ):
+        logger.debug("data: {}, stats: {}, event: {}", data, stats, event)
+        if event is not None and event.type != EventType.CHANGED:
+            return
+
         nonlocal story_is_changing
         story_is_changing = True
         try:
-            if pdata := story_procs.get(story_id):
-                if pdata[0] < stats.version:
+            if sp_data := story_procs.get(story_id):
+                if (
+                    sp_data.v2_runner == v2_runner
+                ):  # Check if the changes are from the same runner
                     logger.info("Story {} data changed, restart it.", story_id)
-                    if story_params := zoo_data_parser.get_story_params(
-                        story_id, data, stats
-                    ):
+                    if story_params := zoo_data_parser.create_story_params(story_id):
                         logger.info("New story params: {}", story_params)
                         stop_story(story_id, grace_term_period)
                         logger.info("Story {} stopped.", story_id)
-                        start_new_story(stats.version, story_params)
+                        start_new_story(story_params, stats.version, v2_runner)
                 else:
-                    logger.info(
-                        "Story {} data changed, but version is not newer.", story_id
+                    logger.warning(
+                        "Story {} data changed from runner {}, but not from the same runner {}, skip it.",
+                        story_id,
+                        v2_runner,
+                        sp_data.v2_runner,
                     )
 
             else:
-                if story_params := zoo_data_parser.get_story_params(
-                    story_id, data, stats
-                ):
-                    start_new_story(stats.version, story_params)
+                if story_params := zoo_data_parser.create_story_params(story_id):
+                    start_new_story(story_params, stats.version, v2_runner)
         except Exception as ex:
             logger.error("Failed to process story data change: {}", ex)
         finally:
             story_is_changing = False
 
-    def watch_story_list(story_ids: List[str]):
-        add_list = set(story_ids).difference(list(story_procs.keys()))
-        remove_list = set(story_procs.keys()).difference(story_ids)
-        logger.info("Story list changed: add={}, remove={}", add_list, remove_list)
+    def watch_story_list(v2_runner: str, v2_runner_path: str, story_ids: List[str]):
+        current_list = []
+        for sid, sp_data in story_procs.items():
+            if sp_data.v2_runner == v2_runner:
+                current_list.append(sid)
+
+        add_list = set(story_ids).difference(current_list)
+        remove_list = set(current_list).difference(story_ids)
+        logger.info(
+            "Stories which are assigned to runner {} are changed: add={}, remove={}",
+            v2_runner,
+            add_list,
+            remove_list,
+        )
 
         for story_id in add_list:
             zoo_client.watch_data(
-                config.get().zookeeper.story_path + "/" + story_id,
-                lambda data, stats, event, story_id=story_id: watch_story_changes(
-                    story_id, data, stats, event
-                ),
+                f"{v2_runner_path}/{story_id}",
+                partial(watch_story_changes, v2_runner, story_id),
             )
 
         if len(remove_list) > 0:
             for story_id in remove_list:
                 stop_story(story_id, grace_term_period)
 
-    zoo_client.watch_children(config.get().zookeeper.story_path, watch_story_list)
+    for v2_runner, v2_runner_path in zoo_data_parser.get_v2_runner_paths():
+        zoo_client.watch_children(
+            v2_runner_path,
+            partial(watch_story_list, v2_runner, v2_runner_path),
+        )
 
     def signal_handler(signalname):
         def f(signal_received, frame):
@@ -193,7 +228,11 @@ def main():
     # --- monitor config change and sub-processes ---
 
     def get_alive_procs() -> List[Process]:
-        return [p for _, _, p in list(story_procs.values()) if p.is_alive()]
+        return [
+            sp_data.process
+            for sp_data in list(story_procs.values())
+            if sp_data.process.is_alive()
+        ]
 
     try:
         while True:
@@ -201,17 +240,19 @@ def main():
                 sleep(0.2)
 
             for story_id in list(story_procs.keys()):
-                zversion, story_params, p = story_procs[story_id]
-                if not p.is_alive():
-                    if p.exitcode == 1:  # if not exit normally, restart
+                sp_data = story_procs[story_id]
+                if not sp_data.process.is_alive():
+                    if sp_data.process.exitcode == 1:  # if not exit normally, restart
                         logger.info(
                             "Story {} exited abnormally with code {}, will restart!",
                             story_id,
-                            p.exitcode,
+                            sp_data.process.exitcode,
                         )
                         stats_client.incr("app.consumer.story.quit.abnormal")
                         sleep(3)
-                        start_new_story(zversion, story_params)
+                        start_new_story(
+                            sp_data.params, sp_data.znode_version, sp_data.v2_runner
+                        )
                     else:
                         logger.info("Story {} process exited normally!", story_id)
                         story_procs.pop(story_id)

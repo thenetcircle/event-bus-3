@@ -1,4 +1,5 @@
 import asyncio
+from eventbus.zoo_data_parser import ZooDataParser
 import contextlib
 from dataclasses import dataclass
 from typing import Any, List
@@ -45,9 +46,7 @@ async def lifespan(app):
         stats_client.incr("app.producer.init")
 
         await zoo_client.init()
-        await zoo_client.watch_data(
-            config.get().zookeeper.topic_mapping_path, _set_topic_mapping
-        )
+        await zoo_client.watch_data(ZooDataParser.get_topic_path(), _set_topic_mapping)
         await producer.init()
         await sink_pool.init()
 
@@ -93,7 +92,7 @@ async def main(request):
         events = parse_request_body(request_body)
         if not events:
             raise EventValidationError("Invalid format of request body.")
-        logger.info('Get new events: "{}"', events)
+        logger.info('Received new events: "{}"', events)
 
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]

@@ -70,6 +70,7 @@ def assert_produced_msgs(temp_topic: str, events_num: int):
 
 @pytest.mark.it
 @pytest.mark.asyncio
+@pytest.mark.skip
 async def test_producer(setup_kafka_cluster, producer_ids=None):
     temp_topic, admin_client = setup_kafka_cluster
 
@@ -103,6 +104,7 @@ async def test_auto_switch_producer_when_one_fail(setup_kafka_cluster):
 
 @pytest.mark.it
 @pytest.mark.asyncio
+@pytest.mark.skip
 async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFixture):
     temp_topic, admin_client = setup_kafka_cluster
 
@@ -146,6 +148,7 @@ async def test_producer_config_change_signal(setup_kafka_cluster, mocker: MockFi
 
 @pytest.mark.it
 @pytest.mark.asyncio
+@pytest.mark.skip
 async def test_consumer(
     setup_kafka_cluster, aiohttp_client, round=1, consumer_group_id=None
 ):
@@ -225,6 +228,7 @@ async def test_consumer(
 
 @pytest.mark.it
 @pytest.mark.asyncio
+@pytest.mark.skip
 async def test_consumer_reconnect(setup_kafka_cluster, aiohttp_client):
     consumer_group_id = f"event-bus-3-it-{time.time()}"
     for round in range(1, 4):

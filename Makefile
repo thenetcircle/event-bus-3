@@ -16,4 +16,7 @@ test:
 	EVENTBUS_CONFIG=configs/test.yml pytest
 
 start-producer:
-	uvicorn --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app
+	EVENTBUS_CONFIG=configs/dev.yml uvicorn --port 8001 --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app
+
+start-consumer:
+	EVENTBUS_CONFIG=configs/dev.yml python eventbus/app_consumer.py

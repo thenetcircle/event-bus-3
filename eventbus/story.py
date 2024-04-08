@@ -38,6 +38,7 @@ class StoryParams(EventBusBaseModel):
     transforms: Optional[List[Tuple[TransformType, Dict[str, Any]]]] = None
     concurrent_per_partition: int = 1
     max_commit_retry_times: int = 2
+    v2_runner: Optional[str] = None
 
 
 # class StoryInfo(EventBusModel):

@@ -6,9 +6,9 @@ app:
 
 zookeeper:
   hosts: 10.60.1.127:2181,10.60.1.128:2181
+  root_path: /event-bus/${COMM}/dev
+  v2_runners: [default-runner]
   timeout: 10.0
-  topic_mapping_path: /event-bus/${COMM}/dev/topics
-  story_path: /event-bus/${COMM}/dev/stories
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
