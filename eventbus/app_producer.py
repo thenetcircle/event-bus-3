@@ -59,7 +59,7 @@ async def lifespan(app):
         await asyncio.gather(producer.close(), zoo_client.close(), sink_pool.close())
 
 
-def home(request):
+def health_check(request):
     return PlainTextResponse("running")
 
 
@@ -222,7 +222,9 @@ def _create_response(
         if d := _get_details():
             resp["details"] = d
 
-        return JSONResponse(resp)
+        return JSONResponse(
+            resp, status_code=200 if resp["status"] == "all_succ" else 400
+        )
 
     else:
         if succ_events_len == len(event_ids):
@@ -232,7 +234,7 @@ def _create_response(
         else:
             resp = "fail" + "\n" + _get_details()
 
-        return PlainTextResponse(resp)
+        return PlainTextResponse(resp, status_code=200 if resp == "ok" else 400)
 
 
 async def _set_topic_mapping(data, stats):
@@ -250,9 +252,9 @@ async def _set_topic_mapping(data, stats):
 
 
 routes = [
-    Route("/", home),
+    Route("/", main, methods=["POST"]),
     Route("/config", show_config),
-    Route("/main", main, methods=["POST"]),
+    Route("/check", health_check),
 ]
 
 app = Starlette(debug=config.get().app.debug, routes=routes, lifespan=lifespan)
