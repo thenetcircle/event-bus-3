@@ -9,6 +9,7 @@ stages:
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
   TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
+  COMM_LIST: "happ,9045 popp,8899"
 
 # update the handbook repo
 build docs:
@@ -129,26 +130,41 @@ deploy:
 
     # remove any existing deployment of this image
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker container rm -f eventbus3-consumer eventbus3-producer || true"
+      "IFS=','
+      for item in $COMM_LIST; do
+      set -- $item
+      COMM=$1
+      docker container rm -f eventbus3-${COMM}-consumer eventbus3-${COMM}-producer || true
+      done"
 
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker run -d
-      -p 8899:8000
-      -e \"COMM=popp\"
+      "IFS=','
+      for item in $COMM_LIST; do
+      set -- $item
+      COMM=$1
+      PORT=$2
+      docker run -d
+      -p ${PORT}:8000
+      -e \"COMM=${COMM}\"
       -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
       --restart unless-stopped
       --log-opt max-size=50m
       --log-opt max-file=1
-      --name eventbus3-producer
-      $TAG_LATEST producer"
+      --name eventbus3-${COMM}-producer
+      $TAG_LATEST producer
+      done"
 
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker run -d
-      -e \"COMM=popp\"
+      "IFS=','
+      for item in $COMM_LIST; do
+      set -- $item
+      COMM=$1
+      docker run -d
+      -e \"COMM=${COMM}\"
       -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
       --restart unless-stopped
       --log-opt max-size=50m
       --log-opt max-file=1
-      --name eventbus3-consumer
-      $TAG_LATEST consumer"
-
+      --name eventbus3-${COMM}-consumer
+      $TAG_LATEST consumer
+      done"
