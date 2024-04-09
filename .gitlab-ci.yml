@@ -9,7 +9,7 @@ stages:
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
   TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
-  COMM_LIST: "happ,9045 popp,8899"
+  COMM_LIST: "popp,8899 feti,9035 gays,9032 happ,9045 kauf,9001"
 
 # update the handbook repo
 build docs:
