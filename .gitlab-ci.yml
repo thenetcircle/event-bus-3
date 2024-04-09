@@ -9,7 +9,7 @@ stages:
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
   TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
-  COMM_LIST: "happ,9045 popp,8899"
+  COMM_LIST: "happ",9045 "popp",8899
 
 # update the handbook repo
 build docs:
@@ -129,7 +129,7 @@ deploy:
       "docker pull $TAG_LATEST"
 
     # remove any existing deployment of this image
-    - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
+    - echo $COMM_LIST && ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
       "IFS=','; for item in ${COMM_LIST}; do set -- $item;
       docker container rm -f eventbus3-${1}-consumer eventbus3-${1}-producer || true;
       done"
