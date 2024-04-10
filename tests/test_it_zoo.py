@@ -110,7 +110,7 @@ def test_zoo_client(zoo_client: ZooClient):
 @pytest.mark.it
 def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
     story_id = "payment-callback"
-    data, stats = zoo_client.get(f"{ZooDataParser.get_story_path()}/{story_id}")
+    data, stats = zoo_client.get(f"{ZooDataParser.get_stories_path()}/{story_id}")
     story_params = zoo_data_parser.create_story_params(story_id)
     assert story_params.id == story_id
     assert story_params.consumer_params == {
@@ -130,9 +130,9 @@ def test_parse_story_data(zoo_client: ZooClient, zoo_data_parser: ZooDataParser)
 @pytest.mark.it
 @pytest.mark.asyncio
 async def test_topic_mapping(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
-    data, stats = zoo_client.get(ZooDataParser.get_topic_path())
+    data, stats = zoo_client.get(ZooDataParser.get_topics_path())
     topic_resolver = TopicResolver()
-    await topic_resolver.set_topic_mapping(
+    await topic_resolver.set_topic_mappings(
         TopicResolver.convert_str_to_topic_mapping(data.decode("utf-8"))
     )
 
@@ -150,7 +150,7 @@ async def test_topic_mapping(zoo_client: ZooClient, zoo_data_parser: ZooDataPars
 
 @pytest.mark.skip
 def test_print_all_stories(zoo_client: ZooClient, zoo_data_parser: ZooDataParser):
-    story_path = ZooDataParser.get_story_path()
+    story_path = ZooDataParser.get_stories_path()
     stories_ids = zoo_client.get_children(story_path)
     for story_id in stories_ids:
         story_path = f"{story_path}/{story_id}"

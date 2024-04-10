@@ -210,7 +210,7 @@ def main():
             for story_id in remove_list:
                 stop_story(story_id, grace_term_period)
 
-    for v2_runner, v2_runner_path in zoo_data_parser.get_v2_runner_paths():
+    for v2_runner, v2_runner_path in zoo_data_parser.get_v2_runner_stories_path():
         zoo_client.watch_children(
             v2_runner_path,
             partial(watch_story_list, v2_runner, v2_runner_path),

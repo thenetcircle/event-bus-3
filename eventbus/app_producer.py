@@ -46,9 +46,9 @@ async def lifespan(app):
         stats_client.incr("app.producer.init")
 
         await zoo_client.init()
-        await zoo_client.watch_data(ZooDataParser.get_topic_path(), _set_topic_mapping)
+        await topic_resolver.init_from_zoo(zoo_client)
+        await sink_pool.init_from_zoo(zoo_client)
         await producer.init()
-        await sink_pool.init()
 
         yield
 
@@ -234,20 +234,6 @@ def _create_response(
             resp = "fail" + "\n" + _get_details()
 
         return PlainTextResponse(resp, status_code=200 if resp == "ok" else 400)
-
-
-async def _set_topic_mapping(data, stats):
-    try:
-        stats_client.incr("producer.topic_mapping.update")
-        data = data.decode("utf-8")
-        if data == "":
-            logger.warning("Get new topic mapping from zookeeper which is empty")
-            return
-        logger.info("Get new topic mapping from zookeeper: {}", data)
-        topic_mapping = TopicResolver.convert_str_to_topic_mapping(data)
-        await topic_resolver.set_topic_mapping(topic_mapping)
-    except Exception as ex:
-        logger.error("Updating topic mapping failed with error: {}", ex)
 
 
 routes = [

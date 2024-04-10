@@ -33,7 +33,7 @@ from eventbus.topic_resolver import TopicResolver, TopicMappingEntry
 @pytest.mark.asyncio
 async def test_resolve(mapping, test_cases):
     resolver = TopicResolver()
-    await resolver.set_topic_mapping(
+    await resolver.set_topic_mappings(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in mapping]
     )
     for case in test_cases:
@@ -108,7 +108,7 @@ async def test_update_mapping(
     init_mapping, new_mapping, should_do_reindex, event_cases, mocker: MockFixture
 ):
     resolver = TopicResolver()
-    await resolver.set_topic_mapping(
+    await resolver.set_topic_mappings(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in init_mapping]
     )
 
@@ -117,7 +117,7 @@ async def test_update_mapping(
             resolver.resolve(create_event_from_dict({"title": event_title})) == topic1
         )
 
-    await resolver.set_topic_mapping(
+    await resolver.set_topic_mappings(
         [TopicMappingEntry(topic=m[0], patterns=m[1]) for m in new_mapping]
     )
 

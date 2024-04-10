@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
@@ -26,6 +26,14 @@ class SinkResult:
 class AbsSink(ABC):
     @abstractmethod
     async def init(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_sink_type(self) -> SinkType:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_params(self, sink_params: Any):
         raise NotImplementedError
 
     @abstractmethod

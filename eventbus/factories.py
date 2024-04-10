@@ -18,6 +18,13 @@ class SinkFactory:
 
         raise ValueError("Invalid sink type")
 
+    @staticmethod
+    def update_sink_params(sink: AbsSink, new_sink_params: Dict[str, Any]) -> Any:
+        if sink.get_sink_type() == SinkType.HTTP:
+            return sink.update_params(HttpSinkParams(**new_sink_params))
+
+        raise ValueError("Invalid sink type")
+
 
 class TransformFactory:
     @staticmethod

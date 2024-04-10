@@ -1,5 +1,5 @@
 import json
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from loguru import logger
 
@@ -13,27 +13,9 @@ class ZooDataParser:
     def __init__(self, zoo_client: ZooClient):
         self._zoo_client = zoo_client
 
-    @staticmethod
-    def get_story_path() -> str:
-        return f"{config.get().zookeeper.root_path}/stories"
-
-    @staticmethod
-    def get_topic_path() -> str:
-        return f"{config.get().zookeeper.root_path}/topics"
-
-    @staticmethod
-    def get_v2_runner_paths() -> List[Tuple[str, str]]:
-        return [
-            (
-                v2_runner,
-                f"{config.get().zookeeper.root_path}/runners/{v2_runner}/stories",
-            )
-            for v2_runner in config.get().zookeeper.v2_runners
-        ]
-
     def create_story_params(self, story_id: str) -> StoryParams:
         try:
-            story_path = self.get_story_path() + "/" + story_id
+            story_path = self.get_stories_path() + "/" + story_id
 
             # check if it has `params` node
 
@@ -42,33 +24,21 @@ class ZooDataParser:
             source_type, source_params = source_data.decode("utf-8").split("#", 1)
             assert source_type == "kafka"
             source_params = json.loads(source_params)
-            topic_pattern = source_params.get("topic-pattern")
-            if topic_pattern == "":
-                topic_pattern = None
             consumer_params = {}
-            if source_params.get("topics"):
+            if source_params.get("topics", "") != "":
                 consumer_params["topics"] = source_params.get("topics")
-            if topic_pattern:
-                consumer_params["topic_pattern"] = topic_pattern
-            if source_params.get("group-id"):
+            if source_params.get("topic-pattern", "") != "":
+                consumer_params["topic_pattern"] = source_params.get("topic-pattern")
+            if source_params.get("group-id", "") != "":
                 consumer_params["group_id"] = source_params.get("group-id")
-            # if source_params.get("bootstrap-servers"):
+            # if source_params.get("bootstrap-servers", "") != "":
             #     consumer_params["bootstrap_servers"] = source_params.get(
             #         "bootstrap-servers"
             #     )
 
             # sink
             sink_data, _ = self._zoo_client.get(f"{story_path}/sink")
-            sink_type, sink_params = sink_data.decode("utf-8").split("#", 1)
-            assert sink_type == "http"
-            sink_params = json.loads(sink_params)
-            sink_params = sink_params["default-request"]
-            assert sink_params["method"] == "POST"
-
-            http_sink_params = {"url": sink_params["uri"]}
-            if sink_params.get("headers"):
-                http_sink_params["headers"] = sink_params["headers"]
-            sink = (SinkType.HTTP, http_sink_params)
+            sink = self.parse_sink_params(sink_data.decode("utf-8"))
 
             # transforms
             transforms = None
@@ -78,11 +48,11 @@ class ZooDataParser:
                 assert op_type == "filter"
                 op_params = json.loads(op_params)
                 transform_params = {}
-                if op_params.get("event-name-white-list"):
+                if op_params.get("event-name-white-list", "") != "":
                     transform_params["include_events"] = op_params[
                         "event-name-white-list"
                     ]
-                if op_params.get("event-name-black-list"):
+                if op_params.get("event-name-black-list", "") != "":
                     transform_params["exclude_events"] = op_params[
                         "event-name-black-list"
                     ]
@@ -107,3 +77,52 @@ class ZooDataParser:
         except Exception as ex:
             logger.error("parse story data error: <{}> {}", type(ex).__name__, ex)
             raise
+
+    @staticmethod
+    def get_stories_path() -> str:
+        return f"{config.get().zookeeper.root_path}/stories"
+
+    @staticmethod
+    def get_topics_path() -> str:
+        return f"{config.get().zookeeper.root_path}/topics"
+
+    @staticmethod
+    def get_sinks_path() -> str:
+        return f"{config.get().zookeeper.root_path}/sinks"
+
+    @staticmethod
+    def get_v2_runner_stories_path() -> List[Tuple[str, str]]:
+        return [
+            (
+                v2_runner,
+                f"{config.get().zookeeper.root_path}/runners/{v2_runner}/stories",
+            )
+            for v2_runner in config.get().zookeeper.v2_runners
+        ]
+
+    @staticmethod
+    def parse_sink_params(sink_data: str) -> Tuple[SinkType, Dict[str, Any]]:
+        sink_type, v2_sink_params = sink_data.split("#", 1)
+
+        if sink_type == "http":
+            v2_sink_params = json.loads(v2_sink_params)
+            if "default-request" in v2_sink_params:
+                v2_sink_params = v2_sink_params["default-request"]
+
+            sink_params = {
+                "url": v2_sink_params["uri"],
+                "method": v2_sink_params["method"].upper(),
+            }
+            other_params = [
+                "headers",
+                "timeout",
+                "max_retry_times",
+                "backoff_retry_step",
+                "backoff_retry_max_time",
+            ]
+            for param in other_params:
+                if v2_sink_params.get(param, "") != "":
+                    sink_params[param] = v2_sink_params[param]
+            return (SinkType.HTTP, sink_params)
+        else:
+            raise ValueError("Invalid sink type")

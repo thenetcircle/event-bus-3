@@ -35,7 +35,7 @@ def client(mocker: MockFixture):
     from eventbus.app_producer import app, topic_resolver
 
     asyncio.run(
-        topic_resolver.set_topic_mapping(
+        topic_resolver.set_topic_mappings(
             [TopicMappingEntry(topic="event-v3-test", patterns=[".*"])]
         )
     )

@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 from aiohttp import ClientSession
@@ -10,7 +10,7 @@ from pydantic import StrictStr
 
 from eventbus.event import Event, EventStatus
 from eventbus.metrics import stats_client
-from eventbus.model import AbsSink, EventBusBaseModel, SinkResult
+from eventbus.model import AbsSink, EventBusBaseModel, SinkResult, SinkType
 
 
 class HttpSinkMethod(str, Enum):
@@ -23,7 +23,7 @@ class HttpSinkParams(EventBusBaseModel):
     url: StrictStr
     method: HttpSinkMethod = HttpSinkMethod.POST
     headers: Optional[Dict[str, str]] = None
-    timeout: float = 300  # seconds
+    timeout: float = 300  # seconds, the timeout of each request or each retry
     max_retry_times: int = 3
     backoff_retry_step: float = 0.1
     backoff_retry_max_time: float = 60.0
@@ -31,16 +31,22 @@ class HttpSinkParams(EventBusBaseModel):
 
 class HttpSink(AbsSink):
     def __init__(self, sink_params: HttpSinkParams):
-        self._params = sink_params
         self._client: Optional[ClientSession] = None
-
-        self._max_retry_times = self._params.max_retry_times
-        self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
+        self.update_params(sink_params)
 
     async def init(self):
         logger.info("Initializing HttpSink")
         self._client = ClientSession()
         logger.info("HttpSink has been initialized")
+
+    def get_sink_type(self) -> SinkType:
+        return SinkType.HTTP
+
+    def update_params(self, sink_params: HttpSinkParams):
+        logger.info("Updating HttpSink params: {}", sink_params)
+        self._params = sink_params
+        self._max_retry_times = self._params.max_retry_times
+        self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
     async def send_event(self, event: Event) -> SinkResult:
         retry_times = 0
@@ -85,7 +91,7 @@ class HttpSink(AbsSink):
                                         'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
                                         event,
                                         req_url,
-                                        retry_times,
+                                        self._max_retry_times,
                                         _cost_time,
                                     )
                                 return SinkResult(
@@ -130,7 +136,7 @@ class HttpSink(AbsSink):
                                     'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
                                     event,
                                     req_url,
-                                    retry_times,
+                                    self._max_retry_times,
                                     _cost_time,
                                 )
                             return SinkResult(
