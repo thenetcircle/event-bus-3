@@ -8,9 +8,8 @@ stages:
 # tnc-service-team group, and is automatically set for every project in
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
-  LAB_TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
-  LAB_COMM_LIST: "popp,8899 feti,9035 gays,9032 happ,9045 kauf,9001"
-  PROD_TAG_LATEST: $DOCKER_REGISTRY_PROD/library/eventbus3:latest
+  TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
+  COMM_LIST: "popp,8899 feti,9035 gays,9032 happ,9045 kauf,9001"
 
 # update the handbook repo
 build docs:
@@ -51,9 +50,9 @@ build:
     # either `docker` or `overlay2`
     - docker
   script:
-    - DOCKER_BUILDKIT=1 docker build -f Dockerfile -t $LAB_TAG_LATEST .
+    - DOCKER_BUILDKIT=1 docker build -f Dockerfile -t $TAG_LATEST .
     - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY
-    - docker push $LAB_TAG_LATEST
+    - docker push $TAG_LATEST
 
 # another stage for running tests; here we need to replace the entrypoint
 # when running, otherwise uvicorn will start from the default entrypoint
@@ -83,10 +82,10 @@ coverage:
   script:
     # remove the test container if it's already running
     - docker container rm -f eventbus3-test || true
-    - docker pull $LAB_TAG_LATEST
+    - docker pull $TAG_LATEST
     # here we're overwriting the entrypoint with the test script
     - >
-      docker run --name eventbus3-test -e "EVENTBUS_CONFIG=/app/configs/test.yml" $LAB_TAG_LATEST coverage
+      docker run --name eventbus3-test -e "EVENTBUS_CONFIG=/app/configs/test.yml" $TAG_LATEST coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
@@ -127,16 +126,16 @@ deploy:
 
     # get the latest image from harbor, which is the one we built earlier
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker pull $LAB_TAG_LATEST"
+      "docker pull $TAG_LATEST"
 
     # remove any existing deployment of this image
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "IFS=','; for item in ${LAB_COMM_LIST}; do set -- \$item;
+      "IFS=','; for item in ${COMM_LIST}; do set -- \$item;
       docker container rm -f eventbus3-\${1}-consumer eventbus3-\${1}-producer || true;
       done"
 
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "IFS=','; for item in ${LAB_COMM_LIST}; do set -- \$item;
+      "IFS=','; for item in ${COMM_LIST}; do set -- \$item;
       docker run -d
       -p \${2}:8000
       -e \"COMM=\${1}\"
@@ -145,11 +144,11 @@ deploy:
       --log-opt max-size=50m
       --log-opt max-file=1
       --name eventbus3-\${1}-producer
-      $LAB_TAG_LATEST producer;
+      $TAG_LATEST producer;
       done"
 
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "IFS=','; for item in ${LAB_COMM_LIST}; do set -- \$item;
+      "IFS=','; for item in ${COMM_LIST}; do set -- \$item;
       docker run -d
       -e \"COMM=\${1}\"
       -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
@@ -157,17 +156,5 @@ deploy:
       --log-opt max-size=50m
       --log-opt max-file=1
       --name eventbus3-\${1}-consumer
-      $LAB_TAG_LATEST consumer;
+      $TAG_LATEST consumer;
       done"
-
-publish_to_prod:
-  when: on_success
-  stage: deploy to lab
-  only:
-    - main
-  tags:
-    - thin-runner
-  script:
-    - docker pull $LAB_TAG_LATEST
-    - docker tag $LAB_TAG_LATEST $PROD_TAG_LATEST
-    - docker push $PROD_TAG_LATEST
