@@ -166,7 +166,7 @@ publish_to_prod:
   only:
     - main
   tags:
-    - thin_runner
+    - thin-runner
   script:
     - docker pull $LAB_TAG_LATEST
     - docker tag $LAB_TAG_LATEST $PROD_TAG_LATEST
