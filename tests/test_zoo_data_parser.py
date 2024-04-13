@@ -11,9 +11,9 @@ def zoo_data_parser():
         hosts=config.get().zookeeper.hosts,
         timeout=config.get().zookeeper.timeout,
     )
-    zoo_client.init()
+    # zoo_client.init()
     yield ZooDataParser(zoo_client)
-    zoo_client.close()
+    # zoo_client.close()
 
 
 def test_parse_sink_params(zoo_data_parser: ZooDataParser):
