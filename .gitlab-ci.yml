@@ -9,7 +9,7 @@ stages:
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
   IMAGE_URL: $DOCKER_REGISTRY/library/eventbus3
-  IMAEG_LATEST: $IMAGE_URL:latest
+  IMAGE_LATEST: $IMAGE_URL:latest
   COMM_LIST: "popp,8899 feti,9035 gays,9032 happ,9045 kauf,9001"
 
 # update the handbook repo
