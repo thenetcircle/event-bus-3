@@ -8,7 +8,8 @@ stages:
 # tnc-service-team group, and is automatically set for every project in
 # the group; it points to Harbor in lab on thin.thenetcircle.lab:5000
 variables:
-  TAG_LATEST: $DOCKER_REGISTRY/library/eventbus3:latest
+  SHORT_SHA: $(git rev-parse --short $CI_COMMIT_SHA)
+  IMAGE_URL: $DOCKER_REGISTRY/library/eventbus3:$SHORT_SHA
   COMM_LIST: "popp,8899 feti,9035 gays,9032 happ,9045 kauf,9001"
 
 # update the handbook repo
@@ -50,9 +51,9 @@ build:
     # either `docker` or `overlay2`
     - docker
   script:
-    - DOCKER_BUILDKIT=1 docker build -f Dockerfile -t $TAG_LATEST .
+    - DOCKER_BUILDKIT=1 docker build -f Dockerfile -t $IMAGE_URL .
     - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY
-    - docker push $TAG_LATEST
+    - docker push $IMAGE_URL
 
 # another stage for running tests; here we need to replace the entrypoint
 # when running, otherwise uvicorn will start from the default entrypoint
@@ -82,10 +83,10 @@ coverage:
   script:
     # remove the test container if it's already running
     - docker container rm -f eventbus3-test || true
-    - docker pull $TAG_LATEST
+    - docker pull $IMAGE_URL
     # here we're overwriting the entrypoint with the test script
     - >
-      docker run --name eventbus3-test -e "EVENTBUS_CONFIG=/app/configs/test.yml" $TAG_LATEST coverage
+      docker run --name eventbus3-test -e "EVENTBUS_CONFIG=/app/configs/test.yml" $IMAGE_URL coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
@@ -126,7 +127,7 @@ deploy:
 
     # get the latest image from harbor, which is the one we built earlier
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
-      "docker pull $TAG_LATEST"
+      "docker pull $IMAGE_URL"
 
     # remove any existing deployment of this image
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
@@ -144,7 +145,7 @@ deploy:
       --log-opt max-size=50m
       --log-opt max-file=1
       --name eventbus3-\${1}-producer
-      $TAG_LATEST producer;
+      $IMAGE_URL producer;
       done"
 
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
@@ -156,5 +157,5 @@ deploy:
       --log-opt max-size=50m
       --log-opt max-file=1
       --name eventbus3-\${1}-consumer
-      $TAG_LATEST consumer;
+      $IMAGE_URL consumer;
       done"
