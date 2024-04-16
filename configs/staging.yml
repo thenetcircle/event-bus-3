@@ -1,28 +1,33 @@
 app:
   project_id: ${COMM}
-  env: lab
+  env: staging
   debug: false
   max_response_time: 5 #seconds
 
 zookeeper:
-  hosts: 10.60.1.127:2181,10.60.1.128:2181
-  root_path: /event-bus/${COMM}/dev
+  hosts: 10.20.2.107:12181,10.20.2.115:12181,10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
+  root_path: /event-bus/${COMM}/staging
   v2_runners: [default-runner]
   timeout: 10.0
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
 
+statsd:
+  host: 10.20.2.118
+  port: 8125
+  prefix: eventbus3.${COMM}
+
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
   producer:
-    "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
+    "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
     "enable_idempotence": "true"
     "acks": "all"
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
-    "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
+    "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
     "enable_auto_commit": false
     "auto_commit_interval_ms": 2000
     "auto_offset_reset": "latest"

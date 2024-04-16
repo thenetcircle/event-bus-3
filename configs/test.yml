@@ -30,14 +30,3 @@ default_kafka_params:
     "metadata_max_age_ms": 180000
     "heartbeat_interval_ms": 3000
     "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
-
-predefined_sinks:
-  test:
-    type: HTTP
-    params:
-      url: http://localhost:8081/receive_events
-      method: POST
-      headers:
-        Content-type: application/json
-      timeout: 3
-      max_retry_times: 0

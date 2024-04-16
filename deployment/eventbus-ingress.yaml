@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eventbus-ingress
+  annotations:
+    nginx.org/rewrites: "serviceName=eventbus-producer-popp rewrite=/;serviceName=eventbus-producer-gays rewrite=/;serviceName=eventbus-producer-feti rewrite=/;serviceName=eventbus-producer-happ rewrite=/;serviceName=eventbus-producer-kauf rewrite=/"
+spec:
+  rules:
+  - host: eb.ideawisegroup.com
+    http:
+      paths:
+      - path: /popp/
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-producer-popp
+            port:
+              number: 80
+      - path: /feti/
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-producer-feti
+            port:
+              number: 80
+      - path: /gays/
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-producer-gays
+            port:
+              number: 80
+      - path: /happ/
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-producer-happ
+            port:
+              number: 80
+      - path: /kauf/
+        pathType: Prefix
+        backend:
+          service:
+            name: eventbus-producer-kauf
+            port:
+              number: 80
