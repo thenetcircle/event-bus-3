@@ -40,8 +40,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: [ "producer" ]
           env:
-            - name: EVENTBUS_CONFIG
+            - name: EB_CONF_FILE
               value: /app/configs/staging.yml
+            - name: EB_COMM
+              value: {comm}
+            - name: EB_RUNNERS
+              value: default-runner
           ports:
             - name: http
               containerPort: 8000

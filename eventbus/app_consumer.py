@@ -63,7 +63,7 @@ def main():
         "-c",
         "--config_file",
         type=str,
-        help="Config file path. If not specified, it will look for environment variable `EVENTBUS_CONFIG`",
+        help="Config file path. If not specified, it will look for environment variable `EB_CONF_FILE`",
     )
     args = parser.parse_args()
 

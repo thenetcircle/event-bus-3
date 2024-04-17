@@ -88,7 +88,7 @@ coverage:
     - docker pull $IMAGE_LATEST
     # here we're overwriting the entrypoint with the test script
     - >
-      docker run --name eventbus3-test -e "EVENTBUS_CONFIG=/app/configs/test.yml" $IMAGE_LATEST coverage
+      docker run --name eventbus3-test -e "EB_CONF_FILE=/app/configs/test.yml" $IMAGE_LATEST coverage
   # this line is needed for gitlab to be able to display a test coverage
   # percentage badge on the repository page; it's a regex to catch the final
   # output from `coverage`
@@ -141,8 +141,8 @@ deploy:
       "IFS=','; for item in ${COMM_LIST}; do set -- \$item;
       docker run -d
       -p \${2}:8000
-      -e \"COMM=\${1}\"
-      -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
+      -e \"EB_COMM=\${1}\"
+      -e \"EB_CONF_FILE=/app/configs/lab.yml\"
       --restart unless-stopped
       --log-opt max-size=50m
       --log-opt max-file=1
@@ -153,8 +153,8 @@ deploy:
     - ssh -i $ID_RSA -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP
       "IFS=','; for item in ${COMM_LIST}; do set -- \$item;
       docker run -d
-      -e \"COMM=\${1}\"
-      -e \"EVENTBUS_CONFIG=/app/configs/lab.yml\"
+      -e \"EB_COMM=\${1}\"
+      -e \"EB_CONF_FILE=/app/configs/lab.yml\"
       --restart unless-stopped
       --log-opt max-size=50m
       --log-opt max-file=1

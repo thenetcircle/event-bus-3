@@ -22,8 +22,8 @@ def setup_kafka_cluster():
     config_path = Path(__file__).parent / "fixtures" / "config.it.yml"
     config.update_from_yaml(config_path)
 
-    if "EVENTBUS_TEST_BROKERS" in os.environ:
-        brokers = os.environ["EVENTBUS_TEST_BROKERS"]
+    if "EB_TEST_BROKERS" in os.environ:
+        brokers = os.environ["EB_TEST_BROKERS"]
         config_dict = config.get().dict()
         for _, c in config_dict["consumers"].items():
             c["kafka_config"]["bootstrap.servers"] = brokers

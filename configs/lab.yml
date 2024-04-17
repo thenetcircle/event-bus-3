@@ -1,12 +1,12 @@
 app:
-  project_id: ${COMM}
+  project_id: ${EB_COMM}
   env: lab
   debug: false
   max_response_time: 5 #seconds
 
 zookeeper:
   hosts: 10.60.1.127:2181,10.60.1.128:2181
-  root_path: /event-bus/${COMM}/dev
+  root_path: /event-bus/${EB_COMM}/dev
   v2_runners: [default-runner]
   timeout: 10.0
 

@@ -1,13 +1,13 @@
 app:
-  project_id: ${COMM}
+  project_id: ${EB_COMM}
   env: staging
   debug: false
   max_response_time: 5 #seconds
 
 zookeeper:
   hosts: 10.20.2.107:12181,10.20.2.115:12181,10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
-  root_path: /event-bus/${COMM}/staging
-  v2_runners: [default-runner]
+  root_path: /event-bus/${EB_COMM}/staging
+  v2_runners: [${EB_RUNNERS}]
   timeout: 10.0
 
 sentry:
@@ -16,7 +16,7 @@ sentry:
 statsd:
   host: 10.20.2.118
   port: 8125
-  prefix: eventbus3.${COMM}
+  prefix: eventbus3.${EB_COMM}
 
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer

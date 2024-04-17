@@ -37,7 +37,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: [ "consumer" ]
           env:
-            - name: EVENTBUS_CONFIG
+            - name: EB_CONF_FILE
               value: /app/configs/{env}.yml
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -120,9 +120,7 @@ def parse_yaml_config(yaml_file_path: Union[str, Path]) -> Dict[str, Any]:
 
 def load_from_environ() -> None:
     config_file_path = (
-        os.environ["EVENTBUS_CONFIG"]
-        if "EVENTBUS_CONFIG" in os.environ
-        else "config.yml"
+        os.environ["EB_CONF_FILE"] if "EB_CONF_FILE" in os.environ else "config.yml"
     )
     update_from_yaml(config_file_path)
 

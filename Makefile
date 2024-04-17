@@ -13,10 +13,10 @@ build:
 	docker build -t eventbus3 .
 
 test:
-	EVENTBUS_CONFIG=configs/test.yml pytest
+	EB_CONF_FILE=configs/test.yml pytest
 
 start-producer:
-	EVENTBUS_CONFIG=configs/dev.yml uvicorn --port 8001 --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app
+	EB_CONF_FILE=configs/dev.yml uvicorn --port 8001 --reload --reload-dir ./eventbus --app-dir ./eventbus app_producer:app
 
 start-consumer:
-	EVENTBUS_CONFIG=configs/dev.yml python eventbus/app_consumer.py
+	EB_CONF_FILE=configs/dev.yml python eventbus/app_consumer.py

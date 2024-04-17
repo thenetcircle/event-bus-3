@@ -37,8 +37,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: [ "consumer" ]
           env:
-            - name: EVENTBUS_CONFIG
+            - name: EB_CONF_FILE
               value: /app/configs/staging.yml
+            - name: EB_COMM
+              value: {comm}
+            - name: EB_RUNNERS
+              value: default-runner
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

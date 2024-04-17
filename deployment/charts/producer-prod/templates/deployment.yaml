@@ -40,7 +40,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: [ "producer" ]
           env:
-            - name: EVENTBUS_CONFIG
+            - name: EB_CONF_FILE
               value: /app/configs/{env}.yml
           ports:
             - name: http
