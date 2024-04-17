@@ -41,7 +41,11 @@ spec:
           args: [ "producer" ]
           env:
             - name: EB_CONF_FILE
-              value: /app/configs/{env}.yml
+              value: /app/configs/prod.yml
+            - name: EB_COMM
+              value: {comm}
+            - name: EB_RUNNERS
+              value: {runners}
           ports:
             - name: http
               containerPort: 8000

@@ -71,7 +71,10 @@ deploy() {
   chart_name="eventbus-${component}-${community}"
   [ "$environment" == "staging" ] && chart_name="${chart_name}-staging"
 
-  ssh $remote_username@$remote_host "helm -n serviceteam upgrade --install --set image.tag=$version $chart_name $remote_directory"
+  current_time=$(date +%s)
+  remote_command="helm -n serviceteam upgrade --install --set image.tag=$version --set podAnnotations.restartDate=\"\\\"${current_time}\\\"\" $chart_name $remote_directory"
+  echo "Running command: $remote_command"
+  ssh $remote_username@$remote_host $remote_command
 
   # echo "Remove directory: $dst_directory"
   rm -rf "$dst_directory"

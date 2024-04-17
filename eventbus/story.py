@@ -7,6 +7,9 @@ from aiokafka.errors import ConsumerStoppedError
 from aiokafka.coordinator.assignors.sticky.sticky_assignor import (
     StickyPartitionAssignor,
 )
+from aiokafka.coordinator.assignors.range import (
+    RangePartitionAssignor,
+)
 from loguru import logger
 from pydantic import StrictStr
 
@@ -74,7 +77,7 @@ class Story:
         ), "topics or topic_pattern must be set in consumer_params"
         if "group_id" not in consumer_params:
             consumer_params["group_id"] = self._create_group_id()
-        consumer_params["partition_assignment_strategy"] = [StickyPartitionAssignor()]
+        consumer_params["partition_assignment_strategy"] = [RangePartitionAssignor()]
         consumer_topics = consumer_params.pop("topics", None)
         consumer_topic_pattern = consumer_params.pop("topic_pattern", None)
         self._consumer = KafkaConsumer(

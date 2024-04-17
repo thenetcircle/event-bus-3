@@ -38,7 +38,11 @@ spec:
           args: [ "consumer" ]
           env:
             - name: EB_CONF_FILE
-              value: /app/configs/{env}.yml
+              value: /app/configs/prod.yml
+            - name: EB_COMM
+              value: {comm}
+            - name: EB_RUNNERS
+              value: {runners}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

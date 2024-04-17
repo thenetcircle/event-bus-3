@@ -5,7 +5,7 @@ app:
   max_response_time: 5 #seconds
 
 zookeeper:
-  hosts: 10.20.2.107:12181,10.20.2.115:12181,10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
+  hosts: 10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
   root_path: /event-bus/${EB_COMM}/staging
   v2_runners: [${EB_RUNNERS}]
   timeout: 10.0
