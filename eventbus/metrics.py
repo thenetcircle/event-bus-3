@@ -1,4 +1,5 @@
 from statsd import StatsClient
+from eventbus import config
 
 
 class StatsClientProxy:
@@ -6,17 +7,15 @@ class StatsClientProxy:
         self.client: StatsClient = None
 
     def init(self):
-        from eventbus import config
+        statsd_config = config.get().statsd
+        if statsd_config:
+            prefix = statsd_config.prefix
+            if config.get().app.env == config.Env.STAGING:
+                prefix = f"{prefix}.staging" if prefix else "staging"
 
-        _config = config.get()
-        prefix = _config.statsd.prefix
-        if _config.app.env == config.Env.STAGING:
-            prefix = f"{prefix}.staging"
-
-        if _config.statsd:
             self.client = StatsClient(
-                host=_config.statsd.host,
-                port=_config.statsd.port,
+                host=statsd_config.host,
+                port=statsd_config.port,
                 prefix=prefix,
             )
 
