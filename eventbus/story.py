@@ -41,7 +41,6 @@ class StoryParams(EventBusBaseModel):
     transforms: Optional[List[Tuple[TransformType, Dict[str, Any]]]] = None
     concurrent_per_partition: int = 1
     max_commit_retry_times: int = 2
-    v2_runner: Optional[str] = None
 
 
 # class StoryInfo(EventBusModel):
@@ -69,15 +68,7 @@ class Story:
             story_params,
         )
 
-        consumer_params = deep_merge_two_dict(
-            config.get().default_kafka_params.consumer, story_params.consumer_params
-        )
-        assert (
-            "topics" in consumer_params or "topic_pattern" in consumer_params
-        ), "topics or topic_pattern must be set in consumer_params"
-        if "group_id" not in consumer_params:
-            consumer_params["group_id"] = self._create_group_id()
-        consumer_params["partition_assignment_strategy"] = [RangePartitionAssignor()]
+        consumer_params = self._compose_consumer_params()
         consumer_topics = consumer_params.pop("topics", None)
         consumer_topic_pattern = consumer_params.pop("topic_pattern", None)
         self._consumer = KafkaConsumer(
@@ -239,6 +230,19 @@ class Story:
             if not event:
                 return None
         return event
+
+    def _compose_consumer_params(self):
+        consumer_params = deep_merge_two_dict(
+            config.get().default_kafka_params.consumer, self._params.consumer_params
+        )
+        assert (
+            "topics" in consumer_params or "topic_pattern" in consumer_params
+        ), "topics or topic_pattern must be set in consumer_params"
+
+        if "group_id" not in consumer_params:
+            consumer_params["group_id"] = self._create_group_id()
+        consumer_params["partition_assignment_strategy"] = [RangePartitionAssignor()]
+        return consumer_params
 
     def _create_group_id(self):
         return f"event-bus_consumer_{config.get().app.project_id}_{config.get().app.env}_{self._params.id}"

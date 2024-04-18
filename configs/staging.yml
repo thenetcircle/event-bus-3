@@ -22,16 +22,16 @@ default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
   producer:
     "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
-    "enable_idempotence": "true"
     "acks": "all"
+    "enable_idempotence": "true"
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
     "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
-    "enable_auto_commit": false
-    "auto_commit_interval_ms": 2000
+    "client_id": "evenbus3-${EB_COMM}-staging"
     "auto_offset_reset": "latest"
-    "max_poll_interval_ms": 600000 # offset commit failures because of rebalance
+    "enable_auto_commit": false
+    "max_poll_interval_ms": 600000 # offsets commit failed because of rebalance
     "metadata_max_age_ms": 180000
     "heartbeat_interval_ms": 3000
     "session_timeout_ms": 60000 # If no hearts are received by the broker for a group member within the session timeout, the broker will remove the consumer from the group and trigger a rebalance.
