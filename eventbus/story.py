@@ -97,7 +97,7 @@ class Story:
         self._is_closing = False
 
     async def init(self) -> None:
-        logger.info("Initializing Story")
+        logger.info("Initializing Story {}", self._params.id)
         await asyncio.gather(
             self._producer.init(),
             self._consumer.init(),
@@ -111,7 +111,7 @@ class Story:
             return
         self._is_closing = True
 
-        logger.info("Closing Story")
+        logger.info("Closing Story {}", self._params.id)
         closing_tasks = [
             self._consumer.close(),
             self._producer.close(),
@@ -127,7 +127,7 @@ class Story:
 
     async def run(self) -> None:
         try:
-            logger.info("Running Story")
+            logger.info("Running Story {}", self._params.id)
             while True:
                 events_buffer = await self._consumer.poll()
 
@@ -143,7 +143,9 @@ class Story:
                                 committing_offsets[tp] = event.offset + 1
                                 event = await self._transform(event)
                                 if event:
-                                    logger.debug("Transformed event: {}", event)
+                                    logger.bind(event=event).debug(
+                                        "Event transformed successfully"
+                                    )
                                     sending_events.append(event)
                                     break
 
@@ -157,7 +159,7 @@ class Story:
                     # sending the events to the sink
                     sending_tasks = []
                     for event in sending_events:
-                        logger.info("Sending event: {}", event)
+                        logger.bind(event=event).info("Start sending event")
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
 
@@ -176,11 +178,9 @@ class Story:
                             dead_letter_topic = self._get_dead_letter_topic(
                                 _result.event
                             )
-                            logger.info(
-                                "Sending event {} to dead_letter_topic {}",
-                                _result.event,
-                                dead_letter_topic,
-                            )
+                            logger.bind(
+                                event=_result.event, dead_letter_topic=dead_letter_topic
+                            ).info("Sending event to dead_letter_topic")
                             producing_tasks.append(
                                 self._producer.produce(dead_letter_topic, _result.event)
                             )
@@ -190,12 +190,12 @@ class Story:
                     # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
                     for i in range(1, self._params.max_commit_retry_times + 1):
                         with logger.contextualize(
-                            offsets=committing_offsets, commit_times=i
+                            offsets=str(committing_offsets), commit_times=i
                         ):
                             try:
                                 logger.debug("Committing offsets")
                                 await self._consumer.commit(committing_offsets)
-                                logger.info("Committed offsets")
+                                logger.info("Offsets committed")
                                 break
                             except Exception as ex:
                                 if i == self._params.max_commit_retry_times:
@@ -209,10 +209,15 @@ class Story:
                                     )
 
         except (asyncio.CancelledError, ConsumerStoppedError) as ex:
-            logger.warning("Story has been quit by <{}> {}", type(ex).__name__, ex)
+            logger.warning(
+                "Story {} has been quit by <{}> {}",
+                self._params.id,
+                type(ex).__name__,
+                ex,
+            )
 
         except Exception as ex:
-            logger.exception("Story has been quit by an Exception")
+            logger.exception("Story {} has been quit by an Exception", self._params.id)
             raise
 
     async def _transform(self, event: KafkaEvent) -> Optional[KafkaEvent]:

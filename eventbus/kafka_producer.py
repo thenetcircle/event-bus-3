@@ -43,8 +43,8 @@ class KafkaProducer:
 
     async def produce(self, topic: str, event: Event):
         if self._producer is None or self._loop is None:
-            logger.bind(producer=self._producer, loop=self._loop).error(
-                "KafkaProducer has not been initialized"
+            logger.error(
+                "KafkaProducer has not been initialized, _producer and _loop should not be None."
             )
             raise RuntimeError(
                 "Need initialize KafkaProducer before call the produce method."
