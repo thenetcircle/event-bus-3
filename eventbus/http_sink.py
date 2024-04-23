@@ -25,8 +25,8 @@ class HttpSinkParams(EventBusBaseModel):
     headers: Optional[Dict[str, str]] = None
     timeout: float = 300  # seconds, the timeout of each request or each retry
     max_retry_times: int = 3
-    backoff_retry_step: float = 0.1
-    backoff_retry_max_time: float = 60.0
+    exp_backoff_factor: float = 0.1
+    exp_backoff_max_delay: float = 60.0
 
 
 class HttpSink(AbsSink):
@@ -49,7 +49,7 @@ class HttpSink(AbsSink):
         self._timeout = aiohttp.ClientTimeout(total=self._params.timeout)
 
     async def send_event(self, event: Event) -> SinkResult:
-        retry_times = 0
+        send_times = 0
         req_func = getattr(self._client, self._params.method.lower())
         req_url = self._params.url
         req_kwargs = {
@@ -62,92 +62,114 @@ class HttpSink(AbsSink):
         stats_client.incr("consumer.event.send.new")
 
         while True:
+            send_times += 1
             start_time = datetime.now()
             try:
                 async with req_func(req_url, **req_kwargs) as resp:
-                    _cost_time = self._get_cost_time(start_time)
+                    cost_time = self._get_cost_time(start_time)
                     stats_client.timing(
-                        "consumer.event.send.time", int(_cost_time * 1000)
+                        "consumer.event.send.time", int(cost_time * 1000)
                     )
 
                     if resp.status == 200:
                         resp_body = await resp.text()
-                        if resp_body == "ok":
+                        resp_body_lower = resp_body.lower()
+
+                        if resp_body_lower == "ok":
                             logger.info(
-                                'Sending an event "{}" to "{}" succeeded in {} seconds after {} times retires',
+                                'Sending an event "{}" to "{}" succeeded in {} seconds in {} times',
                                 event,
                                 req_url,
-                                _cost_time,
-                                retry_times,
+                                cost_time,
+                                send_times,
                             )
                             stats_client.incr("consumer.event.send.done")
                             return SinkResult(event, EventStatus.DONE)
 
-                        elif resp_body == "retry":
-                            # retry logic
-                            if retry_times >= self._max_retry_times:
-                                if retry_times > 0:
-                                    logger.info(
-                                        'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                        event,
-                                        req_url,
-                                        self._max_retry_times,
-                                        _cost_time,
-                                    )
+                        elif resp_body_lower == "retry":
+                            if send_times > self._max_retry_times:
+                                logger.info(
+                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    event,
+                                    req_url,
+                                    self._max_retry_times,
+                                    cost_time,
+                                )
+                                stats_client.incr("consumer.event.send.dead_letter")
                                 return SinkResult(
                                     event,
                                     EventStatus.DEAD_LETTER,
-                                    Exception("Maximum Retry"),
+                                    Exception("Maximum Retries"),
                                 )
                             else:
                                 stats_client.incr("consumer.event.send.retry")
-                                retry_times += 1
+                                logger.info(
+                                    'Sending an event "{}" to "{}" get RETRY response, in {} seconds in {} times',
+                                    event,
+                                    req_url,
+                                    cost_time,
+                                    send_times,
+                                )
                                 continue
 
-                        else:
-                            # unexpected resp
+                        elif resp_body_lower == "exponential_backoff_retry":
+                            if send_times > self._max_retry_times:
+                                stats_client.incr("consumer.event.send.dead_letter")
+                                logger.info(
+                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
+                                    event,
+                                    req_url,
+                                    self._max_retry_times,
+                                    cost_time,
+                                )
+                                return SinkResult(
+                                    event,
+                                    EventStatus.DEAD_LETTER,
+                                    Exception("Maximum Retries"),
+                                )
+                            else:
+                                stats_client.incr("consumer.event.send.retry")
+                                sleep_time = self._get_exp_backoff_delay(send_times)
+                                logger.info(
+                                    'Sending an event "{}" to "{}" get RETRY response, in {} seconds in {} times, will retry after {} seconds',
+                                    event,
+                                    req_url,
+                                    cost_time,
+                                    send_times,
+                                    sleep_time,
+                                )
+                                await asyncio.sleep(sleep_time)
+                                continue
+
+                        else:  # unexpected resp
                             logger.warning(
                                 'Sending an event "{}" to "{}" failed in {} seconds because of unexpected response: {}',
                                 event,
                                 req_url,
-                                _cost_time,
+                                cost_time,
                                 resp_body,
                             )
-                            stats_client.incr("consumer.event.send.retry")
+                            stats_client.incr("consumer.event.send.dead_letter")
                             return SinkResult(
                                 event,
                                 EventStatus.DEAD_LETTER,
                                 Exception(f"Unexpected Response: {resp_body}"),
                             )
 
-                    else:
+                    else:  # unexpected status code
                         logger.warning(
                             'Sending an event "{}" to "{}" failed in {} seconds because of non-200 status code: {}',
                             event,
                             req_url,
-                            _cost_time,
+                            cost_time,
                             resp.status,
                         )
-
-                        # non-200 status code, use retry logic
-                        if retry_times >= self._max_retry_times:
-                            if retry_times > 0:
-                                logger.info(
-                                    'Sending an event "{}" to "{}" exceeded max retry times {} in {} seconds',
-                                    event,
-                                    req_url,
-                                    self._max_retry_times,
-                                    _cost_time,
-                                )
-                            return SinkResult(
-                                event,
-                                EventStatus.DEAD_LETTER,
-                                Exception(f"Non-200 Status Code: {resp.status}"),
-                            )
-                        else:
-                            stats_client.incr("consumer.event.send.retry")
-                            retry_times += 1
-                            continue
+                        stats_client.incr("consumer.event.send.dead_letter")
+                        return SinkResult(
+                            event,
+                            EventStatus.DEAD_LETTER,
+                            Exception(f"Non-200 Status Code: {resp.status}"),
+                        )
 
             # more details of aiohttp errors can be found here:
             # https://docs.aiohttp.org/en/stable/client_reference.html#aiohttp.ClientPayloadError
@@ -156,7 +178,7 @@ class HttpSink(AbsSink):
                 aiohttp.InvalidURL,
                 asyncio.exceptions.TimeoutError,
             ) as ex:
-                sleep_time = self._get_backoff_sleep_time(retry_times)
+                sleep_time = self._get_exp_backoff_delay(send_times)
                 logger.error(
                     'Sending an event "{}" to "{}" failed in {} seconds after {} retries '
                     'because of "{}", details: {}, '
@@ -164,13 +186,12 @@ class HttpSink(AbsSink):
                     event,
                     req_url,
                     self._get_cost_time(start_time),
-                    retry_times,
+                    send_times,
                     type(ex),
                     ex,
                     sleep_time,
                 )
-                # TODO trigger alert
-                # keep retry
+                stats_client.incr("consumer.event.send.retry")
                 await asyncio.sleep(sleep_time)
 
             except (
@@ -186,16 +207,15 @@ class HttpSink(AbsSink):
                     event,
                     req_url,
                     self._get_cost_time(start_time),
-                    retry_times,
+                    send_times,
                     type(ex),
                     ex,
                 )
-                # TODO trigger alert
-                stats_client.incr("consumer.event.send.retry")
+                stats_client.incr("consumer.event.send.dead_letter")
                 return SinkResult(event, EventStatus.DEAD_LETTER, ex)
 
             except Exception as ex:
-                sleep_time = self._get_backoff_sleep_time(retry_times)
+                sleep_time = self._get_exp_backoff_delay(send_times)
                 logger.error(
                     'Sending an event "{}" to "{}" failed in {} seconds after {} retries '
                     'because of a unknown exception "{}", details : {}, '
@@ -203,16 +223,14 @@ class HttpSink(AbsSink):
                     event,
                     req_url,
                     self._get_cost_time(start_time),
-                    retry_times,
+                    send_times,
                     type(ex),
                     ex,
                     sleep_time,
                 )
-                # TODO trigger alert
+                stats_client.incr("consumer.event.send.retry")
                 # keep retry until fixed
                 await asyncio.sleep(sleep_time)
-
-            retry_times += 1
 
     async def close(self):
         if self._client:
@@ -223,13 +241,17 @@ class HttpSink(AbsSink):
 
             logger.info("HttpSink has been closed")
 
-    def _get_backoff_sleep_time(self, retry_times: int) -> float:
+    def _get_exp_backoff_delay(self, send_times: int) -> float:
         return min(
-            [
-                (retry_times + 1) * self._params.backoff_retry_step,
-                self._params.backoff_retry_max_time,
-            ]
+            2 ** (send_times - 1) * self._params.exp_backoff_factor,
+            self._params.exp_backoff_max_delay,
         )
+        # return min(
+        #     [
+        #         send_times * self._params.backoff_retry_step,
+        #         self._params.backoff_retry_max_time,
+        #     ]
+        # )
 
     @staticmethod
     def _get_cost_time(start_time: datetime) -> float:

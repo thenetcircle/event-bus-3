@@ -117,8 +117,8 @@ class ZooDataParser:
                 "headers",
                 "timeout",
                 "max_retry_times",
-                "backoff_retry_step",
-                "backoff_retry_max_time",
+                "exp_backoff_factor",
+                "exp_backoff_max_delay",
             ]
             for param in other_params:
                 if v2_sink_params.get(param, "") != "":

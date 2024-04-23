@@ -16,7 +16,7 @@ sentry:
 statsd:
   host: 10.20.2.118
   port: 8125
-  prefix: eventbus3.${EB_COMM}
+  prefix: eventbus3.${EB_COMM}staging
 
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer

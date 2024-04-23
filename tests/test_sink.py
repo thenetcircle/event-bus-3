@@ -22,6 +22,8 @@ async def test_httpsink_send_event(aiohttp_client):
                 return web.Response(text="ok")
             elif req_body == "retry":
                 return web.Response(text="retry")
+            elif req_body == "exp_backoff_retry":
+                return web.Response(text="exponential_backoff_retry")
             elif req_body == "retry2":
                 nonlocal retry2_req_times
                 retry2_req_times += 1
@@ -66,6 +68,9 @@ async def test_httpsink_send_event(aiohttp_client):
     retry_event = create_kafka_event_from_dict({"payload": b"retry"})
     assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
 
+    # retry_event = create_kafka_event_from_dict({"payload": b"exp_backoff_retry"})
+    # assert (await sink.send_event(retry_event)).status == EventStatus.DEAD_LETTER
+
     ok_event = create_kafka_event_from_dict({"payload": b"retry2"})
     assert (await sink.send_event(ok_event)).status == EventStatus.DONE
 
@@ -91,3 +96,11 @@ async def test_httpsink_send_event(aiohttp_client):
     )
     sink2._client = client
     assert (await sink2.send_event(ok_event)).status == EventStatus.DEAD_LETTER
+
+
+def test_get_exp_backoff_delay():
+    sink = HttpSink(HttpSinkParams(url="/"))
+    for i in range(1, 10):
+        print(sink._get_exp_backoff_delay(i))
+    assert sink._get_exp_backoff_delay(1) == 0.1
+    assert sink._get_exp_backoff_delay(5) == 1.6

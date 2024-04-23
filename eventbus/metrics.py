@@ -9,14 +9,10 @@ class StatsClientProxy:
     def init(self):
         statsd_config = config.get().statsd
         if statsd_config:
-            prefix = statsd_config.prefix
-            if config.get().app.env == config.Env.STAGING:
-                prefix = f"{prefix}.staging" if prefix else "staging"
-
             self.client = StatsClient(
                 host=statsd_config.host,
                 port=statsd_config.port,
-                prefix=prefix,
+                prefix=statsd_config.prefix,
             )
 
     def incr(self, key: str):
