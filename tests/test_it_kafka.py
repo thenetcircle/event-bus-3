@@ -183,7 +183,7 @@ async def test_consumer(
             received_reqs.append(req_body)
             return web.Response(text="ok")
         except Exception as ex:
-            logger.error(ex)
+            logger.exception("")
 
     app = web.Application()
     app.router.add_post("/", mock_server)

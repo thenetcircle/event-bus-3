@@ -75,7 +75,7 @@ class ZooDataParser:
             return story_params
 
         except Exception as ex:
-            logger.error("parse story data error: <{}> {}", type(ex).__name__, ex)
+            logger.exception("Parse story params from Zookeeper failed")
             raise
 
     @staticmethod

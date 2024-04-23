@@ -39,40 +39,27 @@ class KafkaProducer:
                 await self._producer.stop()
             logger.info("KafkaProducer has been closed")
         except Exception as ex:
-            logger.error(
-                "Closing KafkaProducer failed with error: <{}> {}",
-                type(ex).__name__,
-                ex,
-            )
+            logger.exception("Closing KafkaProducer failed")
 
     async def produce(self, topic: str, event: Event):
         if self._producer is None or self._loop is None:
-            logger.error(
-                "KafkaProducer has not been initialized, _producer: {}, _loop: {}",
-                self._producer,
-                self._loop,
+            logger.bind(producer=self._producer, loop=self._loop).error(
+                "KafkaProducer has not been initialized"
             )
             raise RuntimeError(
                 "Need initialize KafkaProducer before call the produce method."
             )
 
-        try:
-            key, value = create_kafka_message(event)
-            result = await self._producer.send_and_wait(
-                topic, value.encode("utf-8"), key=key.encode("utf-8")
-            )
-            logger.info(
-                'Have sent event "{}" into Kafka topic "{}" with key "{}" and result "{}"',
-                event,
-                topic,
-                key,
-                result,
-            )
-            return result
-        except Exception as ex:
-            logger.error(
-                "KafkaProducer producing an event failed with error: <{}> {}",
-                type(ex).__name__,
-                ex,
-            )
-            raise
+        with logger.contextualize(topic=topic, event=event):
+            try:
+                key, value = create_kafka_message(event)
+                result = await self._producer.send_and_wait(
+                    topic, value.encode("utf-8"), key=key.encode("utf-8")
+                )
+                logger.bind(key=key, result=result).info(
+                    "Event send to Kafka successfully",
+                )
+                return result
+            except Exception as ex:
+                logger.exception("Event send to Kafka failed")
+                raise

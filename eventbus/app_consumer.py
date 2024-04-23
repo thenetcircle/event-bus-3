@@ -107,10 +107,8 @@ def main():
             logger.info('Story "{}" is disabled, skip to start.', story_id)
             return
         if story_id in story_procs and story_procs[story_id].process.is_alive():
-            # TODO trigger alert on all errors
-            logger.error(
-                "Consumer#{} already in consumer_procs and is alive, something went wrong!",
-                story_id,
+            logger.bind(story_params=story_params).error(
+                "Consumer already in consumer_procs and is alive, something went wrong!",
             )
             return
 
@@ -181,7 +179,7 @@ def main():
                 if story_params := zoo_data_parser.create_story_params(story_id):
                     start_new_story(story_params, stats.version, v2_runner)
         except Exception as ex:
-            logger.error("Failed to process story data change: {}", ex)
+            logger.exception("Failed to process story data change")
         finally:
             story_is_changing = False
 

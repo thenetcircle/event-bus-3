@@ -92,14 +92,13 @@ async def main(request):
         events = parse_request_body(request_body)
         if not events:
             raise EventValidationError("Invalid format of request body.")
-        logger.info('Received new events: "{}"', events)
+
+        logger.bind(events=events).info("Received new events")
 
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]
         stats_client.incr("producer.request.fail")
-        logger.warning(
-            'Parsing request failed: "{}", the request body: "{}"', ex, request_body
-        )
+        logger.bind(details=ex, request_body=request_body).warning("Event parse failed")
         return _create_response(
             event_ids, [ex for _ in event_ids], request_context.resp_format
         )

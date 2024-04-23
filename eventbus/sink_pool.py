@@ -34,7 +34,7 @@ class SinkPool:
                 await self._sinks[sink_id].init()
             except Exception as ex:
                 del self._sinks[sink_id]
-                logger.error("Failed to init sink {}, caused by {}", sink_id, ex)
+                logger.bind(sink_id=sink_id).exception("Init sink failed")
         logger.info("SinkPool has been initialized")
 
     async def close(self):
@@ -71,8 +71,6 @@ class SinkPool:
                         await sink.init()
                         self._sinks[sink_id] = sink
                     except Exception as ex:
-                        logger.error(
-                            "Failed to initialize sink {}, caused by {}", sink_id, ex
-                        )
+                        logger.bind(sink_id=sink_id).exception("Init sink failed")
         except Exception as ex:
-            logger.error("Update new sinks config failed with error: {}", ex)
+            logger.exception("Update new sinks config failed")

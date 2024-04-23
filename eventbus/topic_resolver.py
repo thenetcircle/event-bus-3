@@ -72,7 +72,7 @@ class TopicResolver:
             topic_mappings = self.convert_str_to_topic_mapping(data)
             await self.set_topic_mappings(topic_mappings)
         except Exception as ex:
-            logger.error("Update topic mappings failed with error: {}", ex)
+            logger.exception("Update topic mappings failed")
 
     @staticmethod
     def convert_str_to_topic_mapping(data: str) -> List[TopicMappingEntry]:

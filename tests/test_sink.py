@@ -49,7 +49,7 @@ async def test_httpsink_send_event(aiohttp_client):
                 else:
                     return web.Response(text="ok")
         except Exception as ex:
-            logger.error(ex)
+            logger.exception("")
 
     app = web.Application()
     app.router.add_post("/", mock_server)

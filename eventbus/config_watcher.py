@@ -76,13 +76,9 @@ def _watch_file(
             time.sleep(checking_interval)
 
         except Exception as ex:
-            logger.error(
-                '_watch_file on config file "{}" quit because of error: <{}> {}',
-                config_file_path,
-                type(ex).__name__,
-                ex,
+            logger.bind(config_file_path=config_file_path).exception(
+                "_watch_file running failed"
             )
-            # TODO trigger alert
 
 
 def _get_file_mtime(config_file_path: Path) -> float:

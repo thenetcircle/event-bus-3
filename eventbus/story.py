@@ -189,39 +189,30 @@ class Story:
 
                     # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
                     for i in range(1, self._params.max_commit_retry_times + 1):
-                        try:
-                            logger.debug(
-                                "Committing offsets {} at the {} times",
-                                committing_offsets,
-                                i,
-                            )
-                            await self._consumer.commit(committing_offsets)
-                            logger.info("Committed offsets {}", committing_offsets)
-                            break
-                        except Exception as ex:
-                            if i == self._params.max_commit_retry_times:
-                                logger.error(
-                                    "Commit offsets failed with exception: <{}> {}",
-                                    type(ex).__name__,
-                                    ex,
-                                )
-                                raise
-                            else:
-                                logger.error(
-                                    "Commit offsets failed with exception: <{}> {}, going to retry.",
-                                    type(ex).__name__,
-                                    ex,
-                                )
+                        with logger.contextualize(
+                            offsets=committing_offsets, commit_times=i
+                        ):
+                            try:
+                                logger.debug("Committing offsets")
+                                await self._consumer.commit(committing_offsets)
+                                logger.info("Committed offsets")
+                                break
+                            except Exception as ex:
+                                if i == self._params.max_commit_retry_times:
+                                    logger.exception(
+                                        "Commit offsets to Kafka failed and exceed the max retry times"
+                                    )
+                                    raise
+                                else:
+                                    logger.exception(
+                                        "Commit offsets to Kafka failed, will retry.",
+                                    )
 
         except (asyncio.CancelledError, ConsumerStoppedError) as ex:
             logger.warning("Story has been quit by <{}> {}", type(ex).__name__, ex)
 
         except Exception as ex:
-            logger.error(
-                "Story has been quit by <{}> {}",
-                type(ex).__name__,
-                ex,
-            )
+            logger.exception("Story has been quit by an Exception")
             raise
 
     async def _transform(self, event: KafkaEvent) -> Optional[KafkaEvent]:

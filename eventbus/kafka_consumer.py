@@ -50,11 +50,7 @@ class KafkaConsumer:
                 await self._consumer.stop()
             logger.info("KafkaConsumer has been closed")
         except Exception as ex:
-            logger.error(
-                "Closing AioConsmer failed with error: <{}> {}",
-                type(ex).__name__,
-                ex,
-            )
+            logger.exception("Closing AioConsmer failed")
 
     async def poll(self) -> Dict[KafkaTP, List[KafkaEvent]]:
         msgs: Dict[TopicPartition, List[ConsumerRecord]] = await self._consumer.getmany(
@@ -75,13 +71,12 @@ class KafkaConsumer:
                     stats_client.incr("consumer.event.new")
                     event = parse_aiokafka_msg(record)
                     results[tp].append(event)
+
+                    logger.bind(event=event).info("Pulled a event from Kafka")
                 except Exception as ex:
                     stats_client.incr("consumer.event.fail")
-                    logger.error(
-                        "Parsing a message from Kafka failed with error: <{}> {}",
-                        type(ex).__name__,
-                        ex,
-                    )
+                    logger.bind(record=record).exception("Parse a Kafka message failed")
+
         return results
 
     async def commit(self, offsets: Optional[Dict[KafkaTP, int]] = None) -> None:
@@ -91,11 +86,7 @@ class KafkaConsumer:
             logger.debug("Committed offsets {}", offsets)
         except Exception as ex:
             stats_client.incr("consumer.event.commit.fail")
-            logger.error(
-                "Committing a message from Kafka failed with error: <{}> {}",
-                type(ex).__name__,
-                ex,
-            )
+            logger.exception("Committing offsets to Kafka failed")
             raise
 
 
