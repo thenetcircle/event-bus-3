@@ -67,6 +67,8 @@ def main():
     )
     args = parser.parse_args()
 
+    multiprocessing.set_start_method("spawn")
+
     if args.config_file:
         config.update_from_yaml(args.config_file)
     else:
@@ -98,8 +100,6 @@ def main():
 
     story_procs: Dict[str, StoryProcess] = {}
     story_is_changing = True
-
-    multiprocessing.set_start_method("spawn")
 
     def start_new_story(story_params: StoryParams, znode_version: int, v2_runner: str):
         story_id = story_params.id

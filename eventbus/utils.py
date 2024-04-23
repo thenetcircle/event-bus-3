@@ -1,9 +1,10 @@
+import inspect
+import json
 import sys
 
 from loguru import logger
 
 from eventbus import config
-import inspect
 
 
 def setup_logger():
@@ -17,10 +18,32 @@ def setup_logger():
         "- <level>{message}</level>"
     )
 
+    short_format = "{level} | {name}:{function}:{line} | {message}"
+
+    # def my_log_serializer(record):
+    #     return (
+    #         json.dumps(
+    #             {
+    #                 "time": record["time"].strftime("%Y-%m-%d %H:%M:%S"),
+    #                 "level": record["level"].name,
+    #                 "message": record["message"],
+    #                 "func_string": f"{record['name']}:{record['function']}:{record['line']}",
+    #                 "data": record["extra"],
+    #             },
+    #             default=str,
+    #             ensure_ascii=False,
+    #         )
+    #         + "\n"
+    #     )
+
     if config.get().app.debug:
-        logger.add(sys.stderr, level="DEBUG", format=format)
+        logger.add(
+            sys.stderr, level="DEBUG", format=short_format, serialize=True, enqueue=True
+        )
     else:
-        logger.add(sys.stderr, level="INFO", format=format)
+        logger.add(
+            sys.stderr, level="INFO", format=short_format, serialize=True, enqueue=True
+        )
 
     import logging
 
@@ -57,7 +80,7 @@ def setup_logger():
         import sentry_sdk
 
         # from sentry_sdk.integrations.logging import LoggingIntegration
-        from sentry_sdk.integrations.loguru import LoguruIntegration, LoggingLevels
+        from sentry_sdk.integrations.loguru import LoggingLevels, LoguruIntegration
 
         # from sentry_sdk.integrations.logging import LoggingIntegration
         # sentry_logging = LoggingIntegration(
