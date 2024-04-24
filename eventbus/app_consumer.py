@@ -52,6 +52,7 @@ async def run_story(story: Story):
     finally:
         stats_client.incr("app.consumer.story.quit")
         await story.close()
+        await logger.complete()
         await asyncio.sleep(5)
 
 

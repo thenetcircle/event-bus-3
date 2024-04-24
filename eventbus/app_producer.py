@@ -56,6 +56,7 @@ async def lifespan(app):
         stats_client.incr("app.producer.quit")
         logger.info("The app is shutting down")
         await asyncio.gather(producer.close(), zoo_client.close(), sink_pool.close())
+        await logger.complete()
 
 
 def health_check(request):

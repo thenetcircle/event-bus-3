@@ -59,7 +59,7 @@ class KafkaConsumer:
         )
         if len(msgs) > 0:
             logger.info(
-                "Have polled a bunch of messages from Kafka topic-partitions: {}",
+                "Have polled some messages from Kafka(format: [(topic-partitions, amouont)]): {}",
                 [(tp, len(records)) for tp, records in msgs.items()],
             )
 
@@ -72,7 +72,9 @@ class KafkaConsumer:
                     event = parse_aiokafka_msg(record)
                     results[tp].append(event)
 
-                    logger.bind(event=event).info("Pulled a event from Kafka")
+                    logger.bind(event=event).info(
+                        "Parsed an event from the Kafka message"
+                    )
                 except Exception as ex:
                     stats_client.incr("consumer.event.fail")
                     logger.bind(record=record).exception("Parse a Kafka message failed")

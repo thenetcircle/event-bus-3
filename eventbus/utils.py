@@ -38,11 +38,23 @@ def setup_logger():
 
     if config.get().app.debug:
         logger.add(
-            sys.stderr, level="DEBUG", format=short_format, serialize=True, enqueue=True
+            sys.stderr,
+            level="DEBUG",
+            format=short_format,
+            serialize=True,
+            enqueue=True,
+            backtrace=True,
+            diagnose=True,
         )
     else:
         logger.add(
-            sys.stderr, level="INFO", format=short_format, serialize=True, enqueue=True
+            sys.stderr,
+            level="INFO",
+            format=short_format,
+            serialize=True,
+            enqueue=True,
+            backtrace=False,
+            diagnose=False,
         )
 
     import logging
