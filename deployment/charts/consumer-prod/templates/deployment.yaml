@@ -41,8 +41,6 @@ spec:
               value: /app/configs/prod.yml
             - name: EB_COMM
               value: {comm}
-            - name: EB_RUNNERS
-              value: {runners}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

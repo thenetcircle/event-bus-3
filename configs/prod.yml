@@ -1,13 +1,13 @@
 app:
   project_id: ${EB_COMM}
-  env: staging
+  env: prod
   debug: false
   max_response_time: 5 #seconds
 
 zookeeper:
   hosts: 10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
-  root_path: /event-bus/${EB_COMM}/staging
-  v2_runners: ["default-runner"]
+  root_path: /event-bus/${EB_COMM}/prod
+  v2_runners: ["gpu01"] # TODO: improve this later
   timeout: 10.0
 
 sentry:
@@ -16,7 +16,7 @@ sentry:
 statsd:
   host: 10.20.2.118
   port: 8125
-  prefix: eventbus3.${EB_COMM}staging
+  prefix: eventbus3.${EB_COMM}
 
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
@@ -28,7 +28,7 @@ default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
     "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
-    "client_id": "evenbus3-${EB_COMM}-staging"
+    "client_id": "evenbus3-${EB_COMM}"
     "auto_offset_reset": "latest"
     "enable_auto_commit": false
     "max_poll_interval_ms": 600000 # offsets commit failed because of rebalance

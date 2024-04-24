@@ -44,8 +44,6 @@ spec:
               value: /app/configs/prod.yml
             - name: EB_COMM
               value: {comm}
-            - name: EB_RUNNERS
-              value: {runners}
           ports:
             - name: http
               containerPort: 8000

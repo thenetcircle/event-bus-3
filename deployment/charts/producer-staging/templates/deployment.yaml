@@ -44,8 +44,6 @@ spec:
               value: /app/configs/staging.yml
             - name: EB_COMM
               value: {comm}
-            - name: EB_RUNNERS
-              value: default-runner
           ports:
             - name: http
               containerPort: 8000
