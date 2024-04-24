@@ -47,13 +47,13 @@ async def run_story(story: Story):
     try:
         await story.run()
     except Exception as ex:
-        logger.info("Process of story {} is quitting on code 1", story._params.id)
+        logger.exception("Process of story {} is quitting on code 1", story._params.id)
         sys.exit(1)
     finally:
         stats_client.incr("app.consumer.story.quit")
         await story.close()
         await logger.complete()
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
 
 
 def main():

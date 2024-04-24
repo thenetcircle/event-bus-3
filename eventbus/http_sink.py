@@ -33,6 +33,7 @@ class HttpSink(AbsSink):
     def __init__(self, sink_params: HttpSinkParams):
         self._client: Optional[ClientSession] = None
         self.update_params(sink_params)
+        self._is_closed = False
 
     async def init(self):
         logger.info("Initializing HttpSink")
@@ -61,7 +62,7 @@ class HttpSink(AbsSink):
 
         stats_client.incr("consumer.event.send.new")
 
-        while True:
+        while not self._is_closed:
             send_times += 1
             start_time = datetime.now()
             try:
@@ -202,12 +203,15 @@ class HttpSink(AbsSink):
                 # keep retry until fixed
                 await asyncio.sleep(sleep_time)
 
+        return SinkResult(event, EventStatus.UNKNOWN, Exception("HttpSink is closed"))
+
     async def close(self):
         if self._client:
             logger.info("Closing HttpSink")
 
             await self._client.close()
             self._client = None
+            self._is_closed = True
 
             logger.info("HttpSink has been closed")
 

@@ -62,6 +62,7 @@ class StoryParams(EventBusBaseModel):
 class Story:
     def __init__(self, story_params: StoryParams):
         self._params = story_params
+        self._is_closed = False
 
         logger.info(
             "Constructing a new Story with params: {}",
@@ -94,8 +95,6 @@ class Story:
             story_params.sink[0], story_params.sink[1]
         )
 
-        self._is_closing = False
-
     async def init(self) -> None:
         logger.info("Initializing Story {}", self._params.id)
         await asyncio.gather(
@@ -107,9 +106,9 @@ class Story:
         logger.info("Story has benn initialized")
 
     async def close(self) -> None:
-        if self._is_closing:
+        if self._is_closed:
             return
-        self._is_closing = True
+        self._is_closed = True
 
         logger.info("Closing Story {}", self._params.id)
         closing_tasks = [
@@ -123,15 +122,15 @@ class Story:
             "Story has been closed with results: {}",
             closing_results,
         )
-        self._is_closing = False
 
     async def run(self) -> None:
         try:
             logger.info("Running Story {}", self._params.id)
-            while True:
-                events_buffer = await self._consumer.poll()
+            while not self._is_closed:
 
-                while len(events_buffer) > 0:
+                events_buffer = await self._consumer.poll()
+                while len(events_buffer) > 0 and not self._is_closed:
+
                     sending_events: List[KafkaEvent] = []
                     committing_offsets: Dict[KafkaTP, int] = {}
 
@@ -141,10 +140,10 @@ class Story:
                             while len(events) > 0:
                                 event = events.pop(0)
                                 committing_offsets[tp] = event.offset + 1
-                                event = await self._transform(event)
+                                event = await self._transform_event(event)
                                 if event:
                                     logger.bind(event=event).debug(
-                                        "Event transformed successfully"
+                                        "Event has been transformed successfully"
                                     )
                                     sending_events.append(event)
                                     break
@@ -162,51 +161,31 @@ class Story:
                         logger.bind(event=event).info("Start sending event")
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
-
                     sending_results: List[SinkResult] = await asyncio.gather(
                         *sending_tasks
                     )
 
-                    # sending failed tasks to another kafka topics
-                    producing_tasks = []
+                    is_event_status_clear = True
+                    producing_tasks = []  # sending failed tasks to another kafka topics
                     for _result in sending_results:
                         if _result.status == EventStatus.DONE:
                             pass
-                        elif _result.status == EventStatus.DISCARD:
-                            pass
+                        elif _result.status == EventStatus.UNKNOWN:
+                            is_event_status_clear = False
                         elif _result.status == EventStatus.DEAD_LETTER:
-                            dead_letter_topic = self._get_dead_letter_topic(
-                                _result.event
-                            )
-                            logger.bind(
-                                event=_result.event, dead_letter_topic=dead_letter_topic
-                            ).info("Sending event to dead_letter_topic")
-                            producing_tasks.append(
-                                self._producer.produce(dead_letter_topic, _result.event)
-                            )
-                    if producing_tasks:
+                            if isinstance(_result.event, KafkaEvent):
+                                producing_tasks.append(
+                                    self._send_to_dead_letter(_result.event)
+                                )
+                            else:
+                                logger.error(
+                                    "The event is not a KafkaEvent, ignore it."
+                                )
+                    if len(producing_tasks) > 0:
                         await asyncio.gather(*producing_tasks)
 
-                    # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
-                    for i in range(1, self._params.max_commit_retry_times + 1):
-                        with logger.contextualize(
-                            offsets=str(committing_offsets), commit_times=i
-                        ):
-                            try:
-                                logger.debug("Committing offsets")
-                                await self._consumer.commit(committing_offsets)
-                                logger.info("Offsets committed")
-                                break
-                            except Exception as ex:
-                                if i == self._params.max_commit_retry_times:
-                                    logger.exception(
-                                        "Commit offsets to Kafka failed and exceed the max retry times"
-                                    )
-                                    raise
-                                else:
-                                    logger.exception(
-                                        "Commit offsets to Kafka failed, will retry.",
-                                    )
+                    if is_event_status_clear:
+                        await self._commit_offsets(committing_offsets)
 
         except (asyncio.CancelledError, ConsumerStoppedError) as ex:
             logger.warning(
@@ -220,7 +199,35 @@ class Story:
             logger.exception("Story {} has been quit by an Exception", self._params.id)
             raise
 
-    async def _transform(self, event: KafkaEvent) -> Optional[KafkaEvent]:
+    async def _send_to_dead_letter(self, event: KafkaEvent) -> None:
+        dead_letter_topic = self._get_dead_letter_topic(event)
+        logger.bind(
+            event=event,
+            dead_letter_topic=dead_letter_topic,
+        ).info("Sending event to dead_letter_topic")
+        await self._producer.produce(dead_letter_topic, event)
+
+    async def _commit_offsets(self, offsets: Dict[KafkaTP, int]) -> None:
+        # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
+        for i in range(1, self._params.max_commit_retry_times + 1):
+            with logger.contextualize(offsets=str(offsets), commit_times=i):
+                try:
+                    logger.debug("Committing offsets")
+                    await self._consumer.commit(offsets)
+                    logger.info("Offsets committed")
+                    break
+                except Exception as ex:
+                    if i == self._params.max_commit_retry_times:
+                        logger.exception(
+                            "Commit offsets to Kafka failed and exceed the max retry times"
+                        )
+                        raise
+                    else:
+                        logger.exception(
+                            "Commit offsets to Kafka failed, will retry.",
+                        )
+
+    async def _transform_event(self, event: KafkaEvent) -> Optional[KafkaEvent]:
         for transform in self._transforms:
             event = await transform.run(event)
             if not event:

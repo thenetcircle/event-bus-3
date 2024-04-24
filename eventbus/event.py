@@ -45,7 +45,7 @@ class KafkaEvent(Event):
 class EventStatus(str, Enum):
     DONE = "DONE"
     DEAD_LETTER = "DEAD_LETTER"
-    DISCARD = "DISCARD"
+    UNKNOWN = "UNKNOWN"
 
 
 def create_kafka_message(event: Event) -> Tuple[str, str]:
