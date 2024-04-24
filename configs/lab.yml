@@ -7,8 +7,10 @@ app:
 zookeeper:
   hosts: 10.60.1.127:2181,10.60.1.128:2181
   root_path: /event-bus/${EB_COMM}/dev
-  v2_runners: [default-runner]
   timeout: 10.0
+
+v2_runners:
+  all: [default-runner]
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24

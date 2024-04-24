@@ -7,8 +7,10 @@ app:
 zookeeper:
   hosts: 10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
   root_path: /event-bus/${EB_COMM}/staging
-  v2_runners: ["default-runner"]
   timeout: 10.0
+
+v2_runners:
+  all: [default-runner]
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
@@ -21,13 +23,31 @@ statsd:
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
   producer:
-    "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
+    "bootstrap_servers":
+      [
+        "10.20.2.101:9093",
+        "10.20.2.102:9093",
+        "10.20.2.103:9093",
+        "10.20.2.104:9093",
+        "10.20.2.125:9093",
+        "10.20.2.126:9093",
+        "10.20.2.127:9093",
+      ]
     "acks": "all"
     "enable_idempotence": "true"
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
-    "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
+    "bootstrap_servers":
+      [
+        "10.20.2.101:9093",
+        "10.20.2.102:9093",
+        "10.20.2.103:9093",
+        "10.20.2.104:9093",
+        "10.20.2.125:9093",
+        "10.20.2.126:9093",
+        "10.20.2.127:9093",
+      ]
     "client_id": "evenbus3-${EB_COMM}-staging"
     "auto_offset_reset": "latest"
     "enable_auto_commit": false

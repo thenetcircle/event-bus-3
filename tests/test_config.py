@@ -15,7 +15,6 @@ def test_update_from_yaml():
         hosts="localhost:12181",
         timeout=10.0,
         root_path="/event-bus-3/dev",
-        v2_runners=["gpu01", "ch06"],
     )
     assert config_data.default_kafka_params == config.DefaultKafkaParams(
         producer={
@@ -61,3 +60,10 @@ def test_environment_variables():
     os.environ["STATSD_PREFIX"] = "test_prefix"
     config.load_from_environ()
     assert config.get().statsd.prefix == "test_prefix"
+
+
+def test_v2_runners():
+    assert config.get().v2_runners == {
+        "all": ["gpu01", "ch06"],
+        "test": ["default-runner"],
+    }

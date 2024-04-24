@@ -40,3 +40,31 @@ def test_parse_sink_params(zoo_data_parser: ZooDataParser):
         "method": "POST",
         "headers": {"accept": "application/json;version=1"},
     }
+
+
+def test_get_v2_runner_stories_path():
+    _config = config.get().model_dump()
+
+    _config["v2_runners"] = {
+        "all": ["runner1", "runner2"],
+        "test": ["runner3"],
+    }
+    _config["app"]["project_id"] = "test"
+    _config["zookeeper"]["root_path"] = "root_path"
+    config.update_from_dict(_config)
+
+    result = ZooDataParser.get_v2_runner_stories_path()
+    assert result == [("runner3", "root_path/runners/runner3/stories")]
+
+    _config["app"]["project_id"] = "unknown"
+    config.update_from_dict(_config)
+    result = ZooDataParser.get_v2_runner_stories_path()
+    assert result == [
+        ("runner1", "root_path/runners/runner1/stories"),
+        ("runner2", "root_path/runners/runner2/stories"),
+    ]
+
+    _config["v2_runners"] = None
+    config.update_from_dict(_config)
+    result = ZooDataParser.get_v2_runner_stories_path()
+    assert result == []

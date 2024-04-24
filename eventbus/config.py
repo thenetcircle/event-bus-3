@@ -36,7 +36,6 @@ class SentryConfig(EventBusBaseModel):
 class ZookeeperConfig(EventBusBaseModel):
     hosts: StrictStr
     root_path: StrictStr
-    v2_runners: List[StrictStr]
     timeout: float = 10.0
 
 
@@ -64,6 +63,7 @@ class Config(EventBusBaseModel):
     predefined_sinks: Optional[Dict[str, SinkConfig]] = None
     sentry: Optional[SentryConfig] = None
     statsd: Optional[StatsdConfig] = None
+    v2_runners: Optional[Dict[str, List[str]]] = None
     last_update_time: Optional[float] = None
     config_file_path: Optional[str] = None
 

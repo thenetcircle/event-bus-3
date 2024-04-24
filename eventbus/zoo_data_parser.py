@@ -92,12 +92,24 @@ class ZooDataParser:
 
     @staticmethod
     def get_v2_runner_stories_path() -> List[Tuple[str, str]]:
+        v2_runners_config = config.get().v2_runners
+        if not v2_runners_config:
+            return []
+
+        project_id = config.get().app.project_id
+        if project_id in v2_runners_config:
+            v2_runners = v2_runners_config[project_id]
+        elif "all" in v2_runners_config:
+            v2_runners = v2_runners_config["all"]
+        else:
+            return []
+
         return [
             (
                 v2_runner,
                 f"{config.get().zookeeper.root_path}/runners/{v2_runner}/stories",
             )
-            for v2_runner in config.get().zookeeper.v2_runners
+            for v2_runner in v2_runners
         ]
 
     @staticmethod

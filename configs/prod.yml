@@ -7,8 +7,11 @@ app:
 zookeeper:
   hosts: 10.20.2.125:12181,10.20.2.126:12181,10.20.2.127:12181
   root_path: /event-bus/${EB_COMM}/prod
-  v2_runners: ["gpu01"] # TODO: improve this later
   timeout: 10.0
+
+v2_runners:
+  all: [gpu01]
+  popp: [gpu01, gpu01_consumer]
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24

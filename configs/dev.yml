@@ -7,8 +7,10 @@ app:
 zookeeper:
   hosts: localhost:12181
   root_path: /event-bus-3/dev
-  v2_runners: [gpu01, ch06]
   timeout: 10.0
+
+v2_runners:
+  all: [gpu01, ch06]
 
 sentry:
   dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
