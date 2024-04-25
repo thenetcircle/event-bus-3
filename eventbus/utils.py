@@ -20,6 +20,9 @@ def setup_logger():
 
     short_format = "{level} | {name}:{function}:{line} | {message}"
 
+    def my_short_format(record):
+        return short_format
+
     # def my_log_serializer(record):
     #     return (
     #         json.dumps(
@@ -40,7 +43,7 @@ def setup_logger():
         logger.add(
             sys.stderr,
             level="DEBUG",
-            format=short_format,
+            format=my_short_format,
             serialize=True,
             enqueue=True,
             backtrace=True,
@@ -50,7 +53,7 @@ def setup_logger():
         logger.add(
             sys.stderr,
             level="INFO",
-            format=short_format,
+            format=my_short_format,
             serialize=True,
             enqueue=True,
             backtrace=False,

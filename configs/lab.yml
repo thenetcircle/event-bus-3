@@ -12,9 +12,6 @@ zookeeper:
 v2_runners:
   all: [default-runner]
 
-sentry:
-  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
-
 default_kafka_params:
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaProducer
   producer:

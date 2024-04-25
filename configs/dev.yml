@@ -12,14 +12,6 @@ zookeeper:
 v2_runners:
   all: [gpu01, ch06]
 
-sentry:
-  dsn: https://6fa26904f71d476ba73c9bfe1b54fe6e@sentry2.ideawisegroup.com/24
-
-statsd:
-  host: localhost
-  port: 8125
-  prefix: eventbus3.popp
-
 default_kafka_params:
   producer:
     "bootstrap_servers": ["localhost:9092"]
