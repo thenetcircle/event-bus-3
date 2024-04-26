@@ -63,7 +63,7 @@ class TopicResolver:
 
     async def _update_from_zoo(self, data, stats):
         try:
-            stats_client.incr("producer.topic_mapping.update")
+            stats_client.incr("topic_mapping.update")
             data = data.decode("utf-8")
             if data == "":
                 logger.warning("Get empty new topic mappings from Zookeeper")

@@ -68,7 +68,6 @@ class KafkaConsumer:
             results[tp] = []
             for record in records:
                 try:
-                    stats_client.incr("consumer.event.new")
                     event = parse_aiokafka_msg(record)
                     results[tp].append(event)
 
@@ -76,18 +75,15 @@ class KafkaConsumer:
                         "Parsed an event from the Kafka message"
                     )
                 except Exception as ex:
-                    stats_client.incr("consumer.event.fail")
                     logger.bind(record=record).exception("Parse a Kafka message failed")
 
         return results
 
     async def commit(self, offsets: Optional[Dict[KafkaTP, int]] = None) -> None:
         try:
-            stats_client.incr("consumer.event.commit.new")
             await self._consumer.commit(offsets=offsets)
             logger.debug("Committed offsets {}", offsets)
         except Exception as ex:
-            stats_client.incr("consumer.event.commit.fail")
             logger.exception("Committing offsets to Kafka failed")
             raise
 
@@ -101,9 +97,9 @@ class MyAssignmentListener(ConsumerRebalanceListener):
     """
 
     def on_partitions_revoked(self, revoked: List[TopicPartition]):
-        stats_client.incr("consumer.partitions.revoked")
+        # stats_client.incr("consumer.partitions.revoked")
         logger.info("Called on_partitions_revoked with partitions: {}", revoked)
 
     def on_partitions_assigned(self, assigned: List[TopicPartition]):
-        stats_client.incr("consumer.partitions.assigned")
+        # stats_client.incr("consumer.partitions.assigned")
         logger.info("Called on_partitions_assigned with partitions: {}", assigned)

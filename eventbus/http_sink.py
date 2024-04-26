@@ -60,16 +60,17 @@ class HttpSink(AbsSink):
         if self._params.headers:
             req_kwargs["headers"] = self._params.headers
 
-        stats_client.incr("consumer.event.send.new")
-
         while not self._is_closed:
             send_times += 1
             start_time = datetime.now()
             try:
+                if send_times > 1:
+                    stats_client.incr("http_sink.request.send.retry")
+
                 async with req_func(req_url, **req_kwargs) as resp:
                     cost_time = self._get_cost_time(start_time)
                     stats_client.timing(
-                        "consumer.event.send.time", int(cost_time * 1000)
+                        "http_sink.request.send.time", int(cost_time * 1000)
                     )
 
                     with logger.contextualize(
@@ -86,7 +87,6 @@ class HttpSink(AbsSink):
                                 logger.info(
                                     "Event send successfully",
                                 )
-                                stats_client.incr("consumer.event.send.done")
                                 return SinkResult(event, EventStatus.DONE)
 
                             elif resp_body_lower == "retry":
@@ -95,14 +95,12 @@ class HttpSink(AbsSink):
                                         "Event send failed with retry response, and exceed the max retry times: {} , will send to dead letter queue.",
                                         self._max_retry_times,
                                     )
-                                    stats_client.incr("consumer.event.send.dead_letter")
                                     return SinkResult(
                                         event,
                                         EventStatus.DEAD_LETTER,
                                         Exception("Maximum Retries"),
                                     )
                                 else:
-                                    stats_client.incr("consumer.event.send.retry")
                                     logger.info(
                                         "Event send failed with retry response, retry now",
                                     )
@@ -110,7 +108,6 @@ class HttpSink(AbsSink):
 
                             elif resp_body_lower == "exponential_backoff_retry":
                                 if send_times > self._max_retry_times:
-                                    stats_client.incr("consumer.event.send.dead_letter")
                                     logger.info(
                                         "Event send failed with exponential_backoff_retry response, and exceeded the max retry times: {}, will send to dead letter queue.",
                                         self._max_retry_times,
@@ -121,7 +118,6 @@ class HttpSink(AbsSink):
                                         Exception("Maximum Retries"),
                                     )
                                 else:
-                                    stats_client.incr("consumer.event.send.retry")
                                     sleep_time = self._get_exp_backoff_delay(send_times)
                                     logger.info(
                                         "Event send failed with exponential_backoff_retry response, will retry after {} seconds",
@@ -135,7 +131,6 @@ class HttpSink(AbsSink):
                                     "Event send failed with unexpected response: {}, will send to dead letter queue.",
                                     resp_body,
                                 )
-                                stats_client.incr("consumer.event.send.dead_letter")
                                 return SinkResult(
                                     event,
                                     EventStatus.DEAD_LETTER,
@@ -147,7 +142,6 @@ class HttpSink(AbsSink):
                                 "Event send failed with non-200 status code: {}, will send to dead letter queue.",
                                 resp.status,
                             )
-                            stats_client.incr("consumer.event.send.dead_letter")
                             return SinkResult(
                                 event,
                                 EventStatus.DEAD_LETTER,
@@ -170,7 +164,6 @@ class HttpSink(AbsSink):
                 ).exception(
                     "Event send failed, will retry after {} seconds", sleep_time
                 )
-                stats_client.incr("consumer.event.send.retry")
                 await asyncio.sleep(sleep_time)
 
             except (
@@ -186,7 +179,6 @@ class HttpSink(AbsSink):
                     cost_time=self._get_cost_time(start_time),
                     send_times=send_times,
                 ).exception("Event send failed, will send to dead letter queue.")
-                stats_client.incr("consumer.event.send.dead_letter")
                 return SinkResult(event, EventStatus.DEAD_LETTER, ex)
 
             except Exception as ex:
@@ -199,7 +191,6 @@ class HttpSink(AbsSink):
                 ).exception(
                     "Event send failed, will retry after {} seconds", sleep_time
                 )
-                stats_client.incr("consumer.event.send.retry")
                 # keep retry until fixed
                 await asyncio.sleep(sleep_time)
 

@@ -26,6 +26,7 @@ from eventbus.model import (
     TransformType,
 )
 from eventbus.utils import deep_merge_two_dict
+from eventbus.metrics import stats_client
 
 
 class StoryStatus(str, Enum):
@@ -158,6 +159,7 @@ class Story:
                     # sending the events to the sink
                     sending_tasks = []
                     for event in sending_events:
+                        stats_client.incr(f"consumer.{self._params.id}.event.new")
                         logger.bind(event=event).info("Start sending event")
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
@@ -169,10 +171,16 @@ class Story:
                     producing_tasks = []  # sending failed tasks to another kafka topics
                     for _result in sending_results:
                         if _result.status == EventStatus.DONE:
-                            pass
+                            stats_client.incr(f"consumer.{self._params.id}.event.done")
                         elif _result.status == EventStatus.UNKNOWN:
+                            stats_client.incr(
+                                f"consumer.{self._params.id}.event.unknown"
+                            )
                             is_event_status_clear = False
                         elif _result.status == EventStatus.DEAD_LETTER:
+                            stats_client.incr(
+                                f"consumer.{self._params.id}.event.dead_letter"
+                            )
                             if isinstance(_result.event, KafkaEvent):
                                 producing_tasks.append(
                                     self._send_to_dead_letter(_result.event)
@@ -210,6 +218,9 @@ class Story:
     async def _commit_offsets(self, offsets: Dict[KafkaTP, int]) -> None:
         # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer.commit
         for i in range(1, self._params.max_commit_retry_times + 1):
+            if i > 1:
+                stats_client.incr(f"consumer.{self._params.id}.commit.retry")
+
             with logger.contextualize(offsets=str(offsets), commit_times=i):
                 try:
                     logger.debug("Committing offsets")

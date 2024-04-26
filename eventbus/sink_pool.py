@@ -49,7 +49,6 @@ class SinkPool:
 
     async def _update_from_zoo(self, data, stats):
         try:
-            stats_client.incr("producer.sinks.update")
             if data is None:
                 raise ValueError("Get none new sinks config from Zookeeper")
 
@@ -57,6 +56,8 @@ class SinkPool:
             if data == "":
                 logger.warning("Get empty new sinks config from Zookeeper")
                 return
+
+            stats_client.incr("sink_pool.update")
 
             logger.info("Get new sinks config from zookeeper: {}", data)
             data = json.loads(data)

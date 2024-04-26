@@ -98,7 +98,6 @@ async def main(request):
 
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]
-        stats_client.incr("producer.request.fail")
         logger.bind(details=ex, request_body=request_body).warning("Event parse failed")
         return _create_response(
             event_ids, [ex for _ in event_ids], request_context.resp_format
@@ -130,7 +129,6 @@ async def send_to_sink(sink_id: str, context: RequestContext):
                 else:
                     return r
 
-            stats_client.incr("producer.request.sink.succ")
             results = list(map(convert_results, results))
             return _create_response(
                 [e.id for e in events], results, context.resp_format
@@ -157,7 +155,6 @@ async def send_to_kafka(context: RequestContext):
             do_send_events_to_kafka(*events), context.max_resp_time
         )
 
-        stats_client.incr("producer.request.kafka.succ")
         return _create_response([e.id for e in events], results, context.resp_format)
 
     except Exception as ex:
@@ -183,6 +180,7 @@ async def do_send_events_to_kafka(*events: Event) -> List[Any]:
         stats_client.incr("producer.event.kafka.new")
 
         if event_topic := topic_resolver.resolve(event):
+            stats_client.incr(f"producer.event.kafka.{event_topic}.new")
             task = asyncio.create_task(producer.produce(event_topic, event))
             tasks.append(task)
         else:
@@ -221,6 +219,9 @@ def _create_response(
         if d := _get_details():
             resp["details"] = d
 
+        if resp["status"] != "all_succ":
+            stats_client.incr("producer.request.fail")
+
         return JSONResponse(
             resp, status_code=200 if resp["status"] == "all_succ" else 400
         )
@@ -232,6 +233,9 @@ def _create_response(
             resp = "part_ok" + "\n" + _get_details()
         else:
             resp = "fail" + "\n" + _get_details()
+
+        if resp != "ok":
+            stats_client.incr("producer.request.fail")
 
         return PlainTextResponse(resp, status_code=200 if resp == "ok" else 400)
 
