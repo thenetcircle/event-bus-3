@@ -17,7 +17,11 @@ from eventbus.errors import (
     InvalidArgumentError,
     NoMatchedKafkaTopicError,
 )
-from eventbus.event import Event, EventStatus, parse_request_body
+from eventbus.event import (
+    Event,
+    LogEventStatus,
+    parse_request_body,
+)
 from eventbus.kafka_producer import KafkaProducer, KafkaProducerParams
 from eventbus.metrics import stats_client
 from eventbus.topic_resolver import TopicResolver
@@ -94,7 +98,11 @@ async def main(request):
         if not events:
             raise EventValidationError("Invalid format of request body.")
 
-        logger.bind(events=events).info("Received new events")
+        for event in events:
+            logger.bind(
+                logstatus=LogEventStatus.RECEIVED,
+                event=event,
+            ).info("Received new events")
 
     except EventValidationError as ex:
         event_ids = [e.id for e in events] if events else ["root"]
@@ -117,7 +125,7 @@ async def send_to_sink(sink_id: str, context: RequestContext):
         events = context.events
         try:
             results = await asyncio.wait_for(
-                do_send_events_to_sink(sink, *events), context.max_resp_time
+                do_send_events_to_sink(sink_id, sink, *events), context.max_resp_time
             )
 
             def convert_results(r):
@@ -164,9 +172,11 @@ async def send_to_kafka(context: RequestContext):
         )
 
 
-async def do_send_events_to_sink(sink: AbsSink, *events: Event) -> List[Any]:
+async def do_send_events_to_sink(
+    sink_id: str, sink: AbsSink, *events: Event
+) -> List[Any]:
     def _send(event):
-        stats_client.incr("producer.event.sink.new")
+        stats_client.incr(f"producer.event.sink.{sink_id}.new")
         return sink.send_event(event)
 
     return await asyncio.gather(
@@ -177,13 +187,12 @@ async def do_send_events_to_sink(sink: AbsSink, *events: Event) -> List[Any]:
 async def do_send_events_to_kafka(*events: Event) -> List[Any]:
     tasks = []
     for event in events:
-        stats_client.incr("producer.event.kafka.new")
-
         if event_topic := topic_resolver.resolve(event):
             stats_client.incr(f"producer.event.kafka.{event_topic}.new")
             task = asyncio.create_task(producer.produce(event_topic, event))
             tasks.append(task)
         else:
+            stats_client.incr(f"producer.event.kafka.unknown.new")
             feature = asyncio.get_running_loop().create_future()
             feature.set_exception(NoMatchedKafkaTopicError)
     return await asyncio.gather(*tasks, return_exceptions=True)

@@ -48,6 +48,17 @@ class EventStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class LogEventStatus(str, Enum):
+    RECEIVED = "RECEIVED"
+    TO_KAFKA = "TO_KAFKA"
+    IN_KAFKA = "IN_KAFKA"
+    FROM_KAFKA = "FROM_KAFKA"
+    TO_SINK = "TO_SINK"
+    RETRY_TO_SINK = "RETRY_TO_SINK"
+    IN_SINK = "IN_SINK"
+    TO_DEAD_LETTER = "TO_DEAD_LETTER"
+
+
 def create_kafka_message(event: Event) -> Tuple[str, str]:
     return event.id, event.payload
 

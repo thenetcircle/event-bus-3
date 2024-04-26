@@ -8,7 +8,7 @@ from aiohttp import ClientSession
 from loguru import logger
 from pydantic import StrictStr
 
-from eventbus.event import Event, EventStatus
+from eventbus.event import Event, EventStatus, LogEventStatus
 from eventbus.metrics import stats_client
 from eventbus.model import AbsSink, EventBusBaseModel, SinkResult, SinkType
 
@@ -60,6 +60,10 @@ class HttpSink(AbsSink):
         if self._params.headers:
             req_kwargs["headers"] = self._params.headers
 
+        logger.bind(status=LogEventStatus.TO_SINK, event=event, sink=req_url).info(
+            "Send event to sink"
+        )
+
         while not self._is_closed:
             send_times += 1
             start_time = datetime.now()
@@ -75,7 +79,7 @@ class HttpSink(AbsSink):
 
                     with logger.contextualize(
                         event=event,
-                        req_url=req_url,
+                        sink=req_url,
                         cost_time=cost_time,
                         send_times=send_times,
                     ):
@@ -84,14 +88,16 @@ class HttpSink(AbsSink):
                             resp_body_lower = resp_body.lower()
 
                             if resp_body_lower == "ok":
-                                logger.info(
+                                logger.bind(status=LogEventStatus.IN_SINK).info(
                                     "Event send successfully",
                                 )
                                 return SinkResult(event, EventStatus.DONE)
 
                             elif resp_body_lower == "retry":
                                 if send_times > self._max_retry_times:
-                                    logger.info(
+                                    logger.bind(
+                                        status=LogEventStatus.TO_DEAD_LETTER
+                                    ).info(
                                         "Event send failed with retry response, and exceed the max retry times: {} , will send to dead letter queue.",
                                         self._max_retry_times,
                                     )
@@ -101,14 +107,18 @@ class HttpSink(AbsSink):
                                         Exception("Maximum Retries"),
                                     )
                                 else:
-                                    logger.info(
+                                    logger.bind(
+                                        status=LogEventStatus.RETRY_TO_SINK
+                                    ).info(
                                         "Event send failed with retry response, retry now",
                                     )
                                     continue
 
                             elif resp_body_lower == "exponential_backoff_retry":
                                 if send_times > self._max_retry_times:
-                                    logger.info(
+                                    logger.bind(
+                                        status=LogEventStatus.TO_DEAD_LETTER
+                                    ).info(
                                         "Event send failed with exponential_backoff_retry response, and exceeded the max retry times: {}, will send to dead letter queue.",
                                         self._max_retry_times,
                                     )
@@ -119,7 +129,9 @@ class HttpSink(AbsSink):
                                     )
                                 else:
                                     sleep_time = self._get_exp_backoff_delay(send_times)
-                                    logger.info(
+                                    logger.bind(
+                                        status=LogEventStatus.RETRY_TO_SINK
+                                    ).info(
                                         "Event send failed with exponential_backoff_retry response, will retry after {} seconds",
                                         sleep_time,
                                     )
@@ -127,7 +139,9 @@ class HttpSink(AbsSink):
                                     continue
 
                             else:  # unexpected resp
-                                logger.warning(
+                                logger.bind(
+                                    status=LogEventStatus.TO_DEAD_LETTER
+                                ).warning(
                                     "Event send failed with unexpected response: {}, will send to dead letter queue.",
                                     resp_body,
                                 )
@@ -138,7 +152,7 @@ class HttpSink(AbsSink):
                                 )
 
                         else:  # unexpected status code
-                            logger.warning(
+                            logger.bind(status=LogEventStatus.TO_DEAD_LETTER).warning(
                                 "Event send failed with non-200 status code: {}, will send to dead letter queue.",
                                 resp.status,
                             )
@@ -158,9 +172,10 @@ class HttpSink(AbsSink):
                 sleep_time = self._get_exp_backoff_delay(send_times)
                 logger.bind(
                     event=event,
-                    req_url=req_url,
+                    sink=req_url,
                     cost_time=self._get_cost_time(start_time),
                     send_times=send_times,
+                    status=LogEventStatus.RETRY_TO_SINK,
                 ).exception(
                     "Event send failed, will retry after {} seconds", sleep_time
                 )
@@ -175,9 +190,10 @@ class HttpSink(AbsSink):
                 # so just return retry_later
                 logger.bind(
                     event=event,
-                    req_url=req_url,
+                    sink=req_url,
                     cost_time=self._get_cost_time(start_time),
                     send_times=send_times,
+                    status=LogEventStatus.TO_DEAD_LETTER,
                 ).exception("Event send failed, will send to dead letter queue.")
                 return SinkResult(event, EventStatus.DEAD_LETTER, ex)
 
@@ -185,9 +201,10 @@ class HttpSink(AbsSink):
                 sleep_time = self._get_exp_backoff_delay(send_times)
                 logger.bind(
                     event=event,
-                    req_url=req_url,
+                    sink=req_url,
                     cost_time=self._get_cost_time(start_time),
                     send_times=send_times,
+                    status=LogEventStatus.RETRY_TO_SINK,
                 ).exception(
                     "Event send failed, will retry after {} seconds", sleep_time
                 )

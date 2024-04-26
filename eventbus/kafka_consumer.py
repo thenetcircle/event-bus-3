@@ -7,7 +7,7 @@ from aiokafka import AIOKafkaConsumer, ConsumerRecord, TopicPartition
 from aiokafka.abc import ConsumerRebalanceListener
 from loguru import logger
 
-from eventbus.event import KafkaTP, KafkaEvent, parse_aiokafka_msg
+from eventbus.event import KafkaTP, KafkaEvent, parse_aiokafka_msg, LogEventStatus
 from eventbus.metrics import stats_client
 
 
@@ -71,9 +71,11 @@ class KafkaConsumer:
                     event = parse_aiokafka_msg(record)
                     results[tp].append(event)
 
-                    logger.bind(event=event).info(
-                        "Parsed an event from the Kafka message"
-                    )
+                    logger.bind(
+                        status=LogEventStatus.FROM_KAFKA,
+                        event=event,
+                    ).info("Parsed an event from the Kafka message")
+
                 except Exception as ex:
                     logger.bind(record=record).exception("Parse a Kafka message failed")
 

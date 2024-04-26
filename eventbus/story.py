@@ -160,7 +160,6 @@ class Story:
                     sending_tasks = []
                     for event in sending_events:
                         stats_client.incr(f"consumer.{self._params.id}.event.new")
-                        logger.bind(event=event).info("Start sending event")
                         task = asyncio.create_task(self._sink.send_event(event))
                         sending_tasks.append(task)
                     sending_results: List[SinkResult] = await asyncio.gather(
@@ -209,10 +208,6 @@ class Story:
 
     async def _send_to_dead_letter(self, event: KafkaEvent) -> None:
         dead_letter_topic = self._get_dead_letter_topic(event)
-        logger.bind(
-            event=event,
-            dead_letter_topic=dead_letter_topic,
-        ).info("Sending event to dead_letter_topic")
         await self._producer.produce(dead_letter_topic, event)
 
     async def _commit_offsets(self, offsets: Dict[KafkaTP, int]) -> None:

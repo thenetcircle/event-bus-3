@@ -1,6 +1,6 @@
 from eventbus.model import EventBusBaseModel
 
-from eventbus.event import Event, create_kafka_message
+from eventbus.event import Event, create_kafka_message, LogEventStatus
 import asyncio
 from aiokafka import AIOKafkaProducer
 
@@ -53,10 +53,13 @@ class KafkaProducer:
         with logger.contextualize(topic=topic, event=event):
             try:
                 key, value = create_kafka_message(event)
+                logger.bind(status=LogEventStatus.TO_KAFKA, key=key).info(
+                    "Send Event to Kafka",
+                )
                 result = await self._producer.send_and_wait(
                     topic, value.encode("utf-8"), key=key.encode("utf-8")
                 )
-                logger.bind(key=key, result=result).info(
+                logger.bind(status=LogEventStatus.IN_KAFKA, result=result).info(
                     "Event send to Kafka successfully",
                 )
                 return result
