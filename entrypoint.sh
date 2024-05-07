@@ -16,6 +16,9 @@ case $CMD in
   test)
     exec pytest "$@"
     ;;
+  resend)
+    exec python3 eventbus/console_resend_event.py "$@"
+    ;;
   coverage)
     coverage run -m pytest
     # Capture the exit code of pytest
