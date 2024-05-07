@@ -22,6 +22,7 @@ async def main(
     topics: List[str],
     sink: str,
     start_time: datetime,
+    wait_time: int = 10,
     end_time: Optional[datetime] = None,
     headers: Optional[List[str]] = None,
 ):
@@ -38,19 +39,28 @@ async def main(
             for _p in consumer.partitions_for_topic(_t)
         ]
 
+        start_time_timestamp = int(start_time.timestamp() * 1000)
+        logger.info(
+            'Seeking start_time offsets: "{}", "{}"', start_time, start_time_timestamp
+        )
         tps_offsets = await consumer.offsets_for_times(
-            dict([(tp, start_time.timestamp()) for tp in tps])
+            dict([(tp, start_time_timestamp) for tp in tps])
         )
 
         for tp, offset in tps_offsets.items():
             logger.info("TopicPartition: {}, Offset: {}", tp, offset)
-            consumer.seek(tp, offset.offset)
+            if offset is None or offset.timestamp < start_time_timestamp:
+                consumer.pause(tp)
+            else:
+                consumer.seek(tp, offset.offset)
 
         http_sink = await create_sink(sink, headers)
 
+        total_send_amount = 0
+
         while True:
             try:
-                msg = await asyncio.wait_for(consumer.getone(), timeout=10)
+                msg = await asyncio.wait_for(consumer.getone(), timeout=wait_time)
             except asyncio.TimeoutError:
                 logger.info("Timeout reached, break")
                 break
@@ -58,7 +68,7 @@ async def main(
                 logger.exception("Error occurred while consuming message")
                 break
 
-            if end_time and msg.timestamp > end_time.timestamp():
+            if end_time and msg.timestamp > int(end_time.timestamp() * 1000):
                 pause_tp = TopicPartition(msg.topic, msg.partition)
                 consumer.pause(pause_tp)
                 logger.info("End time reached, pause tp {}", pause_tp)
@@ -67,11 +77,13 @@ async def main(
             event = parse_aiokafka_msg(msg)
             result = await http_sink.send_event(event)
             logger.info('Sent event to sink with result: "{}"', result)
+            total_send_amount += 1
 
     except Exception:
         logger.exception("Error occurred")
 
     finally:
+        logger.info('Total sent amount: "{}"', total_send_amount)
         if consumer:
             await consumer.stop()
         if http_sink:
@@ -82,12 +94,15 @@ if __name__ == "__main__":
     import argparse
 
     def parse_datetime(time_string):
-        """Converts a string in the format 'YYYY-MM-DDTHH:MM:SS' into a datetime object."""
+        """Parse a datetime string with timezone specified as +HHMM or -HHMM."""
+        # Typical formats could include something like '2021-03-30T14:17:36+0200'
+        fmt = "%Y-%m-%dT%H:%M:%S%z"  # '%z' parses timezone offsets like '+0200'
         try:
-            return datetime.strptime(time_string, "%Y-%m-%dT%H:%M:%S")
+            return datetime.strptime(time_string, fmt)
         except ValueError:
-            msg = f"Not a valid date-time: '{time_string}'. Expected format: YYYY-MM-DDTHH:MM:SS."
-            raise argparse.ArgumentTypeError(msg)
+            raise argparse.ArgumentTypeError(
+                f"Time should be in the ISO format with timezone: YYYY-MM-DDTHH:MM:SS+HHMM. Got {time_string} instead."
+            )
 
     parser = argparse.ArgumentParser(
         description="EventBus v3 - Send Dead Letter Events"
@@ -128,6 +143,12 @@ if __name__ == "__main__":
         type=parse_datetime,
         default=None,
     )
+    parser.add_argument(
+        "--wait_time",
+        help="Max wait time in seconds (default: 10)",
+        type=int,
+        default=10,
+    )
     args = parser.parse_args()
 
     if args.config_file:
@@ -136,5 +157,12 @@ if __name__ == "__main__":
         config.load_from_environ()
 
     asyncio.run(
-        main(args.topics, args.sink, args.start_time, args.end_time, args.headers)
+        main(
+            args.topics,
+            args.sink,
+            args.start_time,
+            args.wait_time,
+            args.end_time,
+            args.headers,
+        )
     )
