@@ -220,7 +220,7 @@ class Story:
                 try:
                     logger.debug("Committing offsets")
                     await self._consumer.commit(offsets)
-                    logger.info("Offsets committed")
+                    logger.debug("Offsets committed")
                     break
                 except Exception as ex:
                     if i == self._params.max_commit_retry_times:

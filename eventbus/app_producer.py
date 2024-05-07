@@ -100,7 +100,7 @@ async def main(request):
 
         for event in events:
             logger.bind(
-                logstatus=LogEventStatus.RECEIVED,
+                status=LogEventStatus.RECEIVED,
                 event=event,
             ).info("Received new events")
 
