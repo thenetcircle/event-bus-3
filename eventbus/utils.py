@@ -106,6 +106,7 @@ def setup_logger():
         # https://docs.sentry.io/platforms/python/integrations/loguru/
         sentry_sdk.init(
             dsn=config.get().sentry.dsn,
+            release=config.get().app.project_id,
             debug=config.get().app.debug,
             environment=str(config.get().app.env),
             sample_rate=config.get().sentry.sample_rate,

@@ -3,6 +3,40 @@
 [![pipeline status](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/pipeline.svg)](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/-/commits/main) 
 [![test coverage](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/coverage.svg?job=coverage)](http://gitlab.thenetcircle.lab/tnc-service-team/eventbus3/badges/main/coverage.svg?job=coverage)
 
+## Operation
+
+### Resend the failed events
+
+The events that sent failed to Sink will be forward to a dead-letter topic, I've created a script to resend any events from any topics.
+
+``` sh
+$ docker run --rm -it cloud-host-01.austria.private:5001/library/eventbus3:latest resend --help
+usage: console_resend_event.py [-h] [-c CONFIG_FILE] -t TOPICS [TOPICS ...] -s SINK --start_time START_TIME [--headers HEADERS [HEADERS ...]] [--end_time END_TIME] [--wait_time WAIT_TIME]
+
+EventBus v3 - Send Dead Letter Events
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -c CONFIG_FILE, --config_file CONFIG_FILE
+                        Config file path. If not specified, it will look for environment variable `EB_CONF_FILE`
+  -t TOPICS [TOPICS ...], --topics TOPICS [TOPICS ...]
+                        The Kafka topics to consume
+  -s SINK, --sink SINK  The http sink to send
+  --start_time START_TIME
+                        Start time in the format YYYY-MM-DDTHH:MM:SS
+  --headers HEADERS [HEADERS ...]
+                        The headers in the sink
+  --end_time END_TIME   End time in the format YYYY-MM-DDTHH:MM:SS
+  --wait_time WAIT_TIME
+                        Max wait time in seconds (default: 10)
+                        
+                        
+# Examples:
+$ docker run --rm -it cloud-host-01.austria.private:5001/library/eventbus3:latest resend -c /app/configs/prod.yml -t event-v2-dead-letter-feti-vps event-v2-dead-letter-feti-payment-callback -s http://10.20.2.100:8002 --start_time "2024-05-07T11:39:00+0800" --end_time "2024-05-07T11:43:00+0800" --wait_time 3 --headers "Accept=application/json;version=1"
+
+$ docker run --rm -it cloud-host-01.austria.private:5001/library/eventbus3:latest resend -c /app/configs/prod.yml -t event-v2-dead-letter-feti-dino event-v2-dead-letter-feti-messenger event-v2-dead-letter-feti-payment-callback event-v2-dead-letter-feti-queue event-v2-dead-letter-feti-vps -s http://10.20.14.4:8080/api.php/api/internal/eventbus/receiver --start_time "2024-05-07T11:24:00+0800" --end_time "2024-05-07T11:43:00+0800" --wait_time 5 --headers "Accept=application/json;version=1"
+```
+
 ## Deploying
 
 ### Lab
