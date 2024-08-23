@@ -18,6 +18,7 @@ default_kafka_params:
     "bootstrap_servers": ["maggie-kafka-1.thenetcircle.lab:9094", "maggie-kafka-2.thenetcircle.lab:9094", "maggie-kafka-3.thenetcircle.lab:9094"]
     "enable_idempotence": "true"
     "acks": "all"
+    "max_request_size": 5242880
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:

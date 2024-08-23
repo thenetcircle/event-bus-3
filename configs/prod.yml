@@ -27,6 +27,7 @@ default_kafka_params:
     "bootstrap_servers": ["10.20.2.101:9093","10.20.2.102:9093","10.20.2.103:9093","10.20.2.104:9093","10.20.2.125:9093","10.20.2.126:9093","10.20.2.127:9093"]
     "acks": "all"
     "enable_idempotence": "true"
+    "max_request_size": 5242880
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:

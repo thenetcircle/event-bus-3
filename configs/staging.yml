@@ -35,6 +35,7 @@ default_kafka_params:
       ]
     "acks": "all"
     "enable_idempotence": "true"
+    "max_request_size": 5242880
 
   # https://aiokafka.readthedocs.io/en/stable/api.html#aiokafka.AIOKafkaConsumer
   consumer:
