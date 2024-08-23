@@ -23,7 +23,6 @@ default_kafka_params:
     "bootstrap_servers": ["localhost:9092"]
     "enable_idempotence": "true"
     "acks": "all"
-    "max_request_size": 5242880
 
   consumer:
     "bootstrap_servers": ["localhost:9092"]
