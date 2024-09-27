@@ -29,7 +29,7 @@ class KafkaProducer:
     async def init(self):
         logger.info("Initializing KafkaProducer")
         self._loop = asyncio.get_running_loop()
-        await self._start_producer()
+        self._producer = await self._start_new_producer()
         logger.info("KafkaProducer has been initialized")
 
     async def close(self):
@@ -72,9 +72,11 @@ class KafkaProducer:
                 raise
 
     async def _restart_producer(self):
-        await self._producer.stop()
-        await self._start_producer()
+        _old_producer = self._producer
+        self._producer = await self._start_new_producer()
+        await _old_producer.stop()
 
-    async def _start_producer(self):
-        self._producer = AIOKafkaProducer(**self._params.client_args)
-        await self._producer.start()
+    async def _start_new_producer(self):
+        _new_producer = AIOKafkaProducer(**self._params.client_args)
+        await _new_producer.start()
+        return _new_producer
